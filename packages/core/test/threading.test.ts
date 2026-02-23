@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildThreadFingerprint,
+  hasForceRouteRequest,
   isContinuationRequest,
   isNewConversation
 } from "../src/threading";
@@ -50,5 +51,47 @@ describe("threading", () => {
     });
 
     expect(extended).toBe(base);
+  });
+
+  it("only triggers #route when it is in the latest user message", () => {
+    expect(
+      hasForceRouteRequest({
+        messages: [
+          { role: "user", content: "#route" },
+          { role: "assistant", content: "Rerouted." },
+          { role: "user", content: "continue please" }
+        ]
+      })
+    ).toBe(false);
+
+    expect(
+      hasForceRouteRequest({
+        messages: [
+          { role: "user", content: "hello" },
+          { role: "assistant", content: "hi" },
+          { role: "user", content: "#route now" }
+        ]
+      })
+    ).toBe(true);
+  });
+
+  it("detects #route from latest Responses API input item only", () => {
+    expect(
+      hasForceRouteRequest({
+        input: [
+          { type: "input_text", text: "#route" },
+          { type: "input_text", text: "normal follow-up" }
+        ]
+      })
+    ).toBe(false);
+
+    expect(
+      hasForceRouteRequest({
+        input: [
+          { type: "input_text", text: "normal follow-up" },
+          { type: "input_text", text: "#route" }
+        ]
+      })
+    ).toBe(true);
   });
 });

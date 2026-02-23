@@ -1,10 +1,18 @@
 import { buildPromptWindow, type LlmRouterFunction } from "./llm-router";
-import { buildThreadFingerprint, isContinuationRequest, isAgentLoop, hasPhaseCompleteSignal, hasImagePayload } from "./threading";
+import {
+  buildThreadFingerprint,
+  isContinuationRequest,
+  isAgentLoop,
+  hasPhaseCompleteSignal,
+  hasImagePayload,
+  hasForceRouteRequest
+} from "./threading";
 import {
   AUTO_MODELS,
   type PinStore,
   type RouteDecision,
   type RouterConfig,
+  type RouterProfile,
   type RouterRequestLike,
   type ThreadPin,
   type CatalogItem
@@ -33,6 +41,7 @@ export class RouterEngine {
     catalog: CatalogItem[];
     catalogVersion: string;
     pinStore: PinStore;
+    profiles?: RouterProfile[];
     now?: Date;
   }): Promise<RouteDecision> {
     const now = args.now ?? new Date();
@@ -40,28 +49,23 @@ export class RouterEngine {
     const messages = args.request.messages ?? [];
     const tools = args.request.tools ?? [];
 
-    const threadKey = buildThreadFingerprint({
-      messages,
-      tools,
-      previousResponseId: args.request.previous_response_id
-    });
+    // Check if request.model matches a named user profile
+    const matchedProfile = args.profiles?.find(p => p.id === requestedModel);
 
-    const isContinuation = isContinuationRequest({
-      messages,
-      tools,
-      previousResponseId: args.request.previous_response_id
-    });
+    // Passthrough if not "auto" and not a known profile
+    if (!AUTO_MODELS.has(requestedModel) && !matchedProfile) {
+      const threadKey = buildThreadFingerprint({
+        messages,
+        tools,
+        previousResponseId: args.request.previous_response_id
+      });
 
-    const threadHasImage = hasImagePayload(messages);
-    let allowedCatalog = args.catalog;
-    if (threadHasImage) {
-      const visionModels = args.catalog.filter(m => m.modality?.includes("image"));
-      if (visionModels.length > 0) {
-        allowedCatalog = visionModels;
-      }
-    }
+      const isContinuation = isContinuationRequest({
+        messages,
+        tools,
+        previousResponseId: args.request.previous_response_id
+      });
 
-    if (!AUTO_MODELS.has(requestedModel)) {
       return {
         mode: "passthrough",
         requestedModel,
@@ -90,21 +94,83 @@ export class RouterEngine {
       };
     }
 
-    let selectedModel = args.config.defaultModel;
+    // Build effective config: profile overrides take precedence over global config
+    const effectiveConfig: RouterConfig = matchedProfile ? {
+      ...args.config,
+      defaultModel: matchedProfile.defaultModel ?? args.config.defaultModel,
+      classifierModel: matchedProfile.classifierModel ?? args.config.classifierModel,
+      routingInstructions: matchedProfile.routingInstructions ?? args.config.routingInstructions,
+      globalBlocklist: [...args.config.globalBlocklist, ...(matchedProfile.blocklist ?? [])],
+    } : args.config;
+
+    const threadKey = buildThreadFingerprint({
+      messages,
+      tools,
+      previousResponseId: args.request.previous_response_id,
+      profileId: matchedProfile?.id,
+    });
+
+    const isContinuation = isContinuationRequest({
+      messages,
+      tools,
+      previousResponseId: args.request.previous_response_id
+    });
+    const forceRoute = hasForceRouteRequest({
+      messages,
+      input: args.request.input
+    });
+
+    const threadHasImage = hasImagePayload(messages);
+    let allowedCatalog = args.catalog;
+
+    // Filter to vision-capable models if the thread contains an image
+    if (threadHasImage) {
+      const visionModels = args.catalog.filter(m => m.modality?.includes("image"));
+      if (visionModels.length > 0) {
+        allowedCatalog = visionModels;
+      }
+    }
+
+    // Apply profile catalogFilter (allowlist of model IDs)
+    if (matchedProfile?.catalogFilter && matchedProfile.catalogFilter.length > 0) {
+      const filterSet = new Set(matchedProfile.catalogFilter);
+      const filtered = allowedCatalog.filter(m => filterSet.has(m.id));
+      if (filtered.length > 0) {
+        allowedCatalog = filtered;
+      }
+    }
+
+    // Apply globalBlocklist (including any profile-specific blocklist entries)
+    if (effectiveConfig.globalBlocklist.length > 0) {
+      const blockSet = new Set(effectiveConfig.globalBlocklist);
+      const unblocked = allowedCatalog.filter(m => !blockSet.has(m.id));
+      if (unblocked.length > 0) {
+        allowedCatalog = unblocked;
+      }
+    }
+
+    let selectedModel = effectiveConfig.defaultModel;
     let pinUsed = false;
     let decisionReason: RouteDecision["explanation"]["decisionReason"] = "initial_route";
     const notes: string[] = [];
     let signals: string[] = [];
     let confidence = 0.5;
 
+    if (matchedProfile) {
+      notes.push(`Routed via named profile: ${matchedProfile.id}`);
+    }
+    if (forceRoute) {
+      notes.push("Force route directive detected in latest user message (#route). Bypassing thread pin for this turn.");
+    }
+
     let activePin: ThreadPin | null = null;
     let pinTurnCount: number | undefined;
 
-    if (isContinuation) {
+    if (isContinuation && !forceRoute) {
       activePin = await args.pinStore.get(threadKey);
 
       if (activePin) {
-        const phaseSignal = args.config.phaseCompleteSignal || "[PHASE_COMPLETE_SIGNAL]";
+        const phaseSignal = effectiveConfig.phaseCompleteSignal || "[PHASE_COMPLETE_SIGNAL]";
         const shouldBreakLock = hasPhaseCompleteSignal(messages, phaseSignal);
         const isLoop = isAgentLoop(messages);
 
@@ -115,7 +181,7 @@ export class RouterEngine {
           // Verify the pinned model exists in the allowed catalog
           const exists = allowedCatalog.some(m => m.id === activePin!.modelId);
           if (exists) {
-            const cooldownTurns = args.config.cooldownTurns ?? 3;
+            const cooldownTurns = effectiveConfig.cooldownTurns ?? 3;
             if (isLoop || activePin.turnCount < cooldownTurns) {
               selectedModel = activePin.modelId;
               pinUsed = true;
@@ -142,14 +208,16 @@ export class RouterEngine {
 
     if (!pinUsed) {
       if (this.llmRouter) {
-        const prompt = buildPromptWindow(messages);
+        const prompt = buildPromptWindow({
+          messages,
+          input: args.request.input,
+        });
         try {
           const result = await this.llmRouter({
             prompt,
             catalog: allowedCatalog,
-            routingInstructions: args.config.routingInstructions,
-            classifierModel: args.config.classifierModel,
-            currentModel: activePin?.modelId
+            routingInstructions: effectiveConfig.routingInstructions,
+            classifierModel: effectiveConfig.classifierModel
           });
 
           if (result && result.selectedModel) {
@@ -162,7 +230,7 @@ export class RouterEngine {
               notes.push(`LLM router selected: ${result.selectedModel}`);
             } else {
               notes.push(`LLM router returned invalid model: ${result.selectedModel}`);
-              selectedModel = args.config.defaultModel;
+              selectedModel = effectiveConfig.defaultModel;
             }
           } else {
             notes.push(`LLM router failed or returned no result. Using default.`);
@@ -184,8 +252,8 @@ export class RouterEngine {
       }
     }
 
-    // Determine fallbacks (simplified for now: just the default model if not already selected)
-    const fallbackModels = selectedModel !== args.config.defaultModel ? [args.config.defaultModel] : [];
+    // Determine fallbacks (simplified: just the effective default model if not already selected)
+    const fallbackModels = selectedModel !== effectiveConfig.defaultModel ? [effectiveConfig.defaultModel] : [];
 
     return {
       mode: "routed",
@@ -211,7 +279,8 @@ export class RouterEngine {
         selectedModel,
         decisionReason,
         fallbackChain: fallbackModels,
-        notes
+        notes,
+        profileId: matchedProfile?.id,
       }
     };
   }

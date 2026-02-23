@@ -1,5 +1,7 @@
 import type { ChatMessage, RouterTool, ThreadFingerprintInput } from "./types";
 
+const FORCE_ROUTE_KEYWORD = "#route";
+
 export function hasImagePayload(messages: ChatMessage[] = []): boolean {
   for (const message of messages) {
     if (Array.isArray(message.content)) {
@@ -47,6 +49,110 @@ function contentToText(content: unknown): string {
   }
 
   return "";
+}
+
+function hasForceRouteDirective(text: string): boolean {
+  const escaped = FORCE_ROUTE_KEYWORD.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}(?:\\s|$)`, "i").test(text.trim());
+}
+
+function getLatestUserMessageText(messages: ChatMessage[] = []): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role !== "user") {
+      continue;
+    }
+
+    const text = contentToText(message.content).trim();
+    return text.length > 0 ? text : null;
+  }
+
+  return null;
+}
+
+function getLatestUserInputText(input: unknown): string | null {
+  if (typeof input === "string") {
+    const text = input.trim();
+    return text.length > 0 ? text : null;
+  }
+
+  if (Array.isArray(input)) {
+    for (let i = input.length - 1; i >= 0; i -= 1) {
+      const item = input[i];
+
+      if (typeof item === "string") {
+        const text = item.trim();
+        if (text.length > 0) return text;
+        continue;
+      }
+
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+
+      const obj = item as Record<string, unknown>;
+      const type = obj.type;
+      const role = obj.role;
+
+      if (type === "message") {
+        if (role !== "user") continue;
+        const text = contentToText(obj.content).trim();
+        if (text.length > 0) return text;
+        continue;
+      }
+
+      if (type === "input_text" || type === "text") {
+        const text =
+          typeof obj.text === "string"
+            ? obj.text.trim()
+            : contentToText(obj.content ?? obj.text).trim();
+        if (text.length > 0) return text;
+        continue;
+      }
+
+      if (role === "user") {
+        const text = contentToText(obj.content ?? obj.text).trim();
+        if (text.length > 0) return text;
+      }
+    }
+
+    return null;
+  }
+
+  if (input && typeof input === "object") {
+    const obj = input as Record<string, unknown>;
+    const role = obj.role;
+    const type = obj.type;
+
+    if (type === "message" && role !== "user") {
+      return null;
+    }
+
+    if (role && role !== "user" && type !== "input_text" && type !== "text") {
+      return null;
+    }
+
+    const text = contentToText(obj.content ?? obj.text).trim();
+    return text.length > 0 ? text : null;
+  }
+
+  return null;
+}
+
+export function hasForceRouteRequest(args: {
+  messages?: ChatMessage[];
+  input?: unknown;
+}): boolean {
+  const latestUserText =
+    args.input === undefined
+      ? getLatestUserMessageText(args.messages)
+      : getLatestUserInputText(args.input);
+
+  if (!latestUserText) {
+    return false;
+  }
+
+  return hasForceRouteDirective(latestUserText);
 }
 
 export function isAgentLoop(messages: ChatMessage[] = []): boolean {
@@ -152,12 +258,17 @@ export function isContinuationRequest(input: ThreadFingerprintInput): boolean {
 export function buildThreadFingerprint(input: ThreadFingerprintInput): string {
   const previousResponseId = input.previousResponseId?.trim();
   if (previousResponseId) {
-    return `response:${previousResponseId}`;
+    // Append profile segment so the same response chain under two different
+    // profiles never shares a pin.
+    const profileSegment = input.profileId ? `:p:${input.profileId}` : "";
+    return `response:${previousResponseId}${profileSegment}`;
   }
 
   const context = extractEarlyContext(input.messages);
   const tools = stableToolSignature(input.tools);
-  const payload = `${context}\ntools:${tools}`;
+  // Include profileId in hash payload — same conversation, different profile = different pin.
+  const profileSegment = input.profileId ? `\nprofile:${input.profileId}` : "";
+  const payload = `${context}\ntools:${tools}${profileSegment}`;
 
   return `thread:${fnv1a32(payload)}`;
 }
