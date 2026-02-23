@@ -45,6 +45,17 @@ export interface ProfileWeights {
   reliability: number;
 }
 
+export interface RouterProfile {
+  id: string;                    // Client-facing model name, e.g. "auto-cheap"
+  name: string;                  // Display name for UI
+  description?: string;          // Shown in /v1/models and admin UI
+  defaultModel?: string;         // Fallback model override for this profile
+  classifierModel?: string;      // Override classifier LLM
+  routingInstructions?: string;  // Replaces global routing instructions
+  blocklist?: string[];          // Additive with globalBlocklist
+  catalogFilter?: string[];      // Allowlist: only route to these model IDs
+}
+
 export interface RouterConfig {
   version: string;
   defaultModel: string;
@@ -88,6 +99,7 @@ export interface ThreadFingerprintInput {
   messages?: ChatMessage[];
   tools?: RouterTool[];
   previousResponseId?: string;
+  profileId?: string;  // Isolates pins per named profile
 }
 
 export interface ThreadPin {
@@ -124,6 +136,7 @@ export interface RoutingExplanation {
   | "fallback_default";
   fallbackChain: string[];
   notes: string[];
+  profileId?: string;  // Set when request was matched to a named profile
 }
 
 export interface RouteDecision {
