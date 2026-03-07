@@ -53,29 +53,32 @@ export default function LandingPage() {
           <span className="landing-nav-name">CustomRouter</span>
         </div>
         <div className="landing-nav-links">
-          <a href="#features">Features</a>
+          <a href="#problem">Problem</a>
           <a href="#how-it-works">How It Works</a>
+          <a href="#features">Why It Wins</a>
           <a href="/admin">Dashboard</a>
-          <a href="/admin" className="nav-cta">Get Started</a>
+          <a href="/admin" className="nav-cta">Build Your Auto Mode</a>
         </div>
       </nav>
 
       {/* ─── Hero ────────────────────────────────────────────────────── */}
       <section className="hero">
-        <div className="hero-badge">Customizable LLM Routing Proxy</div>
+        <div className="hero-badge">Open-Source LLM Router</div>
 
         <h1>
-          CustomRouter<br />
-          <span className="gradient-text">Build the ultimate composite model.</span>
+          Auto-routing you can<br />
+          <span className="gradient-text">actually control.</span>
         </h1>
 
         <p className="hero-sub">
-          Combine your favorite models into a single, unified API. Create entirely custom routing rules to direct each task to the perfect model—Claude for code, GPT for speed, or Gemini for reasoning.
+          Bring your own models, define your own routing logic, and inspect every decision.
+          CustomRouter gives you the convenience of auto mode without handing model selection
+          to a black box.
         </p>
 
         <div className="hero-actions">
           <a href="/admin" className="hero-btn-primary">
-            Start Routing Free <ArrowRight />
+            Build Your Own Auto Mode <ArrowRight />
           </a>
           <a href="#how-it-works" className="hero-btn-secondary">
             See How It Works
@@ -88,7 +91,7 @@ export default function LandingPage() {
               <span className="hero-card-label">Incoming request</span>
             </div>
             <div className="hero-card-body">
-              "Refactor this Python function to use async/await"
+              "Route this coding task to a stronger model and keep cheap models for simple chat."
             </div>
           </div>
           <div className="hero-arrow">
@@ -96,11 +99,11 @@ export default function LandingPage() {
           </div>
           <div className="hero-card highlight">
             <div className="hero-card-header">
-              <span className="hero-card-label">Routed to</span>
-              <span className="hero-card-badge">Claude Sonnet 4</span>
+              <span className="hero-card-label">Selected by your router</span>
+              <span className="hero-card-badge">your rules</span>
             </div>
             <div className="hero-card-body small">
-              Best model for code tasks
+              Chosen using your logic, not hidden vendor incentives.
             </div>
           </div>
         </div>
@@ -109,51 +112,60 @@ export default function LandingPage() {
       {/* ─── Trust Bar ───────────────────────────────────────────────── */}
       <div className="trust-bar">
         <div className="trust-item">
-          <CloudflareIcon />
-          Runs on Cloudflare Workers
-        </div>
-        <div className="trust-item">
-          <TerminalIcon />
-          OpenAI SDK Compatible
+          <GitHubIcon />
+          Open source
         </div>
         <div className="trust-item">
           <ShieldIcon />
-          Self-Hosted &amp; Private
+          Self-hostable
         </div>
         <div className="trust-item">
-          <GitHubIcon />
-          Open Source
+          <TerminalIcon />
+          OpenAI SDK compatible
+        </div>
+        <div className="trust-item">
+          <CloudflareIcon />
+          Bring your own gateways
+        </div>
+        <div className="trust-item">
+          <ShieldIcon />
+          Explainable routing
         </div>
       </div>
 
-      {/* ─── The Idea ────────────────────────────────────────────────── */}
-      <section className="landing-section">
-        <div className="section-label">The Idea</div>
-        <h2 className="section-heading">Create a composite intelligence.</h2>
+      {/* ─── The Problem ─────────────────────────────────────────────── */}
+      <section className="landing-section" id="problem">
+        <div className="section-label">The Problem</div>
+        <h2 className="section-heading">Most auto routers are convenient. Very few are trustworthy.</h2>
         <p className="section-desc">
-          No single model is best at everything. Bring your chosen models together under one endpoint and define custom rules for exactly when to use each one. Build the optimal blend of capabilities, speed, and cost.
+          Plenty of products offer auto model selection, but the routing logic is hidden. You
+          do not know what it is optimizing for, why a model was chosen, or whether the tradeoff
+          serves your product or the platform selling it.
         </p>
 
         <div className="problem-grid">
           <div className="problem-card">
             <div className="problem-icon red">&#x2715;</div>
-            <h3>Routing logic in app code</h3>
+            <h3>Black-box logic</h3>
             <p>
-              Model-selection ternaries scattered across your codebase. Every new model means another branch, another deploy.
+              You get auto mode, but no visibility into how decisions are made or whose incentives
+              shape them.
             </p>
           </div>
           <div className="problem-card">
             <div className="problem-icon amber">&#x26A0;</div>
-            <h3>No fallback on failure</h3>
+            <h3>No custom models or conditions</h3>
             <p>
-              A provider goes down and your users get 500s. You hardcoded one model &mdash; there&rsquo;s no plan B unless you build one.
+              Most routers lock you into a fixed set of providers, models, and hidden heuristics.
+              You cannot tune them to your product.
             </p>
           </div>
           <div className="problem-card">
             <div className="problem-icon orange">&#x2191;</div>
-            <h3>Context lost between turns</h3>
+            <h3>Hard to trust in production</h3>
             <p>
-              Even if you route well on the first message, continuations land on a different model. KV caches are wasted and conversations break.
+              If quality drops, costs rise, or a provider fails, you have no clear way to inspect
+              or correct the behavior.
             </p>
           </div>
         </div>
@@ -162,9 +174,11 @@ export default function LandingPage() {
       {/* ─── How It Works ────────────────────────────────────────────── */}
       <section className="landing-section" id="how-it-works">
         <div className="section-label">How It Works</div>
-        <h2 className="section-heading">Your models. Your rules. One API.</h2>
+        <h2 className="section-heading">Build your own auto mode.</h2>
         <p className="section-desc">
-          Configure gateways, define your model catalog, and write natural language routing instructions. We'll direct every prompt to its ideal model while you code against a single OpenAI-compatible endpoint.
+          CustomRouter gives you one OpenAI-compatible endpoint, but the routing behavior is
+          yours. Add your own gateways, define your own conditions, and tune for quality, speed,
+          cost, reliability, or control.
         </p>
 
         <div className="flow-container">
@@ -174,16 +188,16 @@ export default function LandingPage() {
               <div className="flow-line" />
             </div>
             <div className="flow-content">
-              <h3>Pick your models</h3>
+              <h3>Connect your model gateways</h3>
               <p>
-                Add the models you want to use. Claude for code, GPT for quick chat,
-                Gemini for long context—whatever fits your needs.
+                Add OpenAI, Anthropic, OpenRouter, or any compatible upstream. Build the exact
+                model catalog you want the router to use.
               </p>
               <div className="flow-pills">
-                <span className="flow-pill">Claude Sonnet 4</span>
-                <span className="flow-pill">GPT-4.1 Mini</span>
-                <span className="flow-pill">o3</span>
-                <span className="flow-pill">Gemini 2.5</span>
+                <span className="flow-pill">OpenAI</span>
+                <span className="flow-pill">Anthropic</span>
+                <span className="flow-pill">OpenRouter</span>
+                <span className="flow-pill">Compatible APIs</span>
               </div>
             </div>
           </div>
@@ -194,13 +208,15 @@ export default function LandingPage() {
               <div className="flow-line" />
             </div>
             <div className="flow-content">
-              <h3>Tell us the rules—in plain English</h3>
+              <h3>Define routing in plain English</h3>
               <p>
-                No JSON. No code. Just describe when to use each model.
-                "Use Claude for anything with code." "Use the cheapest model for simple questions."
+                Tell the router how to think: use stronger models for code, cheaper ones for
+                simple tasks, vision models for image inputs, or custom profiles for different
+                workflows.
               </p>
               <div className="flow-quote">
-                &ldquo;Prefer Claude for code. Use GPT-4.1-mini for chat. Pick thinking models for math.&rdquo;
+                &ldquo;Use stronger models for coding. Use cheap fast models for support. Route image
+                requests to vision-capable models only.&rdquo;
               </div>
             </div>
           </div>
@@ -211,10 +227,10 @@ export default function LandingPage() {
               <div className="flow-line" />
             </div>
             <div className="flow-content">
-              <h3>Send prompts. Get answers.</h3>
+              <h3>Keep coding against model: &quot;auto&quot;</h3>
               <p>
-                Use <code className="code">model: &quot;auto&quot;</code> in your OpenAI SDK.
-                We read each prompt, route it to the right model, and handle failures automatically.
+                Your app keeps one integration. The router selects models, keeps threads coherent,
+                and falls back when something breaks.
               </p>
               <div className="flow-code simple">
                 <span style={{ color: "var(--indigo)" }}>await</span> openai.chat.completions.create({"{"}{"\n"}
@@ -229,51 +245,54 @@ export default function LandingPage() {
 
       {/* ─── Features ────────────────────────────────────────────────── */}
       <section className="landing-section" id="features">
-        <div className="section-label centered">What You Get</div>
-        <h2 className="section-heading centered">Total control over model routing.</h2>
+        <div className="section-label centered">Why Teams Use It</div>
+        <h2 className="section-heading centered">Control the upside of auto-routing without the black box.</h2>
         <p className="section-desc centered">
-          Everything you need to orchestrate multiple models effortlessly
-          and define your perfect routing strategy.
+          The point is not just to automate model choice. The point is to automate it on your
+          terms.
         </p>
 
         <div className="features-grid">
           <div className="feature-cell">
             <div className="feature-icon-row">
               <div className="feature-dot cyan" />
-              <h3>Right Model, Every Time</h3>
+              <h3>Bring Your Own Models</h3>
             </div>
             <p>
-              Our classifier reads your prompts and routes them to the best model from your catalog. Code goes to Claude, summaries to GPT.
+              Use the providers and model IDs you actually want, not just the list a platform
+              exposes.
             </p>
           </div>
 
           <div className="feature-cell">
             <div className="feature-icon-row">
               <div className="feature-dot indigo" />
-              <h3>Fully Customizable Rules</h3>
+              <h3>Custom Routing Logic</h3>
             </div>
             <p>
-              Write plain English instructions to dictate routing. "Use Claude for code" or "Pick the cheapest model for simple questions." No code required.
+              Define task-specific routing conditions in plain English instead of hardcoding
+              branching logic across your app.
             </p>
           </div>
 
           <div className="feature-cell">
             <div className="feature-icon-row">
               <div className="feature-dot green" />
-              <h3>Conversations Stay Coherent</h3>
+              <h3>Inspect Every Decision</h3>
             </div>
             <p>
-              Once a model handles a thread, it stays pinned. Multi-turn chats don't switch models mid-conversation. Context is preserved.
+              See why a request was routed, what confidence the router had, and what fallback path
+              it used.
             </p>
           </div>
 
           <div className="feature-cell">
             <div className="feature-icon-row">
               <div className="feature-dot amber" />
-              <h3>Profiles for Different Needs</h3>
+              <h3>Thread-Aware Routing</h3>
             </div>
             <p>
-              Create <code className="code">auto-cheap</code> for internal tools, <code className="code">auto-coding</code> for your IDE, and <code className="code">auto-fast</code> for customer support.
+              Keep conversations pinned to the right model so multi-turn behavior stays coherent.
             </p>
           </div>
 
@@ -283,50 +302,53 @@ export default function LandingPage() {
               <h3>Automatic Failover</h3>
             </div>
             <p>
-              If a provider is down or slow, we automatically try the next best model. Your users never see a 500.
+              If a provider is slow or failing, the router can move to the next best option
+              automatically.
             </p>
           </div>
 
           <div className="feature-cell">
             <div className="feature-icon-row">
               <div className="feature-dot indigo" />
-              <h3>See Every Decision</h3>
+              <h3>Profiles for Real Workloads</h3>
             </div>
             <p>
-              Query any request ID to see exactly why a model was chosen, what the confidence was, and what the fallback chain looked like.
+              Create cost-first, code-first, support-first, or client-specific routing strategies
+              from the same endpoint.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ─── The Config ──────────────────────────────────────────────── */}
+      {/* ─── Comparison ──────────────────────────────────────────────── */}
       <section className="landing-section">
-        <div className="section-label">Configuration</div>
-        <h2 className="section-heading">Change models without changing code.</h2>
+        <div className="section-label">Open Source</div>
+        <h2 className="section-heading">Trust comes from transparency.</h2>
         <p className="section-desc">
-          Add a new model, update your rules, or create a new profile—all from the dashboard.
-          Your code never changes. It just keeps sending <code className="code">model: &quot;auto&quot;</code>.
+          CustomRouter is built for teams that want the convenience of auto mode without giving up
+          visibility or control. Open source means you can inspect the logic, self-host the stack,
+          and adapt the router to your own constraints.
         </p>
 
         <div className="compare">
           <div className="compare-pane">
-            <div className="compare-header before">Without CustomRouter</div>
+            <div className="compare-header before">Black-box auto</div>
             <div className="compare-body plain">
               <div className="compare-item">
                 <span className="compare-x">&#x2718;</span>
-                <span>Write if-statements for every model decision</span>
+                <span>Hidden routing logic</span>
               </div>
               <div className="compare-item">
                 <span className="compare-x">&#x2718;</span>
-                <span>Handle failures and retries yourself</span>
+                <span>Unknown incentives</span>
               </div>
               <div className="compare-item">
                 <span className="compare-x">&#x2718;</span>
-                <span>Redeploy to add a new model</span>
+                <span>Fixed provider choices</span>
               </div>
               <div className="compare-item">
                 <span className="compare-x">&#x2718;</span>
-                <span>Context lost when switching models mid-chat</span>
+                <span>No explainability or custom conditions</span>
               </div>
             </div>
           </div>
@@ -336,78 +358,78 @@ export default function LandingPage() {
             <div className="compare-body plain">
               <div className="compare-item">
                 <span className="compare-check">&#x2714;</span>
-                <span>One line: <code>model: "auto"</code></span>
+                <span>Your models and gateways</span>
               </div>
               <div className="compare-item">
                 <span className="compare-check">&#x2714;</span>
-                <span>Automatic failover when models fail</span>
+                <span>Your cost and quality tradeoffs</span>
               </div>
               <div className="compare-item">
                 <span className="compare-check">&#x2714;</span>
-                <span>Update models in the dashboard instantly</span>
+                <span>Plain-English routing rules</span>
               </div>
               <div className="compare-item">
                 <span className="compare-check">&#x2714;</span>
-                <span>Conversations stay on one model</span>
+                <span>Inspectable decisions and fallbacks</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── Profiles ────────────────────────────────────────────────── */}
+      {/* ─── Audience ────────────────────────────────────────────────── */}
       <section className="landing-section">
-        <div className="section-label">Routing Profiles</div>
-        <h2 className="section-heading">One router, many strategies.</h2>
+        <div className="section-label">Who It&apos;s For</div>
+        <h2 className="section-heading">Built for teams already using more than one model.</h2>
         <p className="section-desc">
-          Create named profiles that act as virtual model names. Each profile can override
-          the model catalog, routing instructions, and defaults &mdash; so different parts of your app
-          get different routing behavior from the same endpoint.
+          If you already care about quality, cost, reliability, and control, this gives you a way
+          to turn auto-routing into a product advantage instead of a black box.
         </p>
 
         <div className="profiles-row">
           <div className="profile-preview">
-            <div className="profile-preview-id">auto-cheap</div>
+            <div className="profile-preview-id">AI product teams</div>
             <p className="profile-preview-desc">
-              Restrict the catalog to low-cost models. Great for internal tools, batch jobs, and simple chat.
+              Route different workloads without rewriting app logic every time the model landscape
+              changes.
             </p>
-            <span className="profile-tag cyan">filtered catalog</span>
-            <span className="profile-tag indigo">cost-first rules</span>
+            <span className="profile-tag cyan">quality + cost</span>
+            <span className="profile-tag indigo">one endpoint</span>
           </div>
 
           <div className="profile-preview">
-            <div className="profile-preview-id">auto-coding</div>
+            <div className="profile-preview-id">Devtool builders</div>
             <p className="profile-preview-desc">
-              Only high-thinking models. Custom instructions that prefer Claude for code and o3 for algorithms.
+              Offer auto mode to users without hiding how it works or surrendering provider choice.
             </p>
-            <span className="profile-tag cyan">thinking models only</span>
-            <span className="profile-tag indigo">code-first rules</span>
+            <span className="profile-tag cyan">inspectable</span>
+            <span className="profile-tag indigo">user-aligned</span>
           </div>
 
           <div className="profile-preview">
-            <div className="profile-preview-id">auto-support</div>
+            <div className="profile-preview-id">Agencies and consultants</div>
             <p className="profile-preview-desc">
-              Customer-facing tier. Fast models with guardrails. Blocklist anything experimental.
+              Create client-specific routing profiles with different reliability, quality, and
+              budget targets.
             </p>
-            <span className="profile-tag cyan">fast defaults</span>
-            <span className="profile-tag indigo">strict blocklist</span>
+            <span className="profile-tag cyan">custom profiles</span>
+            <span className="profile-tag indigo">portable stack</span>
           </div>
         </div>
       </section>
 
       {/* ─── Bottom CTA ──────────────────────────────────────────────── */}
       <section className="bottom-cta">
-        <h2>Build your ultimate composite model.</h2>
+        <h2>Stop guessing what auto is doing.</h2>
         <p>
-          Open source. Self-hosted on Cloudflare. Add your favorite models, write custom rules,
-          and start routing.
+          Build an open-source router that works for your product, your users, and your economics.
         </p>
         <div className="bottom-cta-actions">
           <a href="/admin" className="hero-btn-primary">
-            Open Dashboard <ArrowRight />
+            Build Your Own Auto Mode <ArrowRight />
           </a>
           <a href="#how-it-works" className="hero-btn-secondary">
-            Read the Docs
+            See How It Works
           </a>
         </div>
       </section>
@@ -415,11 +437,11 @@ export default function LandingPage() {
       {/* ─── Footer ──────────────────────────────────────────────────── */}
       <footer className="landing-footer">
         <div className="landing-footer-left">
-          CustomRouter &mdash; open-source LLM routing proxy
+          CustomRouter &mdash; open-source auto-routing you can inspect, tune, and trust
         </div>
         <div className="landing-footer-right">
           <a href="/admin">Dashboard</a>
-          <a href="#how-it-works">Docs</a>
+          <a href="#how-it-works">How It Works</a>
           <a href="#features">Features</a>
         </div>
       </footer>
