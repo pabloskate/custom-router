@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CustomRouter — Auto-routing you can actually control</title>
+  <style>
+    /* ─── Reset + Base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080c10;
+      --bg2: #0d1117;
+      --bg3: #111820;
+      --border: rgba(255,255,255,0.07);
+      --border-bright: rgba(255,255,255,0.14);
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --dim: #94a3b8;
+      --green: #22d3a0;
+      --green-dim: rgba(34,211,160,0.12);
+      --green-glow: rgba(34,211,160,0.25);
+      --cyan: #38bdf8;
+      --cyan-dim: rgba(56,189,248,0.1);
+      --indigo: #818cf8;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ─── Noise overlay ─────────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* ─── Nav ──────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px;
+      height: 60px;
+      background: rgba(8,12,16,0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .nav-mark {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, var(--green), var(--cyan));
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: #080c10;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-name {
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+
+    .nav-links {
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    .nav-links a {
+      padding: 6px 12px;
+      font-size: 13px;
+      color: var(--muted);
+      border-radius: var(--radius-sm);
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+    .nav-cta {
+      background: var(--green) !important;
+      color: #080c10 !important;
+      font-weight: 600;
+      padding: 7px 16px !important;
+      border-radius: var(--radius-sm);
+      transition: opacity 0.15s !important;
+    }
+    .nav-cta:hover { opacity: 0.88 !important; background: var(--green) !important; }
+
+    /* ─── Hero ─────────────────────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 120px 32px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Radial glow */
+    .hero::after {
+      content: '';
+      position: absolute;
+      top: 20%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 800px; height: 500px;
+      background: radial-gradient(ellipse, rgba(34,211,160,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Grid lines */
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black, transparent);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative; z-index: 1;
+      text-align: center;
+      max-width: 760px;
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 14px;
+      background: var(--green-dim);
+      border: 1px solid rgba(34,211,160,0.2);
+      border-radius: 20px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--green);
+      letter-spacing: 0.5px;
+      margin-bottom: 32px;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero h1 {
+      font-size: clamp(40px, 6vw, 72px);
+      font-weight: 800;
+      line-height: 1.08;
+      letter-spacing: -2px;
+      color: #f1f5f9;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--green) 0%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 17px;
+      color: var(--dim);
+      max-width: 560px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    .hero-actions {
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px; flex-wrap: wrap;
+      margin-bottom: 64px;
+    }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 24px;
+      background: var(--green);
+      color: #080c10;
+      font-weight: 700;
+      font-size: 14px;
+      border-radius: var(--radius);
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      box-shadow: 0 0 0 0 var(--green-glow);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 32px var(--green-glow);
+      opacity: 0.92;
+    }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 24px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-bright);
+      color: var(--dim);
+      font-size: 14px;
+      border-radius: var(--radius);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.09);
+      color: var(--text);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    /* ─── Routing visual ────────────────────────────────────────────── */
+    .routing-visual {
+      display: flex; align-items: center; gap: 0;
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      border-radius: 14px;
+      overflow: hidden;
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      font-family: var(--font-mono);
+    }
+
+    .rv-pane {
+      flex: 1;
+      padding: 20px 24px;
+    }
+
+    .rv-label {
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .rv-content {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.5;
+    }
+
+    .rv-divider {
+      width: 1px;
+      background: var(--border-bright);
+      align-self: stretch;
+    }
+
+    .rv-arrow {
+      display: flex; align-items: center; justify-content: center;
+      width: 48px;
+      padding: 16px 0;
+      background: var(--bg3);
+      border-left: 1px solid var(--border-bright);
+      border-right: 1px solid var(--border-bright);
+      color: var(--green);
+      flex-shrink: 0;
+    }
+
+    .rv-result {
+      flex: 1;
+      padding: 20px 24px;
+    }
+
+    .rv-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: var(--green-dim);
+      border: 1px solid rgba(34,211,160,0.2);
+      border-radius: 4px;
+      font-size: 10px;
+      color: var(--green);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .rv-model {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .rv-reason {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ─── Trust bar ─────────────────────────────────────────────────── */
+    .trust-bar {
+      display: flex; align-items: center; justify-content: center;
+      flex-wrap: wrap;
+      gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      padding: 0;
+    }
+
+    .trust-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 18px 32px;
+      font-size: 13px;
+      color: var(--muted);
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+      transition: color 0.15s;
+    }
+    .trust-item:last-child { border-right: none; }
+    .trust-item:hover { color: var(--text); }
+
+    .trust-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    /* ─── Sections ──────────────────────────────────────────────────── */
+    .section {
+      padding: 96px 32px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-full {
+      padding: 96px 32px;
+    }
+
+    .section-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 20px;
+    }
+
+    .section-heading {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800;
+      letter-spacing: -1.2px;
+      line-height: 1.1;
+      color: #f1f5f9;
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      font-size: 16px;
+      color: var(--dim);
+      max-width: 600px;
+      line-height: 1.7;
+    }
+
+    .section-sub.center { text-align: center; max-width: 560px; margin: 0 auto; }
+    .section-heading.center { text-align: center; }
+    .eyebrow.center { display: block; text-align: center; }
+
+    /* ─── Problem ───────────────────────────────────────────────────── */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 56px;
+    }
+
+    .problem-card {
+      background: var(--bg2);
+      padding: 36px 32px;
+      transition: background 0.15s;
+    }
+    .problem-card:hover { background: var(--bg3); }
+
+    .problem-glyph {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 20px;
+    }
+
+    .glyph-red { color: var(--red); }
+    .glyph-amber { color: var(--amber); }
+    .glyph-orange { color: #fb923c; }
+
+    .problem-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+
+    .problem-card p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ─── How it works ──────────────────────────────────────────────── */
+    .hiw-section {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 56px;
+    }
+
+    .step {
+      background: var(--bg2);
+      padding: 36px 32px;
+      position: relative;
+    }
+
+    .step-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--green);
+      margin-bottom: 16px;
+    }
+
+    .step h3 {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .step p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-bottom: 20px;
+    }
+
+    .pills {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+
+    .pill {
+      padding: 4px 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-bright);
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--dim);
+    }
+
+    .step-quote {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--dim);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 12px 16px;
+      line-height: 1.6;
+    }
+
+    .step-code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      line-height: 1.8;
+      color: var(--dim);
+    }
+
+    .kw { color: var(--cyan); }
+    .str { color: var(--green); }
+
+    /* ─── Features ──────────────────────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 56px;
+    }
+
+    .feature {
+      background: var(--bg2);
+      padding: 32px;
+      transition: background 0.15s;
+    }
+    .feature:hover { background: var(--bg3); }
+
+    .feature-tag {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 2px;
+      margin-bottom: 16px;
+    }
+
+    .tag-cyan { background: var(--cyan); }
+    .tag-indigo { background: var(--indigo); }
+    .tag-green { background: var(--green); }
+    .tag-amber { background: var(--amber); }
+
+    .feature h3 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .feature p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ─── Compare ───────────────────────────────────────────────────── */
+    .compare-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 56px;
+    }
+
+    .compare-col { background: var(--bg2); }
+
+    .compare-header {
+      padding: 18px 28px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .compare-header.before { color: var(--red); background: rgba(248,113,113,0.05); }
+    .compare-header.after  { color: var(--green); background: rgba(34,211,160,0.05); }
+
+    .compare-row {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      color: var(--dim);
+      transition: background 0.1s;
+    }
+    .compare-row:last-child { border-bottom: none; }
+    .compare-row:hover { background: rgba(255,255,255,0.02); }
+
+    .cx { color: var(--red); font-size: 12px; margin-top: 2px; flex-shrink: 0; }
+    .ck { color: var(--green); font-size: 12px; margin-top: 2px; flex-shrink: 0; }
+
+    /* ─── Audience ──────────────────────────────────────────────────── */
+    .profiles-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 56px;
+    }
+
+    .profile {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .profile:hover {
+      border-color: var(--border-bright);
+      transform: translateY(-2px);
+    }
+
+    .profile-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      margin-bottom: 12px;
+    }
+
+    .profile p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-bottom: 20px;
+    }
+
+    .profile-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .ptag {
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+
+    .ptag-cyan   { background: var(--cyan-dim);  color: var(--cyan);  border: 1px solid rgba(56,189,248,0.2); }
+    .ptag-green  { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,211,160,0.2); }
+    .ptag-indigo { background: rgba(129,140,248,0.1); color: var(--indigo); border: 1px solid rgba(129,140,248,0.2); }
+
+    /* ─── Bottom CTA ────────────────────────────────────────────────── */
+    .bottom-cta {
+      text-align: center;
+      padding: 96px 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bottom-cta::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+    }
+
+    .bottom-cta::after {
+      content: '';
+      position: absolute;
+      top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 700px; height: 400px;
+      background: radial-gradient(ellipse, rgba(34,211,160,0.06), transparent 70%);
+      pointer-events: none;
+    }
+
+    .bottom-cta h2 {
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      color: #f1f5f9;
+      margin-bottom: 16px;
+      position: relative; z-index: 1;
+    }
+
+    .bottom-cta p {
+      font-size: 16px;
+      color: var(--dim);
+      max-width: 480px;
+      margin: 0 auto 40px;
+      position: relative; z-index: 1;
+    }
+
+    .bottom-cta-actions {
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px; flex-wrap: wrap;
+      position: relative; z-index: 1;
+    }
+
+    /* ─── Footer ────────────────────────────────────────────────────── */
+    footer {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 24px 32px;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-left {
+      font-size: 13px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    .footer-right {
+      display: flex; gap: 24px;
+    }
+
+    .footer-right a {
+      font-size: 13px;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+    .footer-right a:hover { color: var(--text); }
+
+    /* ─── SVG icons ─────────────────────────────────────────────────── */
+    .icon { width: 14px; height: 14px; display: inline-block; vertical-align: middle; }
+
+    /* ─── Responsive ────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      .hero { padding: 100px 20px 60px; }
+      .section { padding: 64px 20px; }
+      .section-full { padding: 64px 20px; }
+      .problem-grid, .steps, .features-grid { grid-template-columns: 1fr; }
+      .compare-wrap { grid-template-columns: 1fr; }
+      .profiles-grid { grid-template-columns: 1fr; }
+      .trust-bar { flex-direction: column; }
+      .trust-item { border-right: none; border-bottom: 1px solid var(--border); width: 100%; justify-content: center; }
+      .trust-item:last-child { border-bottom: none; }
+      .routing-visual { flex-direction: column; }
+      .rv-arrow { width: 100%; height: 36px; border: none; border-top: 1px solid var(--border-bright); border-bottom: 1px solid var(--border-bright); }
+      footer { flex-direction: column; align-items: flex-start; }
+    }
+
+    /* ─── Scroll-fade animation ─────────────────────────────────────── */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Nav ──────────────────────────────────────────────────────── -->
+  <nav>
+    <div class="nav-brand">
+      <div class="nav-mark">CR</div>
+      <span class="nav-name">CustomRouter</span>
+    </div>
+    <div class="nav-links">
+      <a href="#problem">Problem</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#features">Why It Wins</a>
+      <a href="/admin">Dashboard</a>
+      <a href="/admin" class="nav-cta">Build Your Auto Mode</a>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ─────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-grid"></div>
+    <div class="hero-content">
+      <div class="hero-badge">Open-Source LLM Router</div>
+
+      <h1>
+        Auto-routing you can<br>
+        <em>actually control.</em>
+      </h1>
+
+      <p class="hero-sub">
+        Bring your own models, define your own routing logic, and inspect every
+        decision. CustomRouter gives you the convenience of auto mode without
+        handing model selection to a black box.
+      </p>
+
+      <div class="hero-actions">
+        <a href="/admin" class="btn-primary">
+          Build Your Own Auto Mode
+          <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8h10M9 4l4 4-4 4"/>
+          </svg>
+        </a>
+        <a href="#how-it-works" class="btn-secondary">See How It Works</a>
+      </div>
+
+      <!-- Routing visual -->
+      <div class="routing-visual fade-in">
+        <div class="rv-pane">
+          <div class="rv-label">// Incoming request</div>
+          <div class="rv-content">"Route coding tasks to stronger models. Keep cheap models for simple chat."</div>
+        </div>
+        <div class="rv-arrow">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8h10M9 4l4 4-4 4"/>
+          </svg>
+        </div>
+        <div class="rv-result">
+          <div class="rv-label">// Selected by your router</div>
+          <div class="rv-badge">your rules</div>
+          <div class="rv-model">claude-3-5-sonnet</div>
+          <div class="rv-reason">matched: code task → strong model profile</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Trust bar ─────────────────────────────────────────────────── -->
+  <div class="trust-bar">
+    <div class="trust-item"><span class="trust-dot"></span> Open source</div>
+    <div class="trust-item"><span class="trust-dot"></span> Self-hostable</div>
+    <div class="trust-item"><span class="trust-dot"></span> OpenAI SDK compatible</div>
+    <div class="trust-item"><span class="trust-dot"></span> Bring your own gateways</div>
+    <div class="trust-item"><span class="trust-dot"></span> Explainable routing</div>
+  </div>
+
+  <!-- ─── Problem ──────────────────────────────────────────────────── -->
+  <section class="section" id="problem">
+    <div class="fade-in">
+      <span class="eyebrow">The Problem</span>
+      <h2 class="section-heading">Most auto routers are convenient.<br>Very few are trustworthy.</h2>
+      <p class="section-sub">
+        Plenty of products offer auto model selection, but the routing logic is
+        hidden. You do not know what it is optimizing for, why a model was chosen,
+        or whether the tradeoff serves your product or the platform selling it.
+      </p>
+    </div>
+
+    <div class="problem-grid fade-in">
+      <div class="problem-card">
+        <div class="problem-glyph glyph-red">×</div>
+        <h3>Black-box logic</h3>
+        <p>You get auto mode, but no visibility into how decisions are made or whose incentives shape them.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-glyph glyph-amber">⚠</div>
+        <h3>No custom models or conditions</h3>
+        <p>Most routers lock you into a fixed set of providers, models, and hidden heuristics. You cannot tune them to your product.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-glyph glyph-orange">↑</div>
+        <h3>Hard to trust in production</h3>
+        <p>If quality drops, costs rise, or a provider fails, you have no clear way to inspect or correct the behavior.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── How it works ─────────────────────────────────────────────── -->
+  <div class="hiw-section section-full" id="how-it-works">
+    <div class="section-inner">
+      <div class="fade-in">
+        <span class="eyebrow center">How It Works</span>
+        <h2 class="section-heading center">Build your own auto mode.</h2>
+        <p class="section-sub center">
+          CustomRouter gives you one OpenAI-compatible endpoint, but the routing
+          behavior is yours. Add your own gateways, define your own conditions, and
+          tune for quality, speed, cost, reliability, or control.
+        </p>
+      </div>
+
+      <div class="steps fade-in">
+        <div class="step">
+          <div class="step-num">STEP 01</div>
+          <h3>Connect your model gateways</h3>
+          <p>Add OpenAI, Anthropic, OpenRouter, or any compatible upstream. Build the exact model catalog you want the router to use.</p>
+          <div class="pills">
+            <span class="pill">OpenAI</span>
+            <span class="pill">Anthropic</span>
+            <span class="pill">OpenRouter</span>
+            <span class="pill">Compatible APIs</span>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">STEP 02</div>
+          <h3>Define routing in plain English</h3>
+          <p>Tell the router how to think: use stronger models for code, cheaper ones for simple tasks, vision models for image inputs.</p>
+          <div class="step-quote">
+            "Use stronger models for coding. Use cheap fast models for support. Route image requests to vision-capable models only."
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">STEP 03</div>
+          <h3>Keep coding against model: "auto"</h3>
+          <p>Your app keeps one integration. The router selects models, keeps threads coherent, and falls back when something breaks.</p>
+          <div class="step-code">
+            <span class="kw">await</span> openai.chat.completions<br>
+            &nbsp;&nbsp;.create({<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;model: <span class="str">"auto"</span>,<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;messages<br>
+            &nbsp;&nbsp;})
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Features ─────────────────────────────────────────────────── -->
+  <section class="section" id="features">
+    <div class="fade-in">
+      <span class="eyebrow center">Why Teams Use It</span>
+      <h2 class="section-heading center">Control the upside of auto-routing<br>without the black box.</h2>
+      <p class="section-sub center">
+        The point is not just to automate model choice. The point is to automate it on your terms.
+      </p>
+    </div>
+
+    <div class="features-grid fade-in">
+      <div class="feature">
+        <div class="feature-tag tag-cyan"></div>
+        <h3>Bring Your Own Models</h3>
+        <p>Use the providers and model IDs you actually want, not just the list a platform exposes.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-tag tag-indigo"></div>
+        <h3>Custom Routing Logic</h3>
+        <p>Define task-specific routing conditions in plain English instead of hardcoding branching logic across your app.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-tag tag-green"></div>
+        <h3>Inspect Every Decision</h3>
+        <p>See why a request was routed, what confidence the router had, and what fallback path it used.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-tag tag-amber"></div>
+        <h3>Thread-Aware Routing</h3>
+        <p>Keep conversations pinned to the right model so multi-turn behavior stays coherent.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-tag tag-cyan"></div>
+        <h3>Automatic Failover</h3>
+        <p>If a provider is slow or failing, the router can move to the next best option automatically.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-tag tag-indigo"></div>
+        <h3>Profiles for Real Workloads</h3>
+        <p>Create cost-first, code-first, support-first, or client-specific routing strategies from the same endpoint.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Compare ──────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="fade-in">
+      <span class="eyebrow">Open Source</span>
+      <h2 class="section-heading">Trust comes from transparency.</h2>
+      <p class="section-sub">
+        CustomRouter is built for teams that want the convenience of auto mode
+        without giving up visibility or control. Open source means you can inspect
+        the logic, self-host the stack, and adapt the router to your own constraints.
+      </p>
+    </div>
+
+    <div class="compare-wrap fade-in">
+      <div class="compare-col">
+        <div class="compare-header before">// Black-box auto</div>
+        <div class="compare-row"><span class="cx">✗</span><span>Hidden routing logic</span></div>
+        <div class="compare-row"><span class="cx">✗</span><span>Unknown incentives</span></div>
+        <div class="compare-row"><span class="cx">✗</span><span>Fixed provider choices</span></div>
+        <div class="compare-row"><span class="cx">✗</span><span>No explainability or custom conditions</span></div>
+      </div>
+      <div class="compare-col">
+        <div class="compare-header after">// With CustomRouter</div>
+        <div class="compare-row"><span class="ck">✓</span><span>Your models and gateways</span></div>
+        <div class="compare-row"><span class="ck">✓</span><span>Your cost and quality tradeoffs</span></div>
+        <div class="compare-row"><span class="ck">✓</span><span>Plain-English routing rules</span></div>
+        <div class="compare-row"><span class="ck">✓</span><span>Inspectable decisions and fallbacks</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Audience ─────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="fade-in">
+      <span class="eyebrow">Who It's For</span>
+      <h2 class="section-heading">Built for teams already using<br>more than one model.</h2>
+      <p class="section-sub">
+        If you already care about quality, cost, reliability, and control, this gives
+        you a way to turn auto-routing into a product advantage instead of a black box.
+      </p>
+    </div>
+
+    <div class="profiles-grid fade-in">
+      <div class="profile">
+        <div class="profile-title">AI product teams</div>
+        <p>Route different workloads without rewriting app logic every time the model landscape changes.</p>
+        <div class="profile-tags">
+          <span class="ptag ptag-green">quality + cost</span>
+          <span class="ptag ptag-indigo">one endpoint</span>
+        </div>
+      </div>
+
+      <div class="profile">
+        <div class="profile-title">Devtool builders</div>
+        <p>Offer auto mode to users without hiding how it works or surrendering provider choice.</p>
+        <div class="profile-tags">
+          <span class="ptag ptag-cyan">inspectable</span>
+          <span class="ptag ptag-indigo">user-aligned</span>
+        </div>
+      </div>
+
+      <div class="profile">
+        <div class="profile-title">Agencies and consultants</div>
+        <p>Create client-specific routing profiles with different reliability, quality, and budget targets.</p>
+        <div class="profile-tags">
+          <span class="ptag ptag-green">custom profiles</span>
+          <span class="ptag ptag-cyan">portable stack</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Bottom CTA ────────────────────────────────────────────────── -->
+  <section class="bottom-cta fade-in">
+    <h2>Stop guessing what auto is doing.</h2>
+    <p>Build an open-source router that works for your product, your users, and your economics.</p>
+    <div class="bottom-cta-actions">
+      <a href="/admin" class="btn-primary">
+        Build Your Own Auto Mode
+        <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8h10M9 4l4 4-4 4"/>
+        </svg>
+      </a>
+      <a href="#how-it-works" class="btn-secondary">See How It Works</a>
+    </div>
+  </section>
+
+  <!-- ─── Footer ───────────────────────────────────────────────────── -->
+  <footer>
+    <div class="footer-left">
+      CustomRouter — open-source auto-routing you can inspect, tune, and trust
+    </div>
+    <div class="footer-right">
+      <a href="/admin">Dashboard</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#features">Features</a>
+    </div>
+  </footer>
+
+  <!-- ─── Scroll animation ──────────────────────────────────────────── -->
+  <script>
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    );
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
