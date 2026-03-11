@@ -3,6 +3,7 @@ import { authenticateSession } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/runtime";
 import { isSameOriginRequest } from "@/src/lib/csrf";
 import { routerProfileSchema } from "@/src/lib/schemas";
+import { gatewayRowToPublic, loadGatewaysWithMigration } from "@/src/lib/gateway-store";
 import { encryptByokSecret, resolveByokEncryptionSecret } from "@/src/lib/byok-crypto";
 import { normalizeAndValidateUpstreamBaseUrl } from "@/src/lib/upstream";
 import { getUserUpstreamCredentials, upsertUserUpstreamCredentials } from "@/src/lib/user-upstream-store";
@@ -35,6 +36,9 @@ export async function GET(request: Request): Promise<Response> {
             customCatalog: auth.customCatalog,
             profiles: auth.profiles,
             showModelInResponse: auth.showModelInResponse,
+            configAgentEnabled: auth.configAgentEnabled,
+            configAgentOrchestratorModel: auth.configAgentOrchestratorModel,
+            configAgentSearchModel: auth.configAgentSearchModel,
         }
     });
 }
@@ -68,6 +72,15 @@ export async function PUT(request: Request): Promise<Response> {
     const routingInstructions = typeof body.routing_instructions === "string" ? body.routing_instructions : null;
     const customCatalog = Array.isArray(body.custom_catalog) ? body.custom_catalog : null;
     const showModelInResponse = body.show_model_in_response === true;
+    const configAgentEnabled = body.config_agent_enabled === true;
+    const configAgentOrchestratorModel =
+        typeof body.config_agent_orchestrator_model === "string" && body.config_agent_orchestrator_model.trim().length > 0
+            ? body.config_agent_orchestrator_model.trim()
+            : null;
+    const configAgentSearchModel =
+        typeof body.config_agent_search_model === "string" && body.config_agent_search_model.trim().length > 0
+            ? body.config_agent_search_model.trim()
+            : null;
     const clearClassifierApiKey = body.clear_classifier_api_key === true;
 
     // Validate and sanitise profiles array
@@ -89,6 +102,38 @@ export async function PUT(request: Request): Promise<Response> {
     const encryptionSecret = byokSecret ?? "";
 
     const existingCredentials = await getUserUpstreamCredentials(bindings.ROUTER_DB, auth.userId);
+    const gatewayRows = await loadGatewaysWithMigration({
+        db: bindings.ROUTER_DB,
+        userId: auth.userId,
+        upstreamBaseUrl: existingCredentials?.upstream_base_url ?? null,
+        upstreamApiKeyEnc: existingCredentials?.upstream_api_key_enc ?? null,
+        customCatalogJson: customCatalog
+            ? JSON.stringify(customCatalog)
+            : auth.customCatalog
+                ? JSON.stringify(auth.customCatalog)
+                : null,
+    }).then((rows) => rows.map(gatewayRowToPublic));
+    const gatewayModelIds = new Set(
+        gatewayRows.flatMap((gateway) =>
+            gateway.models
+                .map((model) => model.id)
+                .filter((modelId): modelId is string => typeof modelId === "string" && modelId.trim().length > 0)
+        )
+    );
+
+    if (configAgentOrchestratorModel && !gatewayModelIds.has(configAgentOrchestratorModel)) {
+        return json(
+            { error: `Invalid config_agent_orchestrator_model. "${configAgentOrchestratorModel}" is not in your effective gateway catalog.` },
+            400
+        );
+    }
+
+    if (configAgentSearchModel && !gatewayModelIds.has(configAgentSearchModel)) {
+        return json(
+            { error: `Invalid config_agent_search_model. "${configAgentSearchModel}" is not in your effective gateway catalog.` },
+            400
+        );
+    }
 
     let classifierBaseUrl = existingCredentials?.classifier_base_url ?? null;
     if (hasOwn(body, "classifier_base_url")) {
@@ -144,8 +189,11 @@ export async function PUT(request: Request): Promise<Response> {
                  custom_catalog = ?6,
                  profiles = ?7,
                  show_model_in_response = ?8,
-                 updated_at = ?9
-             WHERE id = ?10`
+                 config_agent_enabled = ?9,
+                 config_agent_orchestrator_model = ?10,
+                 config_agent_search_model = ?11,
+                 updated_at = ?12
+             WHERE id = ?13`
         )
         .bind(
             preferredModels.length > 0 ? JSON.stringify(preferredModels) : null,
@@ -156,6 +204,9 @@ export async function PUT(request: Request): Promise<Response> {
             customCatalog ? JSON.stringify(customCatalog) : null,
             profiles ? JSON.stringify(profiles) : null,
             showModelInResponse ? 1 : 0,
+            configAgentEnabled ? 1 : 0,
+            configAgentOrchestratorModel,
+            configAgentSearchModel,
             now,
             auth.userId
         )

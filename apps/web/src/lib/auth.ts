@@ -61,6 +61,9 @@ export interface AuthResult {
     customCatalog: any[] | null;
     profiles: any[] | null;  // RouterProfile[] — named routing configurations
     showModelInResponse: boolean;
+    configAgentEnabled: boolean;
+    configAgentOrchestratorModel: string | null;
+    configAgentSearchModel: string | null;
     upstreamBaseUrl: string | null;
     upstreamApiKeyEnc: string | null;
     classifierBaseUrl: string | null;
@@ -78,6 +81,9 @@ interface AuthRow {
     custom_catalog: string | null;
     profiles: string | null;
     show_model_in_response: number | null;
+    config_agent_enabled: number | null;
+    config_agent_orchestrator_model: string | null;
+    config_agent_search_model: string | null;
     upstream_base_url: string | null;
     upstream_api_key_enc: string | null;
     classifier_base_url: string | null;
@@ -119,6 +125,9 @@ function rowToAuthResult(row: AuthRow): AuthResult {
         customCatalog: parseJsonArray(row.custom_catalog),
         profiles: parseJsonArray(row.profiles),
         showModelInResponse: row.show_model_in_response === 1,
+        configAgentEnabled: row.config_agent_enabled === 1,
+        configAgentOrchestratorModel: row.config_agent_orchestrator_model,
+        configAgentSearchModel: row.config_agent_search_model,
         upstreamBaseUrl: row.upstream_base_url,
         upstreamApiKeyEnc: row.upstream_api_key_enc,
         classifierBaseUrl: row.classifier_base_url,
@@ -232,6 +241,7 @@ export async function authenticateRequest(
     const row = await db
         .prepare(
             `SELECT ak.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles, u.show_model_in_response,
+                    u.config_agent_enabled, u.config_agent_orchestrator_model, u.config_agent_search_model,
                     uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
        FROM api_keys ak
        JOIN users u ON u.id = ak.user_id
@@ -346,6 +356,7 @@ export async function authenticateSession(request: Request, db: D1Database): Pro
 
     const row = await db.prepare(`
         SELECT s.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles, u.show_model_in_response,
+               u.config_agent_enabled, u.config_agent_orchestrator_model, u.config_agent_search_model,
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM user_sessions s
         JOIN users u ON u.id = s.user_id

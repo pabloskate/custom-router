@@ -117,6 +117,9 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
                   routingInstructions: ctx.user.routingInstructions ?? null,
                   blocklist: ctx.user.blocklist ?? null,
                   showModelInResponse: ctx.user.showModelInResponse,
+                  configAgentEnabled: ctx.user.configAgentEnabled,
+                  configAgentOrchestratorModel: ctx.user.configAgentOrchestratorModel ?? null,
+                  configAgentSearchModel: ctx.user.configAgentSearchModel ?? null,
                 }}
                 gatewayModelOptions={args.gatewayModelOptions}
                 onChange={(updated) => {

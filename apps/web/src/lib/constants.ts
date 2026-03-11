@@ -110,7 +110,7 @@ export const ROUTER_CACHE = {
 
 // ── Config Chat ──────────────────────────────────────────────────────────────
 //
-// Conversational config editor: users type #config in a chat message to enter
+// Conversational config editor: users type $$config in a chat message to enter
 // an interactive session where they can view/modify their routing instructions,
 // model catalog, default model, blocklist, etc.  The session stays active until
 // the orchestrator LLM emits #endconfig.
@@ -118,12 +118,6 @@ export const ROUTER_CACHE = {
 export const CONFIG_CHAT = {
   TRIGGER_KEYWORD: "$$config",
   END_KEYWORD: "#endconfig",
-
-  // Tool-use LLM that interprets the user's config intent and calls tools.
-  ORCHESTRATOR_MODEL: "minimax/minimax-m2.5",
-
-  // Online model for web-search tool (latest model info, recommendations).
-  ONLINE_MODEL: "perplexity/sonar-pro",
 
   // Safety limit on tool-call rounds to prevent runaway loops.
   MAX_TOOL_ROUNDS: 6,

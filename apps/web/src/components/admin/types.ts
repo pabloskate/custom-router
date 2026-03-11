@@ -19,6 +19,9 @@ export type ServerUserInfo = {
   customCatalog: CatalogItem[] | null;
   profiles: RouterProfile[] | null;
   showModelInResponse: boolean;
+  configAgentEnabled: boolean;
+  configAgentOrchestratorModel: string | null;
+  configAgentSearchModel: string | null;
 };
 
 export type UserInfo = ServerUserInfo;

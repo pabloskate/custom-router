@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface RouterConfigFields {
   defaultModel: string | null;
@@ -8,6 +8,9 @@ interface RouterConfigFields {
   routingInstructions: string | null;
   blocklist: string[] | null;
   showModelInResponse: boolean;
+  configAgentEnabled: boolean;
+  configAgentOrchestratorModel: string | null;
+  configAgentSearchModel: string | null;
 }
 
 interface Props {
@@ -45,6 +48,14 @@ function IconSave({ className, style }: { className?: string; style?: React.CSSP
   return (
     <svg className={className} style={style} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+    </svg>
+  );
+}
+
+function IconWrench({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.7 6.3a4 4 0 0 0 5 5l-8.4 8.4a2 2 0 0 1-2.8 0l-3.1-3.1a2 2 0 0 1 0-2.8L13.8 5.4a4 4 0 0 0 .9 4.4"/>
     </svg>
   );
 }
@@ -253,6 +264,143 @@ function RoutingLogicSection({
   );
 }
 
+function ConfigAgentSection({
+  config,
+  gatewayModelOptions,
+  onChange,
+}: {
+  config: RouterConfigFields;
+  gatewayModelOptions: string[];
+  onChange: (c: RouterConfigFields) => void;
+}) {
+  const modelOptions = Array.from(
+    new Set(
+      [
+        ...gatewayModelOptions,
+        config.configAgentOrchestratorModel ?? "",
+        config.configAgentSearchModel ?? "",
+      ].filter((id): id is string => id.trim().length > 0)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  return (
+    <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--border-subtle)" }}>
+      <SectionHeader
+        icon={IconWrench}
+        title="Config Agent (Optional)"
+        description="Only needed if you want to manage router settings via chat."
+      />
+
+      <div className="form-group" style={{ marginBottom: "var(--space-5)" }}>
+        <label
+          className="checkbox-wrapper"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "var(--space-3)",
+            padding: "var(--space-4)",
+            background: "var(--bg-interactive)",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--border-default)",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={config.configAgentEnabled}
+            onChange={(e) => onChange({ ...config, configAgentEnabled: e.target.checked })}
+            style={{ marginTop: 2 }}
+          />
+          <div>
+            <span className="checkbox-label" style={{ fontWeight: 500 }}>Enable Config Agent</span>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "var(--space-1)", marginBottom: 0 }}>
+              When enabled, users can enter chat config mode with <code style={{ fontSize: "0.75rem" }}>$$config</code>.
+            </p>
+          </div>
+        </label>
+      </div>
+
+      <div className="form-row" style={{ marginBottom: "var(--space-6)" }}>
+        <div className="form-group">
+          <label className="form-label">Config Orchestrator Model</label>
+          <select
+            className="input input--mono"
+            value={config.configAgentOrchestratorModel || ""}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                configAgentOrchestratorModel: e.target.value.trim().length > 0 ? e.target.value : null,
+              })
+            }
+          >
+            <option value="">Select a model</option>
+            {modelOptions.map((modelId) => (
+              <option key={modelId} value={modelId}>
+                {modelId}
+              </option>
+            ))}
+          </select>
+          <span className="form-hint">Model used for tool-calling and config decisions in $$config mode.</span>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Config Web-Search Model</label>
+          <select
+            className="input input--mono"
+            value={config.configAgentSearchModel || ""}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                configAgentSearchModel: e.target.value.trim().length > 0 ? e.target.value : null,
+              })
+            }
+          >
+            <option value="">Select a model</option>
+            {modelOptions.map((modelId) => (
+              <option key={modelId} value={modelId}>
+                {modelId}
+              </option>
+            ))}
+          </select>
+          <span className="form-hint">Model used by the config assistant web-search tool for latest model recommendations.</span>
+        </div>
+      </div>
+
+      <div
+        style={{
+          padding: "var(--space-4)",
+          borderRadius: "var(--radius-md)",
+          border: "1px solid var(--border-default)",
+          background: "var(--bg-interactive)",
+          display: "grid",
+          gap: "var(--space-4)",
+        }}
+      >
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>Commands</div>
+          <div style={{ display: "grid", gap: "var(--space-1)", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+            <div><code style={{ fontSize: "0.75rem" }}>$$config</code> - enter config mode</div>
+            <div><code style={{ fontSize: "0.75rem" }}>#endconfig</code> - exit config mode</div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>What You Can Ask</div>
+          <div style={{ display: "grid", gap: "var(--space-1)", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+            <div>"Show my current config"</div>
+            <div>"Set default model to ..."</div>
+            <div>"Set classifier model to ..."</div>
+            <div>"Update routing instructions to ..."</div>
+            <div>"Add/Remove model ..."</div>
+            <div>"Set blocklist to ..."</div>
+            <div>"Enable/Disable show model in response"</div>
+            <div>"Recommend latest model for coding"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function RouterConfigPanel({ config, gatewayModelOptions, onChange, onSave }: Props) {
   const [saving, setSaving] = useState(false);
@@ -266,6 +414,12 @@ export function RouterConfigPanel({ config, gatewayModelOptions, onChange, onSav
   return (
     <div>
       <RoutingLogicSection
+        config={config}
+        gatewayModelOptions={gatewayModelOptions}
+        onChange={onChange}
+      />
+
+      <ConfigAgentSection
         config={config}
         gatewayModelOptions={gatewayModelOptions}
         onChange={onChange}

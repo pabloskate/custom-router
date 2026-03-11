@@ -1,14 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // config-chat.ts
 //
-// Conversational config editor.  Users type #config in a chat message to enter
+// Conversational config editor.  Users type $$config in a chat message to enter
 // an interactive session where they can view and modify their routing config
 // (routing instructions, model catalog, default model, blocklist, etc.).
 //
 // The session is "sticky" — once entered, every subsequent message in the same
 // thread is handled by this service until the orchestrator LLM emits
 // #endconfig.  Detection is stateless: we scan the messages array for the most
-// recent #config (user) vs #endconfig (assistant).
+// recent $$config (user) vs #endconfig (assistant).
 //
 // Internally we call a tool-use LLM (the "orchestrator") which has access to:
 //   - get_current_config   → read the user's config
@@ -121,7 +121,7 @@ const TOOLS = [
     function: {
       name: "search_models",
       description:
-        "Search the OpenRouter model catalog by name or ID substring. Returns matching models with their ID, name, context length, pricing, and modality. Use this to find the correct model ID before adding it to the catalog or setting it as default.",
+        "Search the public OpenRouter model catalog by name or ID substring. Returns matching models with their ID, name, context length, pricing, and modality. Use this for model discovery and legacy catalog edits.",
       parameters: {
         type: "object",
         properties: {
@@ -139,7 +139,7 @@ const TOOLS = [
     function: {
       name: "web_search",
       description:
-        "Search the web for information about LLM models, their capabilities, latest releases, or recommendations. Uses an online model with real-time web access. Use this when the user asks about newest models or needs recommendations.",
+        "Search the web for information about LLM models, their capabilities, latest releases, or recommendations. Uses the user's configured config-agent search model. Use this when the user asks about newest models or needs recommendations.",
       parameters: {
         type: "object",
         properties: {
@@ -358,8 +358,8 @@ ${catalogStr}
 
 You have tools to read and modify the configuration:
 - **get_current_config**: Returns the full config as JSON (use if the user asks to see it)
-- **search_models**: Search OpenRouter's model catalog to find valid model IDs
-- **web_search**: Search the web for latest model info and recommendations
+- **search_models**: Search the public OpenRouter model catalog for model discovery and legacy catalog edits
+- **web_search**: Search the web for latest model info and recommendations (uses the configured config-agent search model)
 - **update_routing_instructions**: Set new routing instructions
 - **update_default_model**: Change the fallback model (gateway-catalog constrained when gateways are configured)
 - **update_classifier_model**: Change the classifier model (gateway-catalog constrained when gateways are configured)
@@ -372,7 +372,7 @@ You have tools to read and modify the configuration:
 ## Important Rules
 
 1. **When gateways are configured**, default/classifier model IDs must come from the Effective Model Catalog above (gateway models only). Do not set gateway-incompatible models.
-2. **When no gateways are configured**, validate model IDs before writing them. Use search_models to find the correct OpenRouter model ID. Model IDs on OpenRouter typically look like "provider/model-name" (e.g., "openai/gpt-4.1", "anthropic/claude-sonnet-4").
+2. **When no gateways are configured**, model-write tools still validate against OpenRouter. Use search_models to find canonical model IDs.
 3. **Use web_search** when the user asks about the latest or newest models, or needs recommendations, since your training data may be outdated.
 4. **Confirm changes** after applying them — summarize what was changed.
 5. **Ending the session**: ONLY append ${CONFIG_CHAT.END_KEYWORD} at the very end of your response when the user has **explicitly** said they are finished (e.g., "that's all", "done", "exit", "quit", "I'm done", "no more changes"). NEVER emit ${CONFIG_CHAT.END_KEYWORD} on your own initiative — not when presenting a summary, not when asking a follow-up question, not after making a change. If there is any doubt, ask the user if they need anything else and wait for their reply.
@@ -386,14 +386,19 @@ interface ToolCallResult {
   isError?: boolean;
 }
 
+interface ModelTarget {
+  model: string;
+  apiKey: string;
+  baseUrl: string;
+}
+
 async function executeTool(
   name: string,
   args: Record<string, unknown>,
   auth: AuthResult,
   gatewayRows: GatewayRowPublic[],
   db: D1Database,
-  apiKey: string,
-  baseUrl: string,
+  webSearchTarget: ModelTarget,
 ): Promise<ToolCallResult> {
   switch (name) {
     case "get_current_config": {
@@ -434,7 +439,7 @@ async function executeTool(
         const result = await callOpenAiCompatible({
           apiPath: "/chat/completions",
           payload: {
-            model: CONFIG_CHAT.ONLINE_MODEL,
+            model: webSearchTarget.model,
             messages: [
               {
                 role: "user",
@@ -443,9 +448,9 @@ async function executeTool(
             ],
             max_tokens: 1024,
           },
-          apiKey,
+          apiKey: webSearchTarget.apiKey,
           requestId: makeRequestId("config-web-search"),
-          baseUrl,
+          baseUrl: webSearchTarget.baseUrl,
         });
 
         if (!result.ok) {
@@ -696,6 +701,72 @@ async function resolveApiKey(
   return { error: "No API key available. Configure a BYOK key or set OPENROUTER_API_KEY." };
 }
 
+function findGatewayForModel(
+  modelId: string,
+  gatewayRows: GatewayRowPublic[]
+): GatewayRowPublic | null {
+  for (const gateway of gatewayRows) {
+    if (gateway.models.some((model) => model.id === modelId)) {
+      return gateway;
+    }
+  }
+  return null;
+}
+
+async function resolveModelTarget(args: {
+  auth: AuthResult;
+  bindings: RouterRuntimeBindings;
+  gatewayRows: GatewayRowPublic[];
+  model: string;
+}): Promise<ModelTarget | { error: string }> {
+  if (args.gatewayRows.length > 0) {
+    const gateway = findGatewayForModel(args.model, args.gatewayRows);
+    if (!gateway) {
+      return {
+        error: `Configured model "${args.model}" is not available in your gateway catalog.`,
+      };
+    }
+
+    const byokSecret = resolveByokEncryptionSecret({
+      byokSecret: args.bindings.BYOK_ENCRYPTION_SECRET ?? null,
+    });
+    if (!byokSecret) {
+      return {
+        error:
+          "Server misconfigured: missing BYOK encryption secret for gateway credentials.",
+      };
+    }
+
+    const decryptedGatewayKey = await decryptByokSecret({
+      ciphertext: gateway.apiKeyEnc,
+      secret: byokSecret,
+    });
+    if (!decryptedGatewayKey) {
+      return {
+        error:
+          "Failed to decrypt gateway API key for config mode. Re-save the gateway key and try again.",
+      };
+    }
+
+    return {
+      model: args.model,
+      apiKey: decryptedGatewayKey,
+      baseUrl: gateway.baseUrl,
+    };
+  }
+
+  const fallback = await resolveApiKey(args.auth, args.bindings);
+  if ("error" in fallback) {
+    return { error: fallback.error };
+  }
+
+  return {
+    model: args.model,
+    apiKey: fallback.apiKey,
+    baseUrl: fallback.baseUrl,
+  };
+}
+
 // ── Main entry point ─────────────────────────────────────────────────────────
 
 export async function handleConfigChat(
@@ -709,12 +780,48 @@ export async function handleConfigChat(
     return json({ error: "Server misconfigured: missing database." }, 500);
   }
 
-  const resolved = await resolveApiKey(auth, bindings);
-  if ("error" in resolved) {
-    return json({ error: resolved.error }, 500);
+  if (!auth.configAgentEnabled) {
+    return json(
+      {
+        error:
+          "Config agent is disabled. Enable 'Config Agent (Optional)' in Routing settings to use $$config.",
+      },
+      400
+    );
   }
 
-  const { apiKey, baseUrl } = resolved;
+  const orchestratorModel = auth.configAgentOrchestratorModel?.trim() ?? "";
+  const webSearchModel = auth.configAgentSearchModel?.trim() ?? "";
+  if (!orchestratorModel || !webSearchModel) {
+    return json(
+      {
+        error:
+          "Config agent setup is incomplete. Set both Config Orchestrator Model and Config Web-Search Model in Routing settings.",
+      },
+      400
+    );
+  }
+
+  const orchestratorTarget = await resolveModelTarget({
+    auth,
+    bindings,
+    gatewayRows,
+    model: orchestratorModel,
+  });
+  if ("error" in orchestratorTarget) {
+    return json({ error: orchestratorTarget.error }, 500);
+  }
+
+  const webSearchTarget = await resolveModelTarget({
+    auth,
+    bindings,
+    gatewayRows,
+    model: webSearchModel,
+  });
+  if ("error" in webSearchTarget) {
+    return json({ error: webSearchTarget.error }, 500);
+  }
+
   const db = bindings.ROUTER_DB;
 
   const systemMessage = {
@@ -722,7 +829,7 @@ export async function handleConfigChat(
     content: buildSystemPrompt(auth, gatewayRows),
   };
 
-  // Strip the #config prefix from the first triggering message so the LLM
+  // Strip the $$config prefix from the first triggering message so the LLM
   // sees clean user intent.
   const cleanedMessages = messages.map((m) => {
     if (m.role === "user") {
@@ -746,15 +853,15 @@ export async function handleConfigChat(
     const result = await callOpenAiCompatible({
       apiPath: "/chat/completions",
       payload: {
-        model: CONFIG_CHAT.ORCHESTRATOR_MODEL,
+        model: orchestratorTarget.model,
         messages: llmMessages,
         tools: TOOLS,
         temperature: CONFIG_CHAT.TEMPERATURE,
         max_tokens: CONFIG_CHAT.MAX_TOKENS,
       },
-      apiKey,
+      apiKey: orchestratorTarget.apiKey,
       requestId: makeRequestId("config-chat"),
-      baseUrl,
+      baseUrl: orchestratorTarget.baseUrl,
     });
 
     if (!result.ok) {
@@ -781,8 +888,8 @@ export async function handleConfigChat(
     ) {
       const content = assistantMessage.content ?? "";
       return stream
-        ? buildStreamingResponse(content, body)
-        : buildChatCompletionResponse(content, body);
+        ? buildStreamingResponse(content, body, orchestratorTarget.model)
+        : buildChatCompletionResponse(content, body, orchestratorTarget.model);
     }
 
     // Process tool calls
@@ -805,8 +912,7 @@ export async function handleConfigChat(
         auth,
         gatewayRows,
         db,
-        apiKey,
-        baseUrl,
+        webSearchTarget,
       );
 
       llmMessages.push({
@@ -829,12 +935,12 @@ export async function handleConfigChat(
 
 // ── Response builder ─────────────────────────────────────────────────────────
 
-function buildChatCompletionResponse(content: string, raw: any): Response {
+function buildChatCompletionResponse(content: string, raw: any, model: string): Response {
   const response = {
     id: raw?.id ?? `chatcmpl-config-${Date.now()}`,
     object: "chat.completion",
     created: raw?.created ?? Math.floor(Date.now() / 1000),
-    model: CONFIG_CHAT.ORCHESTRATOR_MODEL,
+    model: raw?.model ?? model,
     choices: [
       {
         index: 0,
@@ -853,16 +959,16 @@ function buildChatCompletionResponse(content: string, raw: any): Response {
   });
 }
 
-function buildStreamingResponse(content: string, raw: any): Response {
+function buildStreamingResponse(content: string, raw: any, model: string): Response {
   const id = raw?.id ?? `chatcmpl-config-${Date.now()}`;
   const created = raw?.created ?? Math.floor(Date.now() / 1000);
-  const model = CONFIG_CHAT.ORCHESTRATOR_MODEL;
+  const resolvedModel = raw?.model ?? model;
 
   const roleChunk = {
     id,
     object: "chat.completion.chunk",
     created,
-    model,
+    model: resolvedModel,
     choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
   };
 
@@ -870,7 +976,7 @@ function buildStreamingResponse(content: string, raw: any): Response {
     id,
     object: "chat.completion.chunk",
     created,
-    model,
+    model: resolvedModel,
     choices: [{ index: 0, delta: { content }, finish_reason: null }],
   };
 
@@ -878,7 +984,7 @@ function buildStreamingResponse(content: string, raw: any): Response {
     id,
     object: "chat.completion.chunk",
     created,
-    model,
+    model: resolvedModel,
     choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
   };
 

@@ -239,6 +239,9 @@ export function AdminShell() {
       custom_catalog: updatedUser.customCatalog,
       profiles: updatedUser.profiles,
       show_model_in_response: updatedUser.showModelInResponse,
+      config_agent_enabled: updatedUser.configAgentEnabled,
+      config_agent_orchestrator_model: updatedUser.configAgentOrchestratorModel,
+      config_agent_search_model: updatedUser.configAgentSearchModel,
     };
 
     const response = await fetch("/api/v1/user/me", {
