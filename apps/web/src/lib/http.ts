@@ -1,25 +1,45 @@
-function mergeHeaders(headers?: HeadersInit): Headers {
-  const responseHeaders = new Headers(headers);
-  if (!responseHeaders.has("content-type")) {
-    responseHeaders.set("content-type", "application/json");
+function headersInitToRecord(headers?: HeadersInit): Record<string, string> {
+  if (!headers) {
+    return {};
   }
-  return responseHeaders;
+
+  if (Array.isArray(headers)) {
+    return headers.reduce<Record<string, string>>((acc, [key, value]) => {
+      acc[key] = value;
+      return acc;
+    }, {});
+  }
+
+  if (headers instanceof Headers) {
+    const acc: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      acc[key] = value;
+    });
+    return acc;
+  }
+
+  return { ...(headers as Record<string, string>) };
 }
 
 export function json(data: unknown, status = 200, headers?: HeadersInit): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: mergeHeaders(headers),
-  });
-}
+  const responseHeaders = headersInitToRecord(headers);
+  if (!responseHeaders["content-type"]) {
+    responseHeaders["content-type"] = "application/json";
+  }
 
-export function jsonNoStore(data: unknown, status = 200, headers?: HeadersInit): Response {
-  const responseHeaders = mergeHeaders(headers);
-  responseHeaders.set("cache-control", "no-store");
   return new Response(JSON.stringify(data), {
     status,
     headers: responseHeaders,
   });
+}
+
+export function jsonNoStore(data: unknown, status = 200, headers?: HeadersInit): Response {
+  const responseHeaders = headersInitToRecord(headers);
+  if (!responseHeaders["content-type"]) {
+    responseHeaders["content-type"] = "application/json";
+  }
+  responseHeaders["cache-control"] = "no-store";
+  return new Response(JSON.stringify(data), { status, headers: responseHeaders });
 }
 
 export function attachRouterHeaders(
