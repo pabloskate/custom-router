@@ -1,4 +1,4 @@
-import { jsonNoStore } from "@/src/lib/http";
+import { json } from "@/src/lib/http";
 import { hashPassword, createSession, buildSessionCookie, shouldUseSecureCookies } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/runtime";
 import { consumeRateLimit, getClientIp } from "@/src/lib/rate-limit";
@@ -6,7 +6,7 @@ import { consumeRateLimit, getClientIp } from "@/src/lib/rate-limit";
 export async function POST(request: Request): Promise<Response> {
     const bindings = getRuntimeBindings();
     if (!bindings.ROUTER_DB) {
-        return jsonNoStore({ error: "Server misconfigured." }, 500);
+        return json({ error: "Server misconfigured." }, 500);
     }
     const ip = getClientIp(request);
 
@@ -18,7 +18,7 @@ export async function POST(request: Request): Promise<Response> {
         windowSeconds: 15 * 60
     });
     if (!ipLimit.allowed) {
-        return jsonNoStore(
+        return json(
             { error: "Too many signup attempts. Try again later." },
             429,
             { "retry-after": String(ipLimit.retryAfterSeconds) }
@@ -29,7 +29,7 @@ export async function POST(request: Request): Promise<Response> {
     try {
         body = (await request.json()) as Record<string, unknown>;
     } catch {
-        return jsonNoStore({ error: "Invalid JSON body." }, 400);
+        return json({ error: "Invalid JSON body." }, 400);
     }
 
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -37,7 +37,7 @@ export async function POST(request: Request): Promise<Response> {
     const password = typeof body.password === "string" ? body.password : "";
 
     if (!name || !email || !password) {
-        return jsonNoStore({ error: "Name, email, and password are required." }, 400);
+        return json({ error: "Name, email, and password are required." }, 400);
     }
 
     const emailLimit = await consumeRateLimit({
@@ -48,7 +48,7 @@ export async function POST(request: Request): Promise<Response> {
         windowSeconds: 60 * 60
     });
     if (!emailLimit.allowed) {
-        return jsonNoStore(
+        return json(
             { error: "Too many signup attempts. Try again later." },
             429,
             { "retry-after": String(emailLimit.retryAfterSeconds) }
@@ -56,7 +56,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     if (password.length < 8) {
-        return jsonNoStore({ error: "Password must be at least 8 characters long." }, 400);
+        return json({ error: "Password must be at least 8 characters long." }, 400);
     }
 
     // Check if user already exists
@@ -66,7 +66,7 @@ export async function POST(request: Request): Promise<Response> {
         .first();
 
     if (existingUser) {
-        return jsonNoStore({ error: "A user with this email already exists." }, 400);
+        return json({ error: "A user with this email already exists." }, 400);
     }
 
     const userId = crypto.randomUUID();
@@ -85,7 +85,7 @@ export async function POST(request: Request): Promise<Response> {
     const secureCookie = shouldUseSecureCookies(bindings.SESSION_COOKIE_SECURE);
     const sessionCookie = buildSessionCookie(sessionToken, { secure: secureCookie });
 
-    return jsonNoStore({
+    return json({
         user: { id: userId, name, email }
     }, 201, {
         "set-cookie": sessionCookie

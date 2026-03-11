@@ -1,4 +1,4 @@
-import { jsonNoStore } from "@/src/lib/http";
+import { json } from "@/src/lib/http";
 import {
   buildSessionCookie,
   getSessionTokenFromRequest,
@@ -14,13 +14,13 @@ export async function POST(request: Request): Promise<Response> {
   const clearCookie = buildSessionCookie("", { secure: secureCookie, clear: true });
 
   if (!isSameOriginRequest(request)) {
-    return jsonNoStore({ error: "Invalid origin." }, 403, {
+    return json({ error: "Invalid origin." }, 403, {
       "set-cookie": clearCookie
     });
   }
 
   if (!bindings.ROUTER_DB) {
-    return jsonNoStore({ ok: true }, 200, {
+    return json({ ok: true }, 200, {
       "set-cookie": clearCookie
     });
   }
@@ -34,7 +34,7 @@ export async function POST(request: Request): Promise<Response> {
       .run();
   }
 
-  return jsonNoStore({ ok: true }, 200, {
+  return json({ ok: true }, 200, {
     "set-cookie": clearCookie
   });
 }
