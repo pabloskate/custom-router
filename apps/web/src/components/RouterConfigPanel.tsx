@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RouterConfigPanel.tsx
@@ -28,6 +28,7 @@ interface RouterConfigFields {
 
 interface Props {
   config: RouterConfigFields;
+  gatewayModelOptions: string[];
   onChange: (updated: RouterConfigFields) => void;
   onSave: (updates: Partial<RouterConfigFields>) => Promise<boolean>;
 }
@@ -181,7 +182,34 @@ function ClassifierSection({ config, onChange }: { config: RouterConfigFields; o
 }
 
 // ─── Routing Logic Section ────────────────────────────────────────────────────
-function RoutingLogicSection({ config, onChange }: { config: RouterConfigFields; onChange: (c: RouterConfigFields) => void }) {
+function RoutingLogicSection({
+  config,
+  gatewayModelOptions,
+  onChange,
+}: {
+  config: RouterConfigFields;
+  gatewayModelOptions: string[];
+  onChange: (c: RouterConfigFields) => void;
+}) {
+  const routingInstructionsRef = useRef<HTMLTextAreaElement | null>(null);
+  const allModelOptions = Array.from(
+    new Set(
+      [
+        ...gatewayModelOptions,
+        config.defaultModel ?? "",
+        config.classifierModel ?? "",
+      ].filter((id): id is string => id.trim().length > 0)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  useEffect(() => {
+    const textarea = routingInstructionsRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [config.routingInstructions]);
+
   return (
     <div>
       <SectionHeader
@@ -198,14 +226,26 @@ function RoutingLogicSection({ config, onChange }: { config: RouterConfigFields;
               Fallback Model
             </div>
           </label>
-          <input
+          <select
             className="input input--mono"
-            type="text"
             value={config.defaultModel || ""}
-            onChange={(e) => onChange({ ...config, defaultModel: e.target.value })}
-            placeholder="openai/gpt-4o"
-          />
-          <span className="form-hint">Used when the classifier fails to decide. e.g., openai/gpt-4o</span>
+            onChange={(e) =>
+              onChange({
+                ...config,
+                defaultModel: e.target.value.trim().length > 0 ? e.target.value : null,
+              })
+            }
+          >
+            <option value="">Select a fallback model</option>
+            {allModelOptions.map((modelId) => (
+              <option key={modelId} value={modelId}>
+                {modelId}
+              </option>
+            ))}
+          </select>
+          <span className="form-hint">
+            Used when the classifier fails to decide. Options are loaded from all gateway models.
+          </span>
         </div>
 
         <div className="form-group">
@@ -215,25 +255,43 @@ function RoutingLogicSection({ config, onChange }: { config: RouterConfigFields;
               Classifier Model
             </div>
           </label>
-          <input
+          <select
             className="input input--mono"
-            type="text"
             value={config.classifierModel || ""}
-            onChange={(e) => onChange({ ...config, classifierModel: e.target.value })}
-            placeholder="meta-llama/llama-3.1-8b-instruct"
-          />
-          <span className="form-hint">Cheap, fast model that makes routing decisions. e.g., llama-3.1-8b</span>
+            onChange={(e) =>
+              onChange({
+                ...config,
+                classifierModel: e.target.value.trim().length > 0 ? e.target.value : null,
+              })
+            }
+          >
+            <option value="">Select a classifier model</option>
+            {allModelOptions.map((modelId) => (
+              <option key={modelId} value={modelId}>
+                {modelId}
+              </option>
+            ))}
+          </select>
+          <span className="form-hint">
+            Cheap, fast model for routing decisions. Options are loaded from all gateway models.
+          </span>
         </div>
       </div>
 
       <div className="form-group" style={{ marginBottom: "var(--space-5)" }}>
         <label className="form-label">Routing Instructions</label>
         <textarea
+          ref={routingInstructionsRef}
           className="textarea"
           value={config.routingInstructions || ""}
-          onChange={(e) => onChange({ ...config, routingInstructions: e.target.value })}
+          onChange={(e) => {
+            onChange({ ...config, routingInstructions: e.target.value });
+            e.target.style.height = "auto";
+            e.target.style.height = `${e.target.scrollHeight}px`;
+          }}
           placeholder="e.g., Use Claude for coding tasks, GPT-4o for creative writing, and Gemini for general chat..."
           rows={4}
+          style={{ overflow: "hidden", resize: "none" }}
         />
         <span className="form-hint">
           Plain-text instructions for the classifier. Be specific about when to use each model type.
@@ -296,7 +354,7 @@ function RoutingLogicSection({ config, onChange }: { config: RouterConfigFields;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function RouterConfigPanel({ config, onChange, onSave }: Props) {
+export function RouterConfigPanel({ config, gatewayModelOptions, onChange, onSave }: Props) {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -314,7 +372,11 @@ export function RouterConfigPanel({ config, onChange, onSave }: Props) {
       <div style={{ height: 1, background: "var(--border-subtle)", margin: "var(--space-8) 0" }} />
 
       {/* Routing Logic */}
-      <RoutingLogicSection config={config} onChange={onChange} />
+      <RoutingLogicSection
+        config={config}
+        gatewayModelOptions={gatewayModelOptions}
+        onChange={onChange}
+      />
 
       {/* Save Button */}
       <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--border-subtle)" }}>

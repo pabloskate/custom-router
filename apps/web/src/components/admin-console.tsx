@@ -4,12 +4,11 @@
 // admin-console.tsx
 //
 // Navigation: vertical sidebar with logical setup order
-//   1. Overview   — stats dashboard (home when already configured)
-//   2. Models     — define the model catalog (start here when new)
-//   3. Routing    — configure classifier, rules, profiles (uses the catalog)
-//   4. API Keys   — provision access keys to call the proxy
-//   5. Playground — test everything end-to-end
-//   6. Account    — name/email (bottom, rarely visited)
+//   1. Gateways   — register upstreams and assign models
+//   2. Routing    — configure classifier, rules, profiles
+//   3. API Keys   — provision access keys to call the proxy
+//   4. Playground — test everything end-to-end
+//   5. Account    — name/email (bottom, rarely visited)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
@@ -21,7 +20,7 @@ import { RouterConfigPanel } from "./RouterConfigPanel";
 import { ProfilesPanel, type RouterProfile } from "./ProfilesPanel";
 import { type CatalogItem } from "./CatalogEditorPanel";
 
-type TabId = "overview" | "gateways" | "routing" | "keys" | "playground" | "account";
+type TabId = "gateways" | "routing" | "keys" | "playground" | "account";
 
 type ServerUserInfo = {
   id: string;
@@ -44,6 +43,12 @@ type UserInfo = ServerUserInfo & {
   clearClassifierApiKey: boolean;
 };
 
+type GatewaySummary = {
+  id: string;
+  name: string;
+  models: Array<{ id: string; name?: string }>;
+};
+
 export type ApiKeyInfo = {
   id: string;
   prefix: string;
@@ -61,23 +66,6 @@ function hydrateUser(user: ServerUserInfo): UserInfo {
 }
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
-function IconOverview({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" />
-    </svg>
-  );
-}
-
-function IconModels({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-    </svg>
-  );
-}
-
 function IconGateway({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -191,8 +179,6 @@ function SideNav({
   return (
     <aside className="sidenav">
       <nav className="sidenav-nav">
-        <NavItem id="overview" label="Overview" icon={IconOverview} />
-
         <div className="sidenav-section-label">Configure</div>
         <NavItem id="gateways" label="Gateways" icon={IconGateway} />
         <NavItem id="routing" label="Routing" icon={IconRouting} />
@@ -227,82 +213,6 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
         <h2>{title}</h2>
         {subtitle && <p>{subtitle}</p>}
       </div>
-    </div>
-  );
-}
-
-// ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ user, keys }: { user: UserInfo | null; keys: ApiKeyInfo[] }) {
-  const activeKeys = keys.filter((k) => !k.revoked).length;
-  const modelCount = user?.customCatalog?.length ?? 0;
-  const profileCount = user?.profiles?.length ?? 0;
-  const isNewUser = activeKeys === 0 && modelCount === 0;
-
-  return (
-    <div className="animate-fade-in">
-      <div className="stat-grid mb-6">
-        <div className="card">
-          <div className="card-body" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-            <div style={{ width: 44, height: 44, borderRadius: "var(--radius-lg)", background: "var(--accent-dim)", color: "var(--accent)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-              <IconKeys />
-            </div>
-            <div>
-              <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-muted)" }}>Active API Keys</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "var(--space-1)" }}>{activeKeys}</div>
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-            <div style={{ width: 44, height: 44, borderRadius: "var(--radius-lg)", background: "var(--success-dim)", color: "var(--success)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-              <IconModels />
-            </div>
-            <div>
-              <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-muted)" }}>Custom Models</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "var(--space-1)" }}>{modelCount}</div>
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-            <div style={{ width: 44, height: 44, borderRadius: "var(--radius-lg)", background: "var(--warning-dim)", color: "var(--warning)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-              <IconRouting />
-            </div>
-            <div>
-              <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-muted)" }}>Routing Profiles</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "var(--space-1)" }}>{profileCount}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {isNewUser && (
-        <div className="card">
-          <div className="card-header">
-            <h3>Getting Started</h3>
-          </div>
-          <div className="card-body">
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-              {[
-                { step: 1, label: "Add your models", desc: "Define which models the router can choose from.", tab: "models" as TabId },
-                { step: 2, label: "Configure routing", desc: "Set up your classifier, instructions, and upstream API key.", tab: "routing" as TabId },
-                { step: 3, label: "Create an API key", desc: "Provision a key to use the proxy in your apps.", tab: "keys" as TabId },
-                { step: 4, label: "Test in Playground", desc: "Send a message and see which model gets selected.", tab: "playground" as TabId },
-              ].map(({ step, label, desc }) => (
-                <div key={step} style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-dim)", border: "1px solid rgba(34,211,238,0.3)", display: "grid", placeItems: "center", flexShrink: 0, fontSize: "0.75rem", fontWeight: 700, color: "var(--accent)" }}>
-                    {step}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)" }}>{label}</div>
-                    <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "var(--space-1)" }}>{desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -342,17 +252,19 @@ export function AdminConsole() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [activeTab, setActiveTab] = useState<TabId>("gateways");
   const [status, setStatus] = useState("Loading...");
   const [error, setError] = useState<string | undefined>();
+  const [gatewayModelOptions, setGatewayModelOptions] = useState<string[]>([]);
 
   async function loadData() {
     setStatus("Loading...");
     setError(undefined);
 
-    const [userRes, keysRes] = await Promise.all([
+    const [userRes, keysRes, gatewaysRes] = await Promise.all([
       fetch("/api/v1/user/me", { cache: "no-store" }),
       fetch("/api/v1/user/keys", { cache: "no-store" }),
+      fetch("/api/v1/user/gateways", { cache: "no-store" }),
     ]);
 
     if (!userRes.ok) {
@@ -371,6 +283,15 @@ export function AdminConsole() {
 
     const userData = await userRes.json() as { user: ServerUserInfo };
     const keysData = await keysRes.json() as { keys: ApiKeyInfo[] };
+    if (gatewaysRes.ok) {
+      const gatewaysData = await gatewaysRes.json() as { gateways?: GatewaySummary[] };
+      const modelIds = Array.from(
+        new Set((gatewaysData.gateways ?? []).flatMap((gw) => gw.models.map((m) => m.id)).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b));
+      setGatewayModelOptions(modelIds);
+    } else {
+      setGatewayModelOptions([]);
+    }
 
     setUser(hydrateUser(userData.user));
     setKeys(keysData.keys);
@@ -388,7 +309,7 @@ export function AdminConsole() {
     setUser(null);
     setKeys([]);
     setStatus("Logged out");
-    setActiveTab("overview");
+    setActiveTab("gateways");
   }
 
   async function saveUserData(updates: Partial<UserInfo>) {
@@ -437,7 +358,6 @@ export function AdminConsole() {
   }
 
   const sectionMeta: Record<TabId, { title: string; subtitle: string }> = {
-    overview: { title: "Overview", subtitle: "Health and activity at a glance" },
     gateways: { title: "Gateways", subtitle: "Register upstream API providers and assign models to each gateway" },
     routing: { title: "Routing", subtitle: "Configure the classifier, rules, and routing profiles" },
     keys: { title: "API Keys", subtitle: "Provision and manage access keys for the proxy" },
@@ -462,14 +382,13 @@ export function AdminConsole() {
           subtitle={sectionMeta[activeTab].subtitle}
         />
 
-        {activeTab === "overview" && (
-          <OverviewTab user={user} keys={keys} />
-        )}
-
         {activeTab === "gateways" && (
           <div className="animate-fade-in">
             <GatewayPanel
-              onStatus={setStatus}
+              onStatus={(msg) => {
+                setStatus(msg);
+                void loadData();
+              }}
               onError={(e) => setError(e)}
             />
           </div>
@@ -494,6 +413,7 @@ export function AdminConsole() {
                     clearClassifierApiKey: user?.clearClassifierApiKey ?? false,
                     showModelInResponse: user?.showModelInResponse ?? false,
                   }}
+                  gatewayModelOptions={gatewayModelOptions}
                   onChange={(updated) => user && setUser({ ...user, ...updated })}
                   onSave={saveUserData}
                 />

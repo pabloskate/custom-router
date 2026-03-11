@@ -24,6 +24,7 @@
 import type { D1Database } from "./cloudflare-types";
 import type { AuthResult } from "./auth";
 import type { RouterRuntimeBindings } from "./runtime";
+import type { GatewayRowPublic } from "./gateway-store";
 import { CONFIG_CHAT, UPSTREAM } from "./constants";
 import { json } from "./http";
 import { decryptByokSecret, resolveByokEncryptionSecret } from "./byok-crypto";
@@ -37,6 +38,15 @@ interface ChatMessage {
   role: string;
   content?: unknown;
   [key: string]: unknown;
+}
+
+interface EffectiveCatalogItem {
+  id: string;
+  name?: string;
+  modality?: string;
+  thinking?: string;
+  whenToUse?: string;
+  gatewayId?: string;
 }
 
 function extractText(content: unknown): string {
@@ -66,6 +76,28 @@ export function isConfigMode(messages: ChatMessage[]): boolean {
   }
 
   return lastConfigIdx > lastEndConfigIdx;
+}
+
+function buildEffectiveCatalog(auth: AuthResult, gatewayRows: GatewayRowPublic[]): EffectiveCatalogItem[] {
+  const fromGateways = gatewayRows.flatMap((gw) =>
+    gw.models.map((m) => ({
+      ...m,
+      gatewayId: gw.id,
+    }))
+  );
+  if (fromGateways.length > 0) {
+    return fromGateways;
+  }
+  return (auth.customCatalog as EffectiveCatalogItem[] | null) ?? [];
+}
+
+function isGatewayModelId(modelId: string, gatewayRows: GatewayRowPublic[]): boolean {
+  for (const gw of gatewayRows) {
+    if (gw.models.some((m) => m.id === modelId)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ── Tool definitions (OpenAI function-calling format) ────────────────────────
@@ -289,8 +321,12 @@ const TOOLS = [
 
 // ── System prompt ────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(auth: AuthResult): string {
-  const catalog = auth.customCatalog ?? [];
+function buildSystemPrompt(auth: AuthResult, gatewayRows: GatewayRowPublic[]): string {
+  const catalog = buildEffectiveCatalog(auth, gatewayRows);
+  const catalogSource =
+    gatewayRows.length > 0
+      ? "all configured gateways"
+      : "legacy custom_catalog (fallback)";
   const catalogStr =
     catalog.length > 0
       ? JSON.stringify(catalog, null, 2)
@@ -311,7 +347,7 @@ CustomRouter is an LLM routing proxy that automatically selects the best model f
 **Routing Instructions:**
 ${auth.routingInstructions ?? "(not set)"}
 
-**Custom Model Catalog:**
+**Effective Model Catalog (source: ${catalogSource}):**
 ${catalogStr}
 
 ## Available Tools
@@ -349,6 +385,7 @@ async function executeTool(
   name: string,
   args: Record<string, unknown>,
   auth: AuthResult,
+  gatewayRows: GatewayRowPublic[],
   db: D1Database,
   apiKey: string,
   baseUrl: string,
@@ -363,6 +400,7 @@ async function executeTool(
             routingInstructions: auth.routingInstructions,
             blocklist: auth.blocklist,
             customCatalog: auth.customCatalog,
+            effectiveCatalog: buildEffectiveCatalog(auth, gatewayRows),
             profiles: auth.profiles,
             showModelInResponse: auth.showModelInResponse,
           },
@@ -430,8 +468,9 @@ async function executeTool(
 
     case "update_default_model": {
       const modelId = args.model_id as string;
-      const valid = await validateModelId(modelId);
-      if (!valid) {
+      const fromGateway = isGatewayModelId(modelId, gatewayRows);
+      const valid = fromGateway ? null : await validateModelId(modelId);
+      if (!fromGateway && !valid) {
         return {
           content: `Model "${modelId}" was not found on OpenRouter. Use search_models to find valid IDs.`,
           isError: true,
@@ -439,13 +478,17 @@ async function executeTool(
       }
       await updateUserField(db, auth.userId, { default_model: modelId });
       auth.defaultModel = modelId;
-      return { content: `Default model set to "${modelId}" (${valid.name}).` };
+      if (fromGateway) {
+        return { content: `Default model set to "${modelId}" (found in your gateway models).` };
+      }
+      return { content: `Default model set to "${modelId}" (${valid!.name}).` };
     }
 
     case "update_classifier_model": {
       const modelId = args.model_id as string;
-      const valid = await validateModelId(modelId);
-      if (!valid) {
+      const fromGateway = isGatewayModelId(modelId, gatewayRows);
+      const valid = fromGateway ? null : await validateModelId(modelId);
+      if (!fromGateway && !valid) {
         return {
           content: `Model "${modelId}" was not found on OpenRouter. Use search_models to find valid IDs.`,
           isError: true,
@@ -453,7 +496,10 @@ async function executeTool(
       }
       await updateUserField(db, auth.userId, { classifier_model: modelId });
       auth.classifierModel = modelId;
-      return { content: `Classifier model set to "${modelId}" (${valid.name}).` };
+      if (fromGateway) {
+        return { content: `Classifier model set to "${modelId}" (found in your gateway models).` };
+      }
+      return { content: `Classifier model set to "${modelId}" (${valid!.name}).` };
     }
 
     case "update_blocklist": {
@@ -631,6 +677,7 @@ export async function handleConfigChat(
   messages: ChatMessage[],
   auth: AuthResult,
   bindings: RouterRuntimeBindings,
+  gatewayRows: GatewayRowPublic[] = [],
   stream = false
 ): Promise<Response> {
   if (!bindings.ROUTER_DB) {
@@ -647,7 +694,7 @@ export async function handleConfigChat(
 
   const systemMessage = {
     role: "system" as const,
-    content: buildSystemPrompt(auth),
+    content: buildSystemPrompt(auth, gatewayRows),
   };
 
   // Strip the #config prefix from the first triggering message so the LLM
@@ -731,6 +778,7 @@ export async function handleConfigChat(
         toolCall.function.name,
         toolArgs,
         auth,
+        gatewayRows,
         db,
         apiKey,
         baseUrl,

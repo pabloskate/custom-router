@@ -44,11 +44,6 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // Intercept config-mode sessions (#config / #endconfig)
-  if (isConfigMode(parsed.data.messages ?? [])) {
-    return handleConfigChat(parsed.data.messages ?? [], auth, bindings, parsed.data.stream ?? false);
-  }
-
   const gatewayRows = await loadGatewaysWithMigration({
     db: bindings.ROUTER_DB,
     userId: auth.userId,
@@ -56,6 +51,17 @@ export async function POST(request: Request): Promise<Response> {
     upstreamApiKeyEnc: auth.upstreamApiKeyEnc ?? null,
     customCatalogJson: auth.customCatalog ? JSON.stringify(auth.customCatalog) : null,
   }).then((rows) => rows.map(gatewayRowToPublic)).catch(() => []);
+
+  // Intercept config-mode sessions (#config / #endconfig)
+  if (isConfigMode(parsed.data.messages ?? [])) {
+    return handleConfigChat(
+      parsed.data.messages ?? [],
+      auth,
+      bindings,
+      gatewayRows,
+      parsed.data.stream ?? false
+    );
+  }
 
   const result = await routeAndProxy({
     body: parsed.data,
