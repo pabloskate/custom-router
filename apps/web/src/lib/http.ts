@@ -1,11 +1,22 @@
+function mergeHeaders(headers?: HeadersInit): Headers {
+  const responseHeaders = new Headers(headers);
+  if (!responseHeaders.has("content-type")) {
+    responseHeaders.set("content-type", "application/json");
+  }
+  return responseHeaders;
+}
+
 export function json(data: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "content-type": "application/json",
-      ...(headers ?? {})
-    }
+    headers: mergeHeaders(headers),
   });
+}
+
+export function jsonNoStore(data: unknown, status = 200, headers?: HeadersInit): Response {
+  const responseHeaders = mergeHeaders(headers);
+  responseHeaders.set("cache-control", "no-store");
+  return json(data, status, responseHeaders);
 }
 
 export function attachRouterHeaders(

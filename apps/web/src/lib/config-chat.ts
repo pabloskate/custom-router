@@ -455,7 +455,7 @@ async function executeTool(
 
         if (!result.ok) {
           return {
-            content: `Web search failed (${result.status}): ${result.errorBody}`,
+            content: `Web search failed (${result.status}). Upstream details were redacted.`,
             isError: true,
           };
         }
@@ -868,7 +868,8 @@ export async function handleConfigChat(
       return json(
         {
           error: "Config chat LLM call failed.",
-          detail: result.errorBody,
+          upstream_status: result.status,
+          detail: "Upstream error details were redacted.",
         },
         502
       );

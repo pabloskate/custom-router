@@ -199,12 +199,6 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
     const data = await res.json() as { apiKey: string };
     setNewKey(data.apiKey);
 
-    try {
-      localStorage.setItem("auto_router_api_key", data.apiKey);
-    } catch {
-      // Ignore storage access issues
-    }
-
     onStatus("API key generated — copy it now!");
     onKeysChanged();
   }

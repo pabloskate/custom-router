@@ -28,12 +28,12 @@ import { callOpenAiCompatible, resolveUpstreamTarget } from "./upstream";
 
 function improveErrorMessage(modelId: string, errorBody: string): string {
   if (errorBody.includes("does not support image input") || errorBody.includes("image_url")) {
-    return `The selected model "${modelId}" does not support image input. Please try a different model or remove any images from your request.`;
+    return `model=${modelId} reason=image_input_not_supported`;
   }
   if (errorBody.includes("Cannot read")) {
-    return `Could not process the input for model "${modelId}". The request may contain unsupported content (images, files, etc.).`;
+    return `model=${modelId} reason=unsupported_input`;
   }
-  return `model=${modelId} status=error body=${errorBody.slice(0, 500)}`;
+  return `model=${modelId} reason=upstream_error_details_redacted`;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -458,9 +458,29 @@ export async function routeAndProxy(args: {
     };
   }
 
+  let classifierApiKeyOverride: string | null = null;
+  if (args.userConfig?.classifierApiKeyEnc) {
+    classifierApiKeyOverride = await decryptByokSecret({
+      ciphertext: args.userConfig.classifierApiKeyEnc,
+      secret: byokSecret,
+    });
+    if (!classifierApiKeyOverride) {
+      return {
+        requestId,
+        response: json(
+          { error: "Classifier key cannot be decrypted. Re-save it in the admin console.", request_id: requestId },
+          500
+        ),
+      };
+    }
+  }
+
   const classifierUpstream = resolveUpstreamTarget({
+    baseUrlOverride: args.userConfig?.classifierBaseUrl,
+    apiKeyOverride: classifierApiKeyOverride,
     fallbackBaseUrl: defaultUpstream.baseUrl,
     fallbackApiKey: defaultUpstream.apiKey,
+    requireApiKeyWithBaseOverride: false,
   });
   if (!classifierUpstream.ok) {
     return {

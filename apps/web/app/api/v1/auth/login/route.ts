@@ -1,4 +1,4 @@
-import { json } from "@/src/lib/http";
+import { jsonNoStore } from "@/src/lib/http";
 import { verifyPassword, createSession, buildSessionCookie, shouldUseSecureCookies } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/runtime";
 import { consumeRateLimit, getClientIp } from "@/src/lib/rate-limit";
@@ -6,7 +6,7 @@ import { consumeRateLimit, getClientIp } from "@/src/lib/rate-limit";
 export async function POST(request: Request): Promise<Response> {
     const bindings = getRuntimeBindings();
     if (!bindings.ROUTER_DB) {
-        return json({ error: "Server misconfigured." }, 500);
+        return jsonNoStore({ error: "Server misconfigured." }, 500);
     }
     const ip = getClientIp(request);
 
@@ -18,7 +18,7 @@ export async function POST(request: Request): Promise<Response> {
         windowSeconds: 15 * 60
     });
     if (!ipLimit.allowed) {
-        return json(
+        return jsonNoStore(
             { error: "Too many login attempts. Try again later." },
             429,
             { "retry-after": String(ipLimit.retryAfterSeconds) }
@@ -29,14 +29,14 @@ export async function POST(request: Request): Promise<Response> {
     try {
         body = (await request.json()) as Record<string, unknown>;
     } catch {
-        return json({ error: "Invalid JSON body." }, 400);
+        return jsonNoStore({ error: "Invalid JSON body." }, 400);
     }
 
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
 
     if (!email || !password) {
-        return json({ error: "Email and password are required." }, 400);
+        return jsonNoStore({ error: "Email and password are required." }, 400);
     }
 
     const emailIpLimit = await consumeRateLimit({
@@ -47,7 +47,7 @@ export async function POST(request: Request): Promise<Response> {
         windowSeconds: 15 * 60
     });
     if (!emailIpLimit.allowed) {
-        return json(
+        return jsonNoStore(
             { error: "Too many login attempts. Try again later." },
             429,
             { "retry-after": String(emailIpLimit.retryAfterSeconds) }
@@ -60,24 +60,24 @@ export async function POST(request: Request): Promise<Response> {
         .first<{ id: string; name: string; password_hash: string | null }>();
 
     if (!user || !user.password_hash) {
-        return json({ error: "Invalid email or password." }, 401);
+        return jsonNoStore({ error: "Invalid email or password." }, 401);
     }
 
     const [salt, hash] = user.password_hash.split(":");
     if (!salt || !hash) {
-        return json({ error: "Invalid email or password." }, 401);
+        return jsonNoStore({ error: "Invalid email or password." }, 401);
     }
 
     const isValid = await verifyPassword(password, hash, salt);
     if (!isValid) {
-        return json({ error: "Invalid email or password." }, 401);
+        return jsonNoStore({ error: "Invalid email or password." }, 401);
     }
 
     const sessionToken = await createSession(user.id, bindings.ROUTER_DB);
     const secureCookie = shouldUseSecureCookies(bindings.SESSION_COOKIE_SECURE);
     const sessionCookie = buildSessionCookie(sessionToken, { secure: secureCookie });
 
-    return json({
+    return jsonNoStore({
         user: { id: user.id, name: user.name, email }
     }, 200, {
         "set-cookie": sessionCookie

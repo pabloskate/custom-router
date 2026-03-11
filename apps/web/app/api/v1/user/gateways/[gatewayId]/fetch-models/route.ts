@@ -58,9 +58,8 @@ export async function GET(
     }
 
     if (!upstreamResponse.ok) {
-      const body = await upstreamResponse.text().catch(() => "");
       return json(
-        { error: `Gateway returned ${upstreamResponse.status}`, detail: body.slice(0, 500) },
+        { error: `Gateway returned ${upstreamResponse.status}. Upstream details were redacted.` },
         upstreamResponse.status >= 400 && upstreamResponse.status < 500 ? 400 : 502
       );
     }

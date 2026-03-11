@@ -274,4 +274,33 @@ describe("handleConfigChat", () => {
     expect(firstCall?.apiKey).toBe(userKey);
     expect(firstCall?.payload).toMatchObject({ model: "legacy/model-a" });
   });
+
+  it("redacts upstream error details when config chat fails", async () => {
+    callMock.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      errorBody: "Authorization: Bearer sk-secret-leak",
+    });
+
+    const response = await handleConfigChat(
+      [{ role: "user", content: "$$config show me config" }],
+      createAuth({
+        configAgentEnabled: true,
+        configAgentOrchestratorModel: "gateway/orchestrator",
+        configAgentSearchModel: "gateway/search",
+      }),
+      createBindings({
+        OPENROUTER_API_KEY: "legacy-key",
+        OPENAI_COMPAT_BASE_URL: "https://legacy.example/v1",
+      }),
+      [],
+      false
+    );
+
+    expect(response.status).toBe(502);
+    const body = await response.json() as { detail: string; upstream_status: number };
+    expect(body.upstream_status).toBe(502);
+    expect(body.detail).toContain("redacted");
+    expect(body.detail).not.toContain("sk-secret-leak");
+  });
 });

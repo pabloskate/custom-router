@@ -29,15 +29,6 @@ type CatalogEntry = {
 };
 
 const CLASSIFIER_OUTPUT_SCHEMA_NAME = "router_classifier_output";
-const CLASSIFIER_DEBUG_PREVIEW_CHARS = 600;
-
-function truncateForLog(text: string): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  return compact.length > CLASSIFIER_DEBUG_PREVIEW_CHARS
-    ? `${compact.slice(0, CLASSIFIER_DEBUG_PREVIEW_CHARS)}…`
-    : compact;
-}
-
 function buildPrompt(args: {
   input: string;
   catalog: CatalogEntry[];
@@ -158,9 +149,8 @@ export async function routeWithFrontierModel(args: {
     }),
   });
   if (!schemaResponse.ok) {
-    const schemaErrorPreview = truncateForLog(await schemaResponse.clone().text());
     console.log(
-      `[router-classifier] schema_request_failed status=${schemaResponse.status} model=${baseRequest.model} body=${schemaErrorPreview}`
+      `[router-classifier] schema_request_failed status=${schemaResponse.status} model=${baseRequest.model}`
     );
   }
 
@@ -181,9 +171,8 @@ export async function routeWithFrontierModel(args: {
       });
 
   if (!response.ok) {
-    const errorPreview = truncateForLog(await response.clone().text());
     console.log(
-      `[router-classifier] request_failed status=${response.status} model=${baseRequest.model} body=${errorPreview}`
+      `[router-classifier] request_failed status=${response.status} model=${baseRequest.model}`
     );
     return null;
   }
@@ -197,11 +186,6 @@ export async function routeWithFrontierModel(args: {
     console.log(`[router-classifier] empty_content model=${baseRequest.model}`);
     return null;
   }
-
-  const rawOutputPreview = truncateForLog(content);
-  console.log(
-    `[router-classifier] raw_output model=${baseRequest.model} content=${rawOutputPreview}`
-  );
 
   try {
     const parsed = JSON.parse(content) as {
@@ -224,9 +208,9 @@ export async function routeWithFrontierModel(args: {
     return {
       selectedModel: parsed.selectedModel,
       confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.7,
-      signals: (Array.isArray(parsed.signals)
+      signals: Array.isArray(parsed.signals)
         ? parsed.signals.filter((s): s is string => typeof s === "string")
-        : ["frontier_classification"]).concat(`classifier_raw:${rawOutputPreview}`),
+        : ["frontier_classification"],
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown_parse_error";

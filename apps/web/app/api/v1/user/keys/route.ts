@@ -1,4 +1,4 @@
-import { json } from "@/src/lib/http";
+import { json, jsonNoStore } from "@/src/lib/http";
 import { authenticateSession, generateApiKey, hashKey } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/runtime";
 import { isSameOriginRequest } from "@/src/lib/csrf";
@@ -34,16 +34,16 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
     const bindings = getRuntimeBindings();
     if (!bindings.ROUTER_DB) {
-        return json({ error: "Server misconfigured." }, 500);
+        return jsonNoStore({ error: "Server misconfigured." }, 500);
     }
 
     if (!isSameOriginRequest(request)) {
-        return json({ error: "Invalid origin." }, 403);
+        return jsonNoStore({ error: "Invalid origin." }, 403);
     }
 
     const auth = await authenticateSession(request, bindings.ROUTER_DB);
     if (!auth) {
-        return json({ error: "Unauthorized." }, 401);
+        return jsonNoStore({ error: "Unauthorized." }, 401);
     }
 
     let body: Record<string, unknown> = {};
@@ -78,7 +78,7 @@ export async function POST(request: Request): Promise<Response> {
         )
         .run();
 
-    return json({
+    return jsonNoStore({
         apiKey: keyData.raw,
         apiKeyPrefix: keyData.prefix,
         keyId,
