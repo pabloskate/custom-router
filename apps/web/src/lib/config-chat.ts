@@ -100,6 +100,10 @@ function isGatewayModelId(modelId: string, gatewayRows: GatewayRowPublic[]): boo
   return false;
 }
 
+function isEffectiveCatalogModelId(modelId: string, auth: AuthResult, gatewayRows: GatewayRowPublic[]): boolean {
+  return buildEffectiveCatalog(auth, gatewayRows).some((m) => m.id === modelId);
+}
+
 // ── Tool definitions (OpenAI function-calling format) ────────────────────────
 
 const TOOLS = [
@@ -171,7 +175,7 @@ const TOOLS = [
     function: {
       name: "update_default_model",
       description:
-        "Set the user's default (fallback) model. This is the model used when the classifier cannot decide or when routing is not needed. The model ID is validated against OpenRouter before saving.",
+        "Set the user's default (fallback) model. This is the model used when the classifier cannot decide or when routing is not needed. If gateways are configured, the model must be one of the effective gateway catalog models.",
       parameters: {
         type: "object",
         properties: {
@@ -189,7 +193,7 @@ const TOOLS = [
     function: {
       name: "update_classifier_model",
       description:
-        "Set the LLM used for routing decisions (the classifier). Must be a capable, fast model. The model ID is validated against OpenRouter before saving.",
+        "Set the LLM used for routing decisions (the classifier). Must be a capable, fast model. If gateways are configured, the model must be one of the effective gateway catalog models.",
       parameters: {
         type: "object",
         properties: {
@@ -357,8 +361,8 @@ You have tools to read and modify the configuration:
 - **search_models**: Search OpenRouter's model catalog to find valid model IDs
 - **web_search**: Search the web for latest model info and recommendations
 - **update_routing_instructions**: Set new routing instructions
-- **update_default_model**: Change the fallback model (validated against OpenRouter)
-- **update_classifier_model**: Change the classifier model (validated against OpenRouter)
+- **update_default_model**: Change the fallback model (gateway-catalog constrained when gateways are configured)
+- **update_classifier_model**: Change the classifier model (gateway-catalog constrained when gateways are configured)
 - **update_blocklist**: Set the model blocklist
 - **update_show_model_in_response**: Toggle whether model IDs are shown in responses
 - **add_to_catalog**: Add a model to the custom catalog (validated)
@@ -367,11 +371,12 @@ You have tools to read and modify the configuration:
 
 ## Important Rules
 
-1. **Always validate model IDs** before writing them. Use search_models to find the correct OpenRouter model ID.  Model IDs on OpenRouter typically look like "provider/model-name" (e.g., "openai/gpt-4.1", "anthropic/claude-sonnet-4").
-2. **Use web_search** when the user asks about the latest or newest models, or needs recommendations, since your training data may be outdated.
-3. **Confirm changes** after applying them — summarize what was changed.
-4. **Ending the session**: ONLY append ${CONFIG_CHAT.END_KEYWORD} at the very end of your response when the user has **explicitly** said they are finished (e.g., "that's all", "done", "exit", "quit", "I'm done", "no more changes"). NEVER emit ${CONFIG_CHAT.END_KEYWORD} on your own initiative — not when presenting a summary, not when asking a follow-up question, not after making a change. If there is any doubt, ask the user if they need anything else and wait for their reply.
-5. Keep responses concise and focused on configuration.`;
+1. **When gateways are configured**, default/classifier model IDs must come from the Effective Model Catalog above (gateway models only). Do not set gateway-incompatible models.
+2. **When no gateways are configured**, validate model IDs before writing them. Use search_models to find the correct OpenRouter model ID. Model IDs on OpenRouter typically look like "provider/model-name" (e.g., "openai/gpt-4.1", "anthropic/claude-sonnet-4").
+3. **Use web_search** when the user asks about the latest or newest models, or needs recommendations, since your training data may be outdated.
+4. **Confirm changes** after applying them — summarize what was changed.
+5. **Ending the session**: ONLY append ${CONFIG_CHAT.END_KEYWORD} at the very end of your response when the user has **explicitly** said they are finished (e.g., "that's all", "done", "exit", "quit", "I'm done", "no more changes"). NEVER emit ${CONFIG_CHAT.END_KEYWORD} on your own initiative — not when presenting a summary, not when asking a follow-up question, not after making a change. If there is any doubt, ask the user if they need anything else and wait for their reply.
+6. Keep responses concise and focused on configuration.`;
 }
 
 // ── Tool executor ────────────────────────────────────────────────────────────
@@ -468,9 +473,16 @@ async function executeTool(
 
     case "update_default_model": {
       const modelId = args.model_id as string;
+      const hasGatewayCatalog = gatewayRows.length > 0;
       const fromGateway = isGatewayModelId(modelId, gatewayRows);
-      const valid = fromGateway ? null : await validateModelId(modelId);
-      if (!fromGateway && !valid) {
+      if (hasGatewayCatalog && !isEffectiveCatalogModelId(modelId, auth, gatewayRows)) {
+        return {
+          content: `Model "${modelId}" is not available in your configured gateways. Choose a model from your Effective Model Catalog.`,
+          isError: true,
+        };
+      }
+      const valid = hasGatewayCatalog ? null : await validateModelId(modelId);
+      if (!hasGatewayCatalog && !valid) {
         return {
           content: `Model "${modelId}" was not found on OpenRouter. Use search_models to find valid IDs.`,
           isError: true,
@@ -478,17 +490,27 @@ async function executeTool(
       }
       await updateUserField(db, auth.userId, { default_model: modelId });
       auth.defaultModel = modelId;
-      if (fromGateway) {
+      if (hasGatewayCatalog && fromGateway) {
         return { content: `Default model set to "${modelId}" (found in your gateway models).` };
+      }
+      if (hasGatewayCatalog) {
+        return { content: `Default model set to "${modelId}" (available in your effective gateway catalog).` };
       }
       return { content: `Default model set to "${modelId}" (${valid!.name}).` };
     }
 
     case "update_classifier_model": {
       const modelId = args.model_id as string;
+      const hasGatewayCatalog = gatewayRows.length > 0;
       const fromGateway = isGatewayModelId(modelId, gatewayRows);
-      const valid = fromGateway ? null : await validateModelId(modelId);
-      if (!fromGateway && !valid) {
+      if (hasGatewayCatalog && !isEffectiveCatalogModelId(modelId, auth, gatewayRows)) {
+        return {
+          content: `Model "${modelId}" is not available in your configured gateways. Choose a model from your Effective Model Catalog.`,
+          isError: true,
+        };
+      }
+      const valid = hasGatewayCatalog ? null : await validateModelId(modelId);
+      if (!hasGatewayCatalog && !valid) {
         return {
           content: `Model "${modelId}" was not found on OpenRouter. Use search_models to find valid IDs.`,
           isError: true,
@@ -496,8 +518,11 @@ async function executeTool(
       }
       await updateUserField(db, auth.userId, { classifier_model: modelId });
       auth.classifierModel = modelId;
-      if (fromGateway) {
+      if (hasGatewayCatalog && fromGateway) {
         return { content: `Classifier model set to "${modelId}" (found in your gateway models).` };
+      }
+      if (hasGatewayCatalog) {
+        return { content: `Classifier model set to "${modelId}" (available in your effective gateway catalog).` };
       }
       return { content: `Classifier model set to "${modelId}" (${valid!.name}).` };
     }
