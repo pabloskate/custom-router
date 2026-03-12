@@ -199,7 +199,6 @@ function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelF
   const [name, setName] = useState(initial?.name ?? "");
   const [upstreamModelId, setUpstreamModelId] = useState(initial?.upstreamModelId ?? initial?.id ?? "");
   const [reasoningPreset, setReasoningPreset] = useState<ReasoningLevel>(initial?.reasoningPreset ?? "none");
-  const [thinking, setThinking] = useState<ReasoningLevel>(initial?.thinking ?? "none");
   const [whenToUse, setWhenToUse] = useState(initial?.whenToUse ?? "");
   const [err, setErr] = useState("");
 
@@ -214,7 +213,7 @@ function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelF
       name: name.trim(),
       upstreamModelId: upstreamModelId.trim(),
       reasoningPreset,
-      thinking,
+      thinking: reasoningPreset,
       whenToUse: whenToUse.trim() || undefined,
     });
   }
@@ -272,19 +271,6 @@ function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelF
             ))}
           </select>
         </div>
-      </div>
-      <div className="form-group">
-        <label className="form-label">Thinking level</label>
-        <select
-          className="input btn--sm"
-          style={{ padding: "var(--space-2) var(--space-3)", fontSize: "0.8125rem" }}
-          value={thinking}
-          onChange={e => setThinking(e.target.value as ReasoningLevel)}
-        >
-          {REASONING_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
       </div>
       <div className="form-group">
         <label className="form-label">When to use (routing hint)</label>
@@ -529,7 +515,6 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
         name: model.name,
         upstreamModelId: model.id,
         reasoningPreset: "none" as const,
-        thinking: "none" as const,
       }));
     const models = [...gateway.models, ...newModels];
     if (await saveModels(models)) {
@@ -655,9 +640,6 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
                       <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
                         <span className="badge badge--info" style={{ fontSize: "0.7rem" }}>
                           reasoning {reasoningLabel(model.reasoningPreset ?? "none")}
-                        </span>
-                        <span className="badge badge--info" style={{ fontSize: "0.7rem" }}>
-                          thinking {reasoningLabel(model.thinking ?? "none")}
                         </span>
                         <span className="badge badge--info" style={{ fontSize: "0.7rem" }}>
                           upstream {model.upstreamModelId ?? model.id}

@@ -216,7 +216,21 @@ export async function deleteUserGateway(args: {
 function parseModels(modelsJson: string): CatalogItem[] {
   try {
     const parsed = JSON.parse(modelsJson);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((item) => {
+          if (!item || typeof item !== "object") {
+            return item;
+          }
+
+          const model = item as CatalogItem;
+          const reasoningPreset = model.reasoningPreset;
+
+          return {
+            ...model,
+            thinking: reasoningPreset ?? model.thinking,
+          };
+        })
+      : [];
   } catch {
     return [];
   }
