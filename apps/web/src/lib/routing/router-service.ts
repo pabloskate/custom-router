@@ -720,7 +720,7 @@ export async function routeAndProxy(args: {
     const isStreaming = args.body.stream === true;
     let finalResponse = result.response;
 
-    if (args.userConfig?.showModelInResponse && !isStreaming) {
+    if (args.userConfig?.showModelInResponse) {
       const { hasToolCalls, response: checkedResponse } = await responseHasToolCalls(
         result.response,
         args.apiPath,

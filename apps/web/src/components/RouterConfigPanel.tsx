@@ -285,13 +285,7 @@ function ConfigAgentSection({
 
   return (
     <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--border-subtle)" }}>
-      <SectionHeader
-        icon={IconWrench}
-        title="Config Agent (Optional)"
-        description="Only needed if you want to manage router settings via chat."
-      />
-
-      <div className="form-group" style={{ marginBottom: "var(--space-5)" }}>
+      <div className="form-group" style={{ marginBottom: "var(--space-6)" }}>
         <label
           className="checkbox-wrapper"
           style={{
@@ -319,84 +313,94 @@ function ConfigAgentSection({
         </label>
       </div>
 
-      <div className="form-row" style={{ marginBottom: "var(--space-6)" }}>
-        <div className="form-group">
-          <label className="form-label">Config Orchestrator Model</label>
-          <select
-            className="input input--mono"
-            value={config.configAgentOrchestratorModel || ""}
-            onChange={(e) =>
-              onChange({
-                ...config,
-                configAgentOrchestratorModel: e.target.value.trim().length > 0 ? e.target.value : null,
-              })
-            }
-          >
-            <option value="">Select a model</option>
-            {modelOptions.map((modelId) => (
-              <option key={modelId} value={modelId}>
-                {modelId}
-              </option>
-            ))}
-          </select>
-          <span className="form-hint">Model used for tool-calling and config decisions in $$config mode.</span>
-        </div>
+      {config.configAgentEnabled && (
+        <>
+          <SectionHeader
+            icon={IconWrench}
+            title="Config Agent (Optional)"
+            description="Only needed if you want to manage router settings via chat."
+          />
 
-        <div className="form-group">
-          <label className="form-label">Config Web-Search Model</label>
-          <select
-            className="input input--mono"
-            value={config.configAgentSearchModel || ""}
-            onChange={(e) =>
-              onChange({
-                ...config,
-                configAgentSearchModel: e.target.value.trim().length > 0 ? e.target.value : null,
-              })
-            }
-          >
-            <option value="">Select a model</option>
-            {modelOptions.map((modelId) => (
-              <option key={modelId} value={modelId}>
-                {modelId}
-              </option>
-            ))}
-          </select>
-          <span className="form-hint">Model used by the config assistant web-search tool for latest model recommendations.</span>
-        </div>
-      </div>
+          <div className="form-row" style={{ marginBottom: "var(--space-6)" }}>
+            <div className="form-group">
+              <label className="form-label">Config Orchestrator Model</label>
+              <select
+                className="input input--mono"
+                value={config.configAgentOrchestratorModel || ""}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    configAgentOrchestratorModel: e.target.value.trim().length > 0 ? e.target.value : null,
+                  })
+                }
+              >
+                <option value="">Select a model</option>
+                {modelOptions.map((modelId) => (
+                  <option key={modelId} value={modelId}>
+                    {modelId}
+                  </option>
+                ))}
+              </select>
+              <span className="form-hint">Model used for tool-calling and config decisions in $$config mode.</span>
+            </div>
 
-      <div
-        style={{
-          padding: "var(--space-4)",
-          borderRadius: "var(--radius-md)",
-          border: "1px solid var(--border-default)",
-          background: "var(--bg-interactive)",
-          display: "grid",
-          gap: "var(--space-4)",
-        }}
-      >
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>Commands</div>
-          <div style={{ display: "grid", gap: "var(--space-1)", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            <div><code style={{ fontSize: "0.75rem" }}>$$config</code> - enter config mode</div>
-            <div><code style={{ fontSize: "0.75rem" }}>#endconfig</code> - exit config mode</div>
+            <div className="form-group">
+              <label className="form-label">Config Web-Search Model</label>
+              <select
+                className="input input--mono"
+                value={config.configAgentSearchModel || ""}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    configAgentSearchModel: e.target.value.trim().length > 0 ? e.target.value : null,
+                  })
+                }
+              >
+                <option value="">Select a model</option>
+                {modelOptions.map((modelId) => (
+                  <option key={modelId} value={modelId}>
+                    {modelId}
+                  </option>
+                ))}
+              </select>
+              <span className="form-hint">Model used by the config assistant web-search tool for latest model recommendations.</span>
+            </div>
           </div>
-        </div>
 
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>What You Can Ask</div>
-          <div style={{ display: "grid", gap: "var(--space-1)", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            <div>"Show my current config"</div>
-            <div>"Set default model to ..."</div>
-            <div>"Set classifier model to ..."</div>
-            <div>"Update routing instructions to ..."</div>
-            <div>"Add/Remove model ..."</div>
-            <div>"Set blocklist to ..."</div>
-            <div>"Enable/Disable show model in response"</div>
-            <div>"Recommend latest model for coding"</div>
+          <div
+            style={{
+              padding: "var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-default)",
+              background: "var(--bg-interactive)",
+              display: "grid",
+              gap: "var(--space-4)",
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>Commands</div>
+              <div style={{ display: "grid", gap: "var(--space-1)", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+                <div><code style={{ fontSize: "0.75rem" }}>$$config</code> - enter config mode</div>
+                <div><code style={{ fontSize: "0.75rem" }}>#endconfig</code> - exit config mode</div>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>What You Can Ask</div>
+              <div style={{ display: "grid", gap: "var(--space-1)", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+                <div>"Show my current config"</div>
+                <div>"Set default model to ..."</div>
+                <div>"Set classifier model to ..."</div>
+                <div>"Update routing instructions to ..."</div>
+                <div>"Add/Remove model ..."</div>
+                <div>"Set blocklist to ..."</div>
+                <div>"Enable/Disable show model in response"</div>
+                <div>"Recommend latest model for coding"</div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

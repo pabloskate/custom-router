@@ -458,11 +458,12 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
         />
       )}
 
-      <QuickstartGuide apiKey={newKey} onStatus={onStatus} />
-
       {/* Empty State */}
       {keys.length === 0 ? (
-        <EmptyState onGenerate={() => void generateKey()} />
+        <>
+          <EmptyState onGenerate={() => void generateKey()} />
+          <QuickstartGuide apiKey={newKey} onStatus={onStatus} />
+        </>
       ) : (
         <>
           {/* Generate Button */}
@@ -573,6 +574,8 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
               Total: {keys.length} key{keys.length !== 1 ? "s" : ""}
             </span>
           </div>
+
+          <QuickstartGuide apiKey={newKey} onStatus={onStatus} />
         </>
       )}
     </div>

@@ -266,6 +266,8 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .topbar-logo {
@@ -273,6 +275,7 @@ body {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--accent);
+  white-space: nowrap;
 }
 
 .topbar-tagline {
@@ -280,6 +283,7 @@ body {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.1em;
+  white-space: nowrap;
 }
 
 .topbar nav {
@@ -289,6 +293,7 @@ body {
   padding: var(--space-1);
   border-radius: var(--radius-full);
   border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .topbar a {
@@ -299,6 +304,7 @@ body {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
   transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
 .topbar a:hover {
@@ -310,6 +316,33 @@ body {
   color: var(--text-primary);
   background: var(--bg-interactive);
   box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) var(--space-6);
+  }
+
+  .topbar-tagline {
+    display: none;
+  }
+
+  .topbar-logo {
+    font-size: 1.2rem;
+  }
+
+  .topbar nav {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .topbar a {
+    font-size: 0.8rem;
+    padding: var(--space-2) var(--space-3);
+  }
 }
 
 /* ─── Cards / Panels ───────────────────────────────────────────────────────── */
