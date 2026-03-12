@@ -40,6 +40,8 @@ interface ChatMessage {
   [key: string]: unknown;
 }
 
+type ConfigChatResponseFormat = "chat.completions" | "responses";
+
 interface EffectiveCatalogItem {
   id: string;
   name?: string;
@@ -60,6 +62,83 @@ function extractText(content: unknown): string {
   return "";
 }
 
+function normalizeResponsesTextPart(part: unknown): { type: "text"; text: string } | null {
+  if (typeof part === "string") {
+    return { type: "text", text: part };
+  }
+  if (!part || typeof part !== "object") {
+    return null;
+  }
+
+  const candidate = part as Record<string, unknown>;
+  const type = typeof candidate.type === "string" ? candidate.type : "";
+  const text =
+    typeof candidate.text === "string"
+      ? candidate.text
+      : typeof candidate.input_text === "string"
+        ? candidate.input_text
+        : typeof candidate.output_text === "string"
+          ? candidate.output_text
+          : null;
+
+  if (!text) {
+    return null;
+  }
+
+  if (type === "input_text" || type === "output_text" || type === "text" || type === "") {
+    return { type: "text", text };
+  }
+
+  return null;
+}
+
+function normalizeResponsesContent(content: unknown): unknown {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    const part = normalizeResponsesTextPart(content);
+    return part ? [part] : content;
+  }
+
+  const normalizedParts = content
+    .map((part) => normalizeResponsesTextPart(part))
+    .filter((part): part is { type: "text"; text: string } => part !== null);
+
+  return normalizedParts.length > 0 ? normalizedParts : content;
+}
+
+export function extractResponsesInputMessages(input: unknown): ChatMessage[] {
+  const items = Array.isArray(input) ? input : [input];
+
+  return items.flatMap((item) => {
+    if (typeof item === "string") {
+      return [{ role: "user", content: item }];
+    }
+
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+
+    const candidate = item as Record<string, unknown>;
+    const role = typeof candidate.role === "string" ? candidate.role : null;
+
+    if (role) {
+      return [
+        {
+          ...candidate,
+          role,
+          content: normalizeResponsesContent(candidate.content),
+        },
+      ];
+    }
+
+    const part = normalizeResponsesTextPart(candidate);
+    return part ? [{ role: "user", content: [part] }] : [];
+  });
+}
+
 export function isConfigMode(messages: ChatMessage[]): boolean {
   let lastConfigIdx = -1;
   let lastEndConfigIdx = -1;
@@ -76,6 +155,10 @@ export function isConfigMode(messages: ChatMessage[]): boolean {
   }
 
   return lastConfigIdx > lastEndConfigIdx;
+}
+
+export function isResponsesConfigMode(input: unknown): boolean {
+  return isConfigMode(extractResponsesInputMessages(input));
 }
 
 function buildEffectiveCatalog(auth: AuthResult, gatewayRows: GatewayRowPublic[]): EffectiveCatalogItem[] {
@@ -774,7 +857,8 @@ export async function handleConfigChat(
   auth: AuthResult,
   bindings: RouterRuntimeBindings,
   gatewayRows: GatewayRowPublic[] = [],
-  stream = false
+  stream = false,
+  responseFormat: ConfigChatResponseFormat = "chat.completions",
 ): Promise<Response> {
   if (!bindings.ROUTER_DB) {
     return json({ error: "Server misconfigured: missing database." }, 500);
@@ -888,6 +972,11 @@ export async function handleConfigChat(
       assistantMessage.tool_calls.length === 0
     ) {
       const content = assistantMessage.content ?? "";
+      if (responseFormat === "responses") {
+        return stream
+          ? buildResponsesStreamingResponse(content, body, orchestratorTarget.model)
+          : buildResponsesResponse(content, body, orchestratorTarget.model);
+      }
       return stream
         ? buildStreamingResponse(content, body, orchestratorTarget.model)
         : buildChatCompletionResponse(content, body, orchestratorTarget.model);
@@ -960,6 +1049,55 @@ function buildChatCompletionResponse(content: string, raw: any, model: string): 
   });
 }
 
+function buildResponsesPayload(content: string, raw: any, model: string) {
+  const responseId = raw?.id ?? `resp-config-${Date.now()}`;
+  const createdAt = raw?.created_at ?? raw?.created ?? Math.floor(Date.now() / 1000);
+  const resolvedModel = raw?.model ?? model;
+  const messageId = raw?.output?.[0]?.id ?? `msg-config-${Date.now()}`;
+  const message = {
+    id: messageId,
+    type: "message",
+    status: "completed",
+    role: "assistant",
+    content: [
+      {
+        type: "output_text",
+        text: content,
+        annotations: [],
+      },
+    ],
+  };
+
+  return {
+    id: responseId,
+    object: "response",
+    created_at: createdAt,
+    status: "completed",
+    error: null,
+    incomplete_details: null,
+    model: resolvedModel,
+    output: [message],
+    parallel_tool_calls: true,
+    previous_response_id: null,
+    reasoning: { effort: null, summary: null },
+    store: true,
+    temperature: CONFIG_CHAT.TEMPERATURE,
+    text: { format: { type: "text" } },
+    tool_choice: "auto",
+    tools: [],
+    top_p: 1,
+    truncation: "disabled",
+    usage: raw?.usage ?? null,
+    metadata: {},
+  };
+}
+
+function buildResponsesResponse(content: string, raw: any, model: string): Response {
+  return json(buildResponsesPayload(content, raw, model), 200, {
+    "x-router-config-mode": "true",
+  });
+}
+
 function buildStreamingResponse(content: string, raw: any, model: string): Response {
   const id = raw?.id ?? `chatcmpl-config-${Date.now()}`;
   const created = raw?.created ?? Math.floor(Date.now() / 1000);
@@ -995,6 +1133,110 @@ function buildStreamingResponse(content: string, raw: any, model: string): Respo
     `data: ${JSON.stringify(stopChunk)}\n\n`,
     `data: [DONE]\n\n`,
   ].join("");
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+      "x-router-config-mode": "true",
+    },
+  });
+}
+
+function buildResponsesStreamingResponse(content: string, raw: any, model: string): Response {
+  const payload = buildResponsesPayload(content, raw, model);
+  const message = payload.output[0]!;
+
+  const events = [
+    {
+      event: "response.in_progress",
+      data: {
+        type: "response.in_progress",
+        response: {
+          ...payload,
+          status: "in_progress",
+          output: [],
+        },
+      },
+    },
+    {
+      event: "response.output_item.added",
+      data: {
+        type: "response.output_item.added",
+        output_index: 0,
+        item: {
+          ...message,
+          status: "in_progress",
+          content: [],
+        },
+      },
+    },
+    {
+      event: "response.content_part.added",
+      data: {
+        type: "response.content_part.added",
+        item_id: message.id,
+        output_index: 0,
+        content_index: 0,
+        part: {
+          type: "output_text",
+          text: "",
+          annotations: [],
+        },
+      },
+    },
+    {
+      event: "response.output_text.delta",
+      data: {
+        type: "response.output_text.delta",
+        item_id: message.id,
+        output_index: 0,
+        content_index: 0,
+        delta: content,
+      },
+    },
+    {
+      event: "response.output_text.done",
+      data: {
+        type: "response.output_text.done",
+        item_id: message.id,
+        output_index: 0,
+        content_index: 0,
+        text: content,
+      },
+    },
+    {
+      event: "response.content_part.done",
+      data: {
+        type: "response.content_part.done",
+        item_id: message.id,
+        output_index: 0,
+        content_index: 0,
+        part: message.content[0],
+      },
+    },
+    {
+      event: "response.output_item.done",
+      data: {
+        type: "response.output_item.done",
+        output_index: 0,
+        item: message,
+      },
+    },
+    {
+      event: "response.completed",
+      data: {
+        type: "response.completed",
+        response: payload,
+      },
+    },
+  ];
+
+  const body = events
+    .map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    .join("");
 
   return new Response(body, {
     status: 200,

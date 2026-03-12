@@ -4,7 +4,7 @@ import type { AuthResult } from "./auth";
 import type { GatewayRowPublic } from "./gateway-store";
 import type { RouterRuntimeBindings } from "./runtime";
 import { encryptByokSecret } from "./byok-crypto";
-import { handleConfigChat } from "./config-chat";
+import { handleConfigChat, isResponsesConfigMode } from "./config-chat";
 import { callOpenAiCompatible } from "./upstream";
 
 vi.mock("./openrouter-models", () => ({
@@ -302,5 +302,48 @@ describe("handleConfigChat", () => {
     expect(body.upstream_status).toBe(502);
     expect(body.detail).toContain("redacted");
     expect(body.detail).not.toContain("sk-secret-leak");
+  });
+
+  it("supports config mode from Responses API input", async () => {
+    expect(
+      isResponsesConfigMode([
+        {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "$$config show me config" }],
+        },
+      ])
+    ).toBe(true);
+
+    callMock.mockResolvedValueOnce(
+      okChatResponse({
+        id: "resp_test",
+        model: "gateway/orchestrator",
+        choices: [{ message: { role: "assistant", content: "Here is your config." } }],
+      })
+    );
+
+    const response = await handleConfigChat(
+      [{ role: "user", content: "$$config show me config" }],
+      createAuth({
+        configAgentEnabled: true,
+        configAgentOrchestratorModel: "gateway/orchestrator",
+        configAgentSearchModel: "gateway/search",
+      }),
+      createBindings({
+        OPENROUTER_API_KEY: "legacy-key",
+        OPENAI_COMPAT_BASE_URL: "https://legacy.example/v1",
+      }),
+      [],
+      false,
+      "responses"
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(body.object).toBe("response");
+    expect(body.output?.[0]?.role).toBe("assistant");
+    expect(body.output?.[0]?.content?.[0]?.type).toBe("output_text");
+    expect(body.output?.[0]?.content?.[0]?.text).toBe("Here is your config.");
   });
 });

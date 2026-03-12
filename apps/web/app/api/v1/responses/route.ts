@@ -1,4 +1,5 @@
 import { authenticateRequest, authenticateSession } from "@/src/lib/auth";
+import { extractResponsesInputMessages, handleConfigChat, isResponsesConfigMode } from "@/src/lib/config-chat";
 import { loadGatewaysWithMigration, gatewayRowToPublic } from "@/src/lib/gateway-store";
 import { json } from "@/src/lib/http";
 import { routeAndProxy } from "@/src/lib/router-service";
@@ -50,6 +51,17 @@ export async function POST(request: Request): Promise<Response> {
     upstreamApiKeyEnc: auth.upstreamApiKeyEnc ?? null,
     customCatalogJson: auth.customCatalog ? JSON.stringify(auth.customCatalog) : null,
   }).then((rows) => rows.map(gatewayRowToPublic)).catch(() => []);
+
+  if (isResponsesConfigMode(parsed.data.input)) {
+    return handleConfigChat(
+      extractResponsesInputMessages(parsed.data.input),
+      auth,
+      bindings,
+      gatewayRows,
+      parsed.data.stream ?? false,
+      "responses"
+    );
+  }
 
   const result = await routeAndProxy({
     body: parsed.data,
