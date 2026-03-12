@@ -51,6 +51,8 @@ export async function POST(request: Request): Promise<Response> {
     name: typeof item.name === "string" ? item.name : item.id,
     modality: typeof item.modality === "string" ? item.modality : undefined,
     thinking: (item.thinking as CatalogItem["thinking"]) ?? undefined,
+    reasoningPreset: (item.reasoningPreset as CatalogItem["reasoningPreset"]) ?? undefined,
+    upstreamModelId: typeof item.upstreamModelId === "string" ? item.upstreamModelId : undefined,
     whenToUse: typeof item.whenToUse === "string" ? item.whenToUse : undefined,
     description: typeof item.description === "string" ? item.description : undefined
   };

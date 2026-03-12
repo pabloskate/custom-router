@@ -90,7 +90,7 @@ export function joinUpstreamUrl(baseUrl: string, apiPath: string): string {
   return `${normalizeBaseUrl(baseUrl)}/${normalizedPath}`;
 }
 
-function isOpenRouterHost(baseUrl: string): boolean {
+export function isOpenRouterHost(baseUrl: string): boolean {
   const parsed = parseValidatedBaseUrl(baseUrl);
   if (!parsed) {
     return false;

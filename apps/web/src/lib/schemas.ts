@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const reasoningPresetSchema = z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]);
+
 export const routerProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(100),
@@ -88,10 +90,12 @@ export const completionsSchema = z.object({
 const catalogItemSchema = z.object({
   id:          z.string().min(1),
   name:        z.string().min(1),
+  upstreamModelId: z.string().min(1).optional(),
   whenToUse:   z.string().optional(),
   description: z.string().optional(),
   modality:    z.string().optional(),
-  thinking:    z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]).optional(),
+  thinking:    reasoningPresetSchema.optional(),
+  reasoningPreset: reasoningPresetSchema.optional(),
 });
 
 export const createGatewaySchema = z.object({
@@ -105,7 +109,25 @@ export const updateGatewaySchema = z.object({
   baseUrl: z.string().url().optional(),
   apiKey:  z.string().min(1).optional(),
   models:  z.array(catalogItemSchema).optional(),
-}).refine(
-  (d) => Object.keys(d).length > 0,
-  { message: "At least one field is required." }
-);
+}).superRefine((data, ctx) => {
+  if (Object.keys(data).length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "At least one field is required.",
+    });
+  }
+
+  if (Array.isArray(data.models)) {
+    const seen = new Set<string>();
+    for (const [index, model] of data.models.entries()) {
+      if (seen.has(model.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate model id "${model.id}" is not allowed.`,
+          path: ["models", index, "id"],
+        });
+      }
+      seen.add(model.id);
+    }
+  }
+});

@@ -180,4 +180,73 @@ describe("routeAndProxy", () => {
     expect(body.details[0]).not.toContain("sk-secret-leak");
     expect(body.details[0]).not.toContain("Authorization");
   });
+
+  it("appends the selected model to Responses API text output when enabled", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+    classifierMock.mockResolvedValue({
+      selectedModel: "model/alpha",
+      confidence: 0.91,
+      signals: ["frontier_classification"],
+    });
+    upstreamMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      response: new Response(
+        JSON.stringify({
+          id: "resp_123",
+          object: "response",
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "ok" }],
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "content-length": "2",
+          },
+        }
+      ),
+    });
+
+    const result = await routeAndProxy({
+      apiPath: "/responses",
+      body: {
+        model: "auto",
+        input: "route this",
+      },
+      userConfig: {
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [{ id: "model/alpha", name: "Alpha" }],
+          },
+        ],
+        showModelInResponse: true,
+      },
+    });
+
+    expect(result.response.status).toBe(200);
+    const body = await result.response.json() as {
+      output: Array<{ content: Array<{ text: string }> }>;
+    };
+    expect(body.output[0]?.content[0]?.text).toBe("ok\n\n#model/alpha");
+    expect(result.response.headers.get("content-length")).toBeNull();
+  });
 });

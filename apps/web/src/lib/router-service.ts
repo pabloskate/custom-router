@@ -24,7 +24,7 @@ import { json, attachRouterHeaders } from "./http";
 import { requestId as makeRequestId } from "./request-id";
 import { getRuntimeBindings } from "./runtime-bindings";
 import { getRouterRepository } from "./router-repository";
-import { callOpenAiCompatible, resolveUpstreamTarget } from "./upstream";
+import { callOpenAiCompatible, isOpenRouterHost, resolveUpstreamTarget } from "./upstream";
 
 function improveErrorMessage(modelId: string, errorBody: string): string {
   if (errorBody.includes("does not support image input") || errorBody.includes("image_url")) {
@@ -56,6 +56,8 @@ export interface UserRouterConfig {
   classifierApiKeyEnc?: string | null;
   showModelInResponse?: boolean;
 }
+
+type RoutedApiPath = "/chat/completions" | "/responses" | "/completions";
 
 interface AttemptTarget {
   modelId: string;
@@ -162,6 +164,7 @@ function injectPhaseSignal(
  */
 async function responseHasToolCalls(
   response: Response,
+  apiPath: RoutedApiPath,
   isStreaming: boolean
 ): Promise<{ hasToolCalls: boolean; response: Response }> {
   if (isStreaming) {
@@ -188,7 +191,10 @@ async function responseHasToolCalls(
           if (data === "[DONE]") continue;
           try {
             const parsed = JSON.parse(data);
-            if (parsed.choices?.[0]?.delta?.tool_calls) {
+            if (
+              (apiPath === "/chat/completions" && parsed.choices?.[0]?.delta?.tool_calls)
+              || (apiPath === "/responses" && parsed.item?.type === "function_call")
+            ) {
               hasToolCalls = true;
             }
           } catch {
@@ -224,7 +230,18 @@ async function responseHasToolCalls(
 
     try {
       const parsed = JSON.parse(body);
-      if (parsed.choices?.[0]?.message?.tool_calls) {
+      if (apiPath === "/chat/completions" && parsed.choices?.[0]?.message?.tool_calls) {
+        hasToolCalls = true;
+      }
+      if (
+        apiPath === "/responses"
+        && Array.isArray(parsed.output)
+        && parsed.output.some((item: unknown) => {
+          if (!item || typeof item !== "object") return false;
+          const candidate = item as Record<string, unknown>;
+          return candidate.type === "function_call";
+        })
+      ) {
         hasToolCalls = true;
       }
     } catch {
@@ -241,6 +258,61 @@ async function responseHasToolCalls(
   }
 }
 
+function responseHeadersForBodyRewrite(headers: HeadersInit): Headers {
+  const nextHeaders = new Headers(headers);
+  nextHeaders.delete("content-length");
+  return nextHeaders;
+}
+
+function appendModelIdToChatCompletionsBody(parsed: Record<string, any>, modelTag: string): boolean {
+  const message = parsed.choices?.[0]?.message;
+  if (typeof message?.content === "string") {
+    message.content += `\n\n${modelTag}`;
+    return true;
+  }
+  return false;
+}
+
+function appendModelIdToCompletionsBody(parsed: Record<string, any>, modelTag: string): boolean {
+  const choice = parsed.choices?.[0];
+  if (typeof choice?.text === "string") {
+    choice.text += `\n\n${modelTag}`;
+    return true;
+  }
+  return false;
+}
+
+function appendModelIdToResponsesBody(parsed: Record<string, any>, modelTag: string): boolean {
+  const output = Array.isArray(parsed.output) ? parsed.output : [];
+
+  for (let i = output.length - 1; i >= 0; i -= 1) {
+    const item = output[i];
+    if (!item || typeof item !== "object") continue;
+    if ((item as Record<string, unknown>).type !== "message") continue;
+
+    const content = Array.isArray((item as Record<string, unknown>).content)
+      ? ((item as Record<string, unknown>).content as unknown[])
+      : [];
+
+    for (let j = content.length - 1; j >= 0; j -= 1) {
+      const part = content[j];
+      if (!part || typeof part !== "object") continue;
+      const candidate = part as Record<string, unknown>;
+      if (candidate.type !== "output_text" || typeof candidate.text !== "string") continue;
+
+      candidate.text += `\n\n${modelTag}`;
+
+      if (typeof parsed.output_text === "string") {
+        parsed.output_text += `\n\n${modelTag}`;
+      }
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Appends the model ID to a non-tool response.
  * For non-streaming: modifies the message content.
@@ -249,6 +321,7 @@ async function responseHasToolCalls(
 async function appendModelIdToResponse(
   response: Response,
   modelId: string,
+  apiPath: RoutedApiPath,
   isStreaming: boolean
 ): Promise<Response> {
   const modelTag = `#${modelId}`;
@@ -321,7 +394,7 @@ async function appendModelIdToResponse(
     return new Response(encoder.encode(transformedText), {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers,
+      headers: responseHeadersForBodyRewrite(response.headers),
     });
   } else {
     // Non-streaming: modify the JSON body
@@ -329,22 +402,26 @@ async function appendModelIdToResponse(
 
     try {
       const parsed = JSON.parse(body);
-      if (parsed.choices?.[0]?.message?.content) {
-        parsed.choices[0].message.content += `\n\n${modelTag}`;
+      if (apiPath === "/chat/completions") {
+        appendModelIdToChatCompletionsBody(parsed, modelTag);
+      } else if (apiPath === "/responses") {
+        appendModelIdToResponsesBody(parsed, modelTag);
+      } else if (apiPath === "/completions") {
+        appendModelIdToCompletionsBody(parsed, modelTag);
       }
       const newBody = JSON.stringify(parsed);
 
       return new Response(newBody, {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers,
+        headers: responseHeadersForBodyRewrite(response.headers),
       });
     } catch {
       // Not valid JSON, return as-is
       return new Response(body, {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers,
+        headers: responseHeadersForBodyRewrite(response.headers),
       });
     }
   }
@@ -371,6 +448,36 @@ function resolveAttemptUpstream(
     if (gw) return gw;
   }
   return defaultUpstream;
+}
+
+function getCatalogItem(catalog: CatalogItem[], modelId: string): CatalogItem | undefined {
+  return catalog.find((item) => item.id === modelId);
+}
+
+function buildAttemptPayload(args: {
+  body: RouterRequestLike & Record<string, unknown>;
+  selectedModelId: string;
+  catalogItem?: CatalogItem;
+  attemptBaseUrl: string;
+  apiPath: "/chat/completions" | "/responses" | "/completions";
+}): Record<string, unknown> & { messages?: unknown[]; tools?: unknown[]; reasoning?: unknown } {
+  const payload: Record<string, unknown> & { messages?: unknown[]; tools?: unknown[]; reasoning?: unknown } = {
+    ...args.body,
+    model: args.catalogItem?.upstreamModelId ?? args.selectedModelId,
+  };
+
+  delete payload.reasoning;
+
+  if (
+    args.apiPath !== "/completions"
+    && args.catalogItem?.reasoningPreset
+    && args.catalogItem.reasoningPreset !== "none"
+    && isOpenRouterHost(args.attemptBaseUrl)
+  ) {
+    payload.reasoning = { effort: args.catalogItem.reasoningPreset };
+  }
+
+  return payload;
 }
 
 function attachTimingHeaders(
@@ -406,7 +513,7 @@ function runInBackground(task: Promise<unknown>): void {
 
 export async function routeAndProxy(args: {
   body: RouterRequestLike & Record<string, unknown>;
-  apiPath: "/chat/completions" | "/responses" | "/completions";
+  apiPath: RoutedApiPath;
   userConfig?: UserRouterConfig;
 }): Promise<RouteAndProxyResult> {
   const routeStartedAtMs = Date.now();
@@ -541,10 +648,21 @@ export async function routeAndProxy(args: {
   const errors: string[] = [];
 
   for (const [index, attempt] of attempts.entries()) {
-    const payload: Record<string, unknown> & { messages?: unknown[]; tools?: unknown[] } = {
-      ...args.body,
-      model: attempt.modelId,
-    };
+    const catalogItem = getCatalogItem(catalog, attempt.modelId);
+
+    const attemptUpstream = resolveAttemptUpstream(
+      attempt.modelId,
+      catalog,
+      gatewayMap,
+      defaultUpstream
+    );
+    const payload = buildAttemptPayload({
+      body: args.body,
+      selectedModelId: attempt.modelId,
+      catalogItem,
+      attemptBaseUrl: attemptUpstream.baseUrl,
+      apiPath: args.apiPath,
+    });
 
     // Inject phase-complete signal only for tool-enabled requests.
     const hasTools = Array.isArray(payload.tools) && payload.tools.length > 0;
@@ -553,12 +671,6 @@ export async function routeAndProxy(args: {
       payload.messages = injectPhaseSignal(payload.messages, signal);
     }
 
-    const attemptUpstream = resolveAttemptUpstream(
-      attempt.modelId,
-      catalog,
-      gatewayMap,
-      defaultUpstream
-    );
     const startedAtMs = Date.now();
     const result = await callOpenAiCompatible({
       apiPath: args.apiPath,
@@ -608,14 +720,15 @@ export async function routeAndProxy(args: {
     const isStreaming = args.body.stream === true;
     let finalResponse = result.response;
 
-    if (args.userConfig?.showModelInResponse && args.apiPath === "/chat/completions" && !isStreaming) {
+    if (args.userConfig?.showModelInResponse && !isStreaming) {
       const { hasToolCalls, response: checkedResponse } = await responseHasToolCalls(
         result.response,
+        args.apiPath,
         isStreaming
       );
 
       if (!hasToolCalls) {
-        finalResponse = await appendModelIdToResponse(checkedResponse, attempt.modelId, isStreaming);
+        finalResponse = await appendModelIdToResponse(checkedResponse, attempt.modelId, args.apiPath, isStreaming);
       } else {
         finalResponse = checkedResponse;
       }

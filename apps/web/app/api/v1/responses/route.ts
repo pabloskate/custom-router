@@ -77,6 +77,7 @@ export async function POST(request: Request): Promise<Response> {
       gatewayRows,
       classifierBaseUrl: auth.classifierBaseUrl,
       classifierApiKeyEnc: auth.classifierApiKeyEnc,
+      showModelInResponse: auth.showModelInResponse,
     },
   });
 

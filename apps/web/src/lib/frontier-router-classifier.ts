@@ -23,6 +23,7 @@ import { joinUpstreamUrl } from "./upstream";
 type CatalogEntry = {
   id: string;
   thinking?: string;
+  reasoningPreset?: string;
   whenToUse?: string;
   description?: string;
   modality?: string;
@@ -39,6 +40,7 @@ function buildPrompt(args: {
     .map((m) => {
       const parts = [`- ${m.id}`];
       if (m.thinking) parts.push(`thinking:${m.thinking}`);
+      if (m.reasoningPreset && m.reasoningPreset !== "none") parts.push(`reasoning:${m.reasoningPreset}`);
       if (m.modality?.includes("image")) parts.push("vision:yes");
       if (m.whenToUse) parts.push(`use:${m.whenToUse}`);
       if (m.description) parts.push(m.description);
@@ -75,7 +77,8 @@ ${modelList}
 - Output valid JSON only
 - If user specifically requests a model that exists in catalog, use it
 - For code tasks: prefer models with "coding" in their whenToUse
-- For deep reasoning: select models optimized for thinking
+- For deep reasoning: prefer variants with higher reasoning presets and stronger thinking hints
+- For simpler or cost-sensitive tasks: prefer base variants with lower reasoning presets
 - For vision/image tasks: only select models with vision:yes
 - For long documents: prefer models with larger context windows${statusQuoBias}
 - selectedModel MUST be an exact byte-for-byte match to one of the available model IDs

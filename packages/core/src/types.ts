@@ -157,11 +157,24 @@ export interface RouteDecision {
   pinTurnCount?: number;
 }
 
+export const REASONING_PRESETS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+
+export type ReasoningPreset = (typeof REASONING_PRESETS)[number];
+
 export interface CatalogItem {
   id: string;
   name: string;
   modality?: string;
-  thinking?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  thinking?: ReasoningPreset;
+  reasoningPreset?: ReasoningPreset;
+  upstreamModelId?: string;
   whenToUse?: string;
   description?: string;
   gatewayId?: string;  // injected at catalog-build time; not stored in gateway models_json
