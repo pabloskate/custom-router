@@ -7,6 +7,7 @@ import { PlaygroundPanel } from "./PlaygroundPanel";
 import { ProfilesPanel } from "./ProfilesPanel";
 import { RouterConfigPanel } from "./RouterConfigPanel";
 import { type AdminExtensionContext, type AdminTabDefinition, type ApiKeyInfo, type RoutingDraftState, type UserInfo } from "./types";
+import { type RegistrationMode } from "@/src/lib/constants";
 
 type BaseAdminTabsArgs = {
   setUser: Dispatch<SetStateAction<UserInfo | null>>;
@@ -19,6 +20,7 @@ type BaseAdminTabsArgs = {
   routingDraftState: RoutingDraftState;
   markRoutingDirty: () => void;
   saveRoutingData: (updates: Partial<UserInfo>) => Promise<boolean>;
+  registrationMode: RegistrationMode;
 };
 
 function IconGateway({ className }: { className?: string }) {
@@ -87,7 +89,7 @@ function InventoryBadge({ activeKeys, revokedKeys }: { activeKeys: number; revok
 }
 
 export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] {
-  return [
+  const tabs: AdminTabDefinition[] = [
     {
       id: "gateways",
       label: "Gateways",
@@ -213,30 +215,6 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
       ),
     },
     {
-      id: "invites",
-      label: "Invites",
-      section: "account",
-      title: "Invite Codes",
-      subtitle: "Generate and manage invite codes for new users",
-      order: 50,
-      icon: IconInvite,
-      render: (ctx: AdminExtensionContext) => (
-        <div className="animate-fade-in">
-          <div className="card">
-            <div className="card-header">
-              <h3>Invite Codes</h3>
-            </div>
-            <div className="card-body">
-              <InviteCodePanel
-                onStatus={args.setStatus}
-                onError={(msg) => args.setError(msg)}
-              />
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    {
       id: "account",
       label: "Account",
       section: "account",
@@ -265,4 +243,33 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
       ),
     },
   ];
+
+  if (args.registrationMode === "invite") {
+    tabs.splice(-1, 0, {
+      id: "invites",
+      label: "Invites",
+      section: "account",
+      title: "Invite Codes",
+      subtitle: "Generate and manage invite codes for new users",
+      order: 50,
+      icon: IconInvite,
+      render: () => (
+        <div className="animate-fade-in">
+          <div className="card">
+            <div className="card-header">
+              <h3>Invite Codes</h3>
+            </div>
+            <div className="card-body">
+              <InviteCodePanel
+                onStatus={args.setStatus}
+                onError={(msg) => args.setError(msg)}
+              />
+            </div>
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  return tabs;
 }

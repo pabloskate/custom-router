@@ -6,7 +6,7 @@
 // Redesigned API key management with:
 // - Clean table-based layout with clear status indicators
 // - Prominent new key reveal with auto-copy and clear warnings
-// - Individual revoke actions per key
+// - Individual revoke and delete actions per key
 // - Empty state with helpful CTA
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -56,6 +56,14 @@ function IconRevoke({ className, style }: { className?: string; style?: React.CS
   return (
     <svg className={className} style={style} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+    </svg>
+  );
+}
+
+function IconTrash({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
   );
 }
@@ -403,6 +411,7 @@ function QuickstartGuide({
 export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
   const [newKey, setNewKey] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function generateKey() {
     onStatus("Generating key...");
@@ -443,6 +452,30 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
 
     onStatus("Key revoked");
     setRevokingId(null);
+    onKeysChanged();
+  }
+
+  async function deleteKey(keyId: string) {
+    const confirmed = window.confirm("Delete this API key permanently? This cannot be undone.");
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(keyId);
+    onStatus("Deleting key...");
+    onError?.(undefined);
+
+    const res = await fetch(`/api/v1/user/keys?keyId=${keyId}&action=delete`, { method: "DELETE" });
+
+    if (!res.ok) {
+      onError?.("Failed to delete key");
+      onStatus("Error");
+      setDeletingId(null);
+      return;
+    }
+
+    onStatus("Key deleted");
+    setDeletingId(null);
     onKeysChanged();
   }
 
@@ -536,16 +569,26 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
                       </span>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      {!key.revoked && (
+                      <div style={{ display: "inline-flex", gap: "var(--space-2)", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {!key.revoked && (
+                          <button
+                            className="btn btn--sm btn--danger"
+                            onClick={() => void revokeKey(key.id)}
+                            disabled={revokingId === key.id || deletingId === key.id}
+                          >
+                            <IconRevoke />
+                            {revokingId === key.id ? "Revoking..." : "Revoke"}
+                          </button>
+                        )}
                         <button
-                          className="btn btn--sm btn--danger"
-                          onClick={() => void revokeKey(key.id)}
-                          disabled={revokingId === key.id}
+                          className="btn btn--sm btn--ghost"
+                          onClick={() => void deleteKey(key.id)}
+                          disabled={deletingId === key.id || revokingId === key.id}
                         >
-                          <IconRevoke />
-                          {revokingId === key.id ? "Revoking..." : "Revoke"}
+                          <IconTrash />
+                          {deletingId === key.id ? "Deleting..." : "Delete"}
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}

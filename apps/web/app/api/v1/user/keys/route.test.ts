@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authenticateSession, generateApiKey, hashKey, isSameOriginRequest } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/infra";
-import { POST } from "./route";
+import { DELETE, POST } from "./route";
 
 vi.mock("@/src/lib/infra", async () => {
   const actual = await vi.importActual<typeof import("@/src/lib/infra")>("@/src/lib/infra");
@@ -62,5 +62,21 @@ describe("/api/v1/user/keys route", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     const body = await response.json() as { apiKey: string };
     expect(body.apiKey).toBe("ar_sk_test_key");
+  });
+
+  it("deletes a key when action=delete is requested", async () => {
+    const db = createDbMock();
+    runtimeMock.mockReturnValue({ ROUTER_DB: db as any });
+    sameOriginMock.mockReturnValue(true);
+    authMock.mockResolvedValue({ userId: "user_1" } as any);
+
+    const response = await DELETE(
+      new Request("http://localhost/api/v1/user/keys?keyId=key_1&action=delete", {
+        method: "DELETE",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.prepare).toHaveBeenCalledWith("DELETE FROM api_keys WHERE id = ?1 AND user_id = ?2");
   });
 });

@@ -23,9 +23,9 @@
   --text-disabled: #4b5563;
   
   /* Accent Colors */
-  --accent: #7c8aff;
-  --accent-dim: rgba(124, 138, 255, 0.12);
-  --accent-glow: rgba(124, 138, 255, 0.25);
+  --accent: #67e8f9;
+  --accent-dim: rgba(103, 232, 249, 0.16);
+  --accent-glow: rgba(103, 232, 249, 0.28);
   --success: #34d399;
   --success-dim: rgba(52, 211, 153, 0.15);
   --warning: #fbbf24;
@@ -220,6 +220,27 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.legal-page {
+  max-width: 72rem;
+}
+
+.legal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.legal-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.legal-copy p {
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
 .quickstart-link-list {
   display: flex;
   flex-wrap: wrap;
@@ -235,7 +256,7 @@ body {
 
 .quickstart-link-list a:hover,
 .quickstart-muted a:hover {
-  color: #67e8f9;
+  color: #a5f3fc;
   text-decoration: underline;
 }
 
@@ -246,6 +267,10 @@ body {
   }
 
   .quickstart-grid--two-up {
+    grid-template-columns: 1fr;
+  }
+
+  .legal-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -582,7 +607,7 @@ body {
 }
 
 .btn--primary:hover {
-  background: #9ba6ff;
+  background: #a5f3fc;
   box-shadow: var(--shadow-glow);
   border-color: transparent;
 }

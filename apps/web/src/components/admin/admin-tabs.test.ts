@@ -22,7 +22,7 @@ const TEST_USER: UserInfo = {
   configAgentSearchModel: null,
 };
 
-function createBaseTabs() {
+function createBaseTabs(registrationMode: "open" | "closed" | "invite" = "closed") {
   return getBaseAdminTabs({
     setUser: () => undefined,
     keys: [],
@@ -34,12 +34,25 @@ function createBaseTabs() {
     routingDraftState: "pristine",
     markRoutingDirty: () => undefined,
     saveRoutingData: async () => true,
+    registrationMode,
   });
 }
 
 describe("admin tab registry", () => {
-  it("returns the OSS base tabs in the current order", () => {
+  it("hides the invite tab unless registration mode is invite", () => {
     const tabs = createBaseTabs();
+
+    expect(tabs.map((tab) => tab.id)).toEqual([
+      "gateways",
+      "routing",
+      "keys",
+      "playground",
+      "account",
+    ]);
+  });
+
+  it("includes the invite tab when registration mode is invite", () => {
+    const tabs = createBaseTabs("invite");
 
     expect(tabs.map((tab) => tab.id)).toEqual([
       "gateways",
@@ -56,7 +69,7 @@ describe("admin tab registry", () => {
   });
 
   it("merges tabs into the expected sections and preserves the default tab", () => {
-    const tabs = mergeAdminTabs(createBaseTabs(), getAdminExtensionTabs());
+    const tabs = mergeAdminTabs(createBaseTabs("invite"), getAdminExtensionTabs());
     const groups = groupAdminTabsBySection(tabs);
 
     expect(groups.configure.map((tab) => tab.id)).toEqual(["gateways", "routing"]);

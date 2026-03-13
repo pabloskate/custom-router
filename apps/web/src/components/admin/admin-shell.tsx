@@ -7,6 +7,7 @@ import { getAdminExtensionTabs } from "./admin-extensions";
 import { getInitialAdminTabId, groupAdminTabsBySection, mergeAdminTabs } from "./admin-tab-registry";
 import { getBaseAdminTabs } from "./admin-tabs";
 import { type AdminTabDefinition, type UserInfo, type ApiKeyInfo, type ServerUserInfo, type GatewaySummary, type RoutingDraftState, hydrateUser } from "./types";
+import { type RegistrationMode } from "@/src/lib/constants";
 
 function IconLogout({ className }: { className?: string }) {
   return (
@@ -161,15 +162,17 @@ export function AdminShell() {
   const [error, setError] = useState<string | undefined>();
   const [gatewayModelOptions, setGatewayModelOptions] = useState<string[]>([]);
   const [routingDraftState, setRoutingDraftState] = useState<RoutingDraftState>("pristine");
+  const [registrationMode, setRegistrationMode] = useState<RegistrationMode>("closed");
 
   async function loadData() {
     setStatus("Loading...");
     setError(undefined);
 
-    const [userRes, keysRes, gatewaysRes] = await Promise.all([
+    const [userRes, keysRes, gatewaysRes, registrationRes] = await Promise.all([
       fetch("/api/v1/user/me", { cache: "no-store" }),
       fetch("/api/v1/user/keys", { cache: "no-store" }),
       fetch("/api/v1/user/gateways", { cache: "no-store" }),
+      fetch("/api/v1/auth/registration-status", { cache: "no-store" }),
     ]);
 
     if (!userRes.ok) {
@@ -201,6 +204,13 @@ export function AdminShell() {
       setGatewayModelOptions(modelIds);
     } else {
       setGatewayModelOptions([]);
+    }
+
+    if (registrationRes.ok) {
+      const registrationData = await registrationRes.json() as { mode: RegistrationMode };
+      setRegistrationMode(registrationData.mode);
+    } else {
+      setRegistrationMode("closed");
     }
 
     setUser(hydrateUser(userData.user));
@@ -287,6 +297,7 @@ export function AdminShell() {
         routingDraftState,
         markRoutingDirty,
         saveRoutingData,
+        registrationMode,
       })
     : [];
   const tabs = user ? mergeAdminTabs(baseTabs, getAdminExtensionTabs()) : [];

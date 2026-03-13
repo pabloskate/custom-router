@@ -415,11 +415,11 @@ export function AuthGate({ onAuthenticated }: Props) {
           }}
         >
           By continuing, you agree to the{" "}
-          <a href="#" style={{ color: "var(--accent)", textDecoration: "none" }}>
+          <a href="/terms" style={{ color: "var(--accent)", textDecoration: "none" }}>
             Terms of Service
           </a>{" "}
           and{" "}
-          <a href="#" style={{ color: "var(--accent)", textDecoration: "none" }}>
+          <a href="/privacy" style={{ color: "var(--accent)", textDecoration: "none" }}>
             Privacy Policy
           </a>
           .

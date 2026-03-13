@@ -27,4 +27,26 @@ describe("ApiKeyPanel", () => {
     expect(markup).toContain("Copy SDK");
     expect(markup).toContain("Copy curl");
   });
+
+  it("renders delete actions for existing keys", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ApiKeyPanel, {
+        keys: [
+          {
+            id: "key_1",
+            prefix: "ar_sk_test_",
+            label: "API Key",
+            revoked: false,
+            createdAt: "2026-03-13T00:00:00.000Z",
+          },
+        ],
+        onKeysChanged: () => undefined,
+        onStatus: () => undefined,
+        onError: () => undefined,
+      })
+    );
+
+    expect(markup).toContain("Revoke");
+    expect(markup).toContain("Delete");
+  });
 });

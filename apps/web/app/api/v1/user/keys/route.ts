@@ -102,9 +102,19 @@ export async function DELETE(request: Request): Promise<Response> {
 
     const url = new URL(request.url);
     const keyId = url.searchParams.get("keyId");
+    const action = url.searchParams.get("action");
 
     if (!keyId) {
         return json({ error: "keyId query parameter is required." }, 400);
+    }
+
+    if (action === "delete") {
+        await bindings.ROUTER_DB
+            .prepare("DELETE FROM api_keys WHERE id = ?1 AND user_id = ?2")
+            .bind(keyId, auth.userId)
+            .run();
+
+        return json({ ok: true }, 200);
     }
 
     const now = new Date().toISOString();
