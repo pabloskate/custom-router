@@ -36,9 +36,10 @@ export default function TermsPage() {
         <span className="badge badge--info">Legal template</span>
         <h1>Terms of Service</h1>
         <p>
-          These starter terms govern access to the CustomRouter service and related APIs. They
-          are a practical default for early setup, but you should replace or revise them before
-          serving external customers or collecting regulated data.
+          These terms govern access to a CustomRouter deployment, including the admin console,
+          OpenAI-compatible API endpoints, routing features, and any managed BYOK hosting or
+          assisted self-hosting services the operator may provide. Replace the bracketed
+          placeholders before external launch.
         </p>
         <div className="quickstart-actions">
           <Link className="btn" href="/privacy">
@@ -50,6 +51,16 @@ export default function TermsPage() {
         </div>
       </section>
 
+      <section className="alert alert--warning quickstart-note">
+        <div>
+          <strong>Operator details to fill in</strong>
+          <p>
+            Replace <code>[LEGAL ENTITY NAME]</code>, <code>[CONTACT EMAIL]</code>, and any
+            billing or governing-law references with your real business details.
+          </p>
+        </div>
+      </section>
+
       <section className="legal-grid">
         <article className="card">
           <div className="card-header">
@@ -57,9 +68,20 @@ export default function TermsPage() {
           </div>
           <div className="card-body legal-copy">
             <p>
-              You may use this service only in compliance with applicable law and these terms.
+              These Terms form an agreement between you and <strong>[LEGAL ENTITY NAME]</strong>
+              {" "}(&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) for your use of this CustomRouter instance.
+              The service may be offered as a self-hosted deployment, a managed BYOK-hosted
+              deployment, or an assisted self-hosting engagement.
+            </p>
+            <p>
+              You may use the service only in compliance with applicable law and these Terms.
               Access may be suspended or revoked if use creates operational, legal, or security
-              risk.
+              risk for us, our infrastructure providers, or our upstream model providers.
+            </p>
+            <p>
+              If your organization self-hosts this software, your organization is the service
+              operator and is responsible for its own terms, privacy disclosures, security
+              controls, and customer commitments.
             </p>
             <BulletList items={SERVICE_RULES} />
           </div>
@@ -67,7 +89,26 @@ export default function TermsPage() {
 
         <article className="card">
           <div className="card-header">
-            <h2>2. Accounts and API keys</h2>
+            <h2>2. What the service does</h2>
+          </div>
+          <div className="card-body legal-copy">
+            <p>
+              CustomRouter is an OpenAI-compatible routing proxy. It accepts requests through API
+              endpoints such as chat completions, responses, and model-listing routes, then may
+              classify, route, retry, pin threads, and attach routing metadata before forwarding
+              requests to one or more upstream model providers.
+            </p>
+            <p>
+              Features may include admin-issued API keys, invite-only registration, configurable
+              routing profiles, thread stickiness, guardrails, BYOK gateways, and stored routing
+              explanations. Not every deployment enables every feature.
+            </p>
+          </div>
+        </article>
+
+        <article className="card">
+          <div className="card-header">
+            <h2>3. Accounts and API keys</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -78,12 +119,16 @@ export default function TermsPage() {
               We may impose rate limits, usage caps, model restrictions, or other controls to
               protect the service and upstream providers.
             </p>
+            <p>
+              We may restrict account creation through closed or invite-only registration and may
+              require admin approval for certain features, gateway changes, or elevated usage.
+            </p>
           </div>
         </article>
 
         <article className="card">
           <div className="card-header">
-            <h2>3. Your content</h2>
+            <h2>4. Your content and BYOK credentials</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -92,24 +137,53 @@ export default function TermsPage() {
               safety, logging, abuse prevention, and request fulfillment.
             </p>
             <p>
-              Do not send sensitive or regulated data unless you have independently confirmed the
-              deployment, storage, retention, and upstream provider terms are appropriate.
+              If you configure your own upstream gateway or API credentials, you represent that
+              you have authority to use them and authorize us to store and use them to fulfill
+              your requests. Stored BYOK credentials may be encrypted at rest, but you remain
+              responsible for choosing appropriate upstream providers and plans.
+            </p>
+            <p>
+              Do not send sensitive, regulated, or high-risk data unless you have independently
+              confirmed that the deployment, security controls, retention settings, and upstream
+              provider terms are appropriate for that data.
             </p>
           </div>
         </article>
 
         <article className="card">
           <div className="card-header">
-            <h2>4. AI-specific disclaimers</h2>
+            <h2>5. Upstream providers and AI-specific disclaimers</h2>
           </div>
           <div className="card-body legal-copy">
+            <p>
+              The service depends on third-party infrastructure and model providers. Requests may
+              be routed to providers you configure or that the operator makes available.
+            </p>
             <BulletList items={DISCLAIMER_ITEMS} />
           </div>
         </article>
 
         <article className="card">
           <div className="card-header">
-            <h2>5. Termination</h2>
+            <h2>6. Fees and billing</h2>
+          </div>
+          <div className="card-body legal-copy">
+            <p>
+              For self-hosted use of the public codebase, no software license fee is charged by
+              this repository itself unless you enter into a separate services or hosting
+              agreement. Managed hosting, support, migration work, or assisted self-hosting may be
+              billed under a separate order form, statement of work, or subscription agreement.
+            </p>
+            <p>
+              If you do not charge users yet, replace this section with a simple statement such
+              as: &quot;The service is currently provided without paid subscriptions.&quot;
+            </p>
+          </div>
+        </article>
+
+        <article className="card">
+          <div className="card-header">
+            <h2>7. Termination</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -121,7 +195,7 @@ export default function TermsPage() {
 
         <article className="card">
           <div className="card-header">
-            <h2>6. Warranty and liability</h2>
+            <h2>8. Warranty and liability</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -131,14 +205,26 @@ export default function TermsPage() {
             </p>
           </div>
         </article>
+
+        <article className="card">
+          <div className="card-header">
+            <h2>9. Contact and governing terms</h2>
+          </div>
+          <div className="card-body legal-copy">
+            <p>
+              Questions about these Terms should be sent to <strong>[CONTACT EMAIL]</strong>. Add
+              your governing law, venue, and effective date here before launch.
+            </p>
+          </div>
+        </article>
       </section>
 
       <section className="alert alert--warning quickstart-note">
         <div>
           <strong>Before you publish this</strong>
           <p>
-            Replace this starter copy with business-specific terms covering your entity name,
-            billing, governing law, support commitments, and a real contact method.
+            This version is now product-specific, but it still needs your entity name, contact
+            method, fees, refund policy if any, governing law, and support commitments.
           </p>
         </div>
       </section>

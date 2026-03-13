@@ -37,9 +37,9 @@ export default function PrivacyPage() {
         <span className="badge badge--info">Legal template</span>
         <h1>Privacy Policy</h1>
         <p>
-          This starter policy explains the categories of data processed by a CustomRouter
-          deployment. It is meant to help you get the product live, not to replace legal review
-          for your business, jurisdiction, or customer contracts.
+          This policy explains how a CustomRouter deployment may collect, use, store, and share
+          information when operating an OpenAI-compatible routing proxy, admin console, and any
+          managed BYOK-hosting or assisted self-hosting services.
         </p>
         <div className="quickstart-actions">
           <Link className="btn" href="/terms">
@@ -48,6 +48,16 @@ export default function PrivacyPage() {
           <Link className="btn btn--secondary" href="/admin">
             Back to Admin
           </Link>
+        </div>
+      </section>
+
+      <section className="alert alert--warning quickstart-note">
+        <div>
+          <strong>Operator details to fill in</strong>
+          <p>
+            Replace <code>[LEGAL ENTITY NAME]</code> and <code>[CONTACT EMAIL]</code>, and add any
+            regional disclosures that apply to your users before launch.
+          </p>
         </div>
       </section>
 
@@ -72,7 +82,25 @@ export default function PrivacyPage() {
 
         <article className="card">
           <div className="card-header">
-            <h2>3. Sharing and processors</h2>
+            <h2>3. Routing-specific processing</h2>
+          </div>
+          <div className="card-body legal-copy">
+            <p>
+              CustomRouter may inspect prompts or message context to classify intent, choose an
+              upstream model, apply fallback behavior, pin a thread to a model for continuity, and
+              store routing explanations or operational metadata for debugging and analytics.
+            </p>
+            <p>
+              Depending on configuration, the service may persist thread identifiers, routing
+              decisions, model names, latency, errors, and limited conversation context needed to
+              provide explainability or reliability features.
+            </p>
+          </div>
+        </article>
+
+        <article className="card">
+          <div className="card-header">
+            <h2>4. Sharing and processors</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -80,12 +108,30 @@ export default function PrivacyPage() {
               operate the service. Those providers may process prompts, metadata, and generated
               output under their own terms and privacy practices.
             </p>
+            <p>
+              These providers may include Cloudflare-hosted infrastructure, OpenRouter, and other
+              OpenAI-compatible upstream gateways that you or the operator configure.
+            </p>
           </div>
         </article>
 
         <article className="card">
           <div className="card-header">
-            <h2>4. Retention</h2>
+            <h2>5. BYOK credentials</h2>
+          </div>
+          <div className="card-body legal-copy">
+            <p>
+              If you store your own upstream API credentials in the service, we may retain those
+              credentials in encrypted form so the router can call your selected providers on your
+              behalf. You should rotate or remove credentials you no longer want associated with
+              your account.
+            </p>
+          </div>
+        </article>
+
+        <article className="card">
+          <div className="card-header">
+            <h2>6. Retention</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -98,7 +144,7 @@ export default function PrivacyPage() {
 
         <article className="card">
           <div className="card-header">
-            <h2>5. Security</h2>
+            <h2>7. Security</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -111,7 +157,7 @@ export default function PrivacyPage() {
 
         <article className="card">
           <div className="card-header">
-            <h2>6. Your choices</h2>
+            <h2>8. Your choices</h2>
           </div>
           <div className="card-body legal-copy">
             <p>
@@ -121,14 +167,27 @@ export default function PrivacyPage() {
             </p>
           </div>
         </article>
+
+        <article className="card">
+          <div className="card-header">
+            <h2>9. Contact</h2>
+          </div>
+          <div className="card-body legal-copy">
+            <p>
+              Privacy questions or requests should be sent to <strong>[CONTACT EMAIL]</strong>.
+              Add an effective date and any region-specific rights language here before launch.
+            </p>
+          </div>
+        </article>
       </section>
 
       <section className="alert alert--warning quickstart-note">
         <div>
           <strong>Before you publish this</strong>
           <p>
-            Add your business name, contact email, subprocessors, retention periods, regional
-            disclosures, and cookie or analytics details if you use them.
+            This version reflects the router’s actual behavior, but you still need your entity
+            name, contact email, subprocessors, retention schedule, and any cookie, analytics, or
+            jurisdiction-specific disclosures you use.
           </p>
         </div>
       </section>
