@@ -3,13 +3,12 @@ import { describe, expect, it } from "vitest";
 import { updateGatewaySchema } from "./schemas";
 
 describe("updateGatewaySchema", () => {
-  it("accepts gateway models with upstreamModelId and reasoningPreset", () => {
+  it("accepts gateway models with reasoningPreset", () => {
     const parsed = updateGatewaySchema.safeParse({
       models: [
         {
           id: "openai/gpt-5.2:high",
           name: "GPT-5.2 High",
-          upstreamModelId: "openai/gpt-5.2",
           reasoningPreset: "high",
           thinking: "high",
         },

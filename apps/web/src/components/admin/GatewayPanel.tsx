@@ -11,7 +11,7 @@ import { GATEWAY_PRESETS, CUSTOM_PRESET_ID } from "../../lib/gateway-presets";
 //
 // Sections per gateway card:
 //   - Gateway header: name, URL, key status, edit/delete actions
-//   - Model list: router model IDs with upstream model + reasoning preset
+//   - Model list: router model IDs with reasoning preset
 //   - "Fetch from gateway" button to auto-discover base models via /models API
 //   - "Add model" and "Clone" flows for fixed reasoning variants
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,7 +21,6 @@ type ReasoningLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 export interface GatewayModel {
   id: string;
   name: string;
-  upstreamModelId?: string;
   whenToUse?: string;
   description?: string;
   modality?: string;
@@ -219,15 +218,14 @@ function GatewayForm({ initial, isEdit, saving, onSave, onCancel }: GatewayFormP
 interface ModelFormProps {
   initial?: GatewayModel;
   saving?: boolean;
-  lockId?: boolean;
+  submitLabel: string;
   onSave: (m: GatewayModel) => Promise<void>;
   onCancel: () => void;
 }
 
-function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelFormProps) {
+function ModelForm({ initial, saving, submitLabel, onSave, onCancel }: ModelFormProps) {
   const [id, setId] = useState(initial?.id ?? "");
   const [name, setName] = useState(initial?.name ?? "");
-  const [upstreamModelId, setUpstreamModelId] = useState(initial?.upstreamModelId ?? initial?.id ?? "");
   const [reasoningPreset, setReasoningPreset] = useState<ReasoningLevel>(initial?.reasoningPreset ?? "none");
   const [whenToUse, setWhenToUse] = useState(initial?.whenToUse ?? "");
   const [err, setErr] = useState("");
@@ -236,16 +234,17 @@ function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelF
     e.preventDefault();
     if (!id.trim()) return setErr("Model ID is required.");
     if (!name.trim()) return setErr("Display name is required.");
-    if (!upstreamModelId.trim()) return setErr("Upstream model ID is required.");
     setErr("");
-    await onSave({
+    const nextModel: GatewayModel = {
       id: id.trim(),
       name: name.trim(),
-      upstreamModelId: upstreamModelId.trim(),
+      description: initial?.description,
+      modality: initial?.modality,
       reasoningPreset,
       thinking: reasoningPreset,
       whenToUse: whenToUse.trim() || undefined,
-    });
+    };
+    await onSave(nextModel);
   }
 
   return (
@@ -262,8 +261,6 @@ function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelF
             placeholder="e.g. openai/gpt-5.2:high"
             value={id}
             onChange={e => setId(e.target.value)}
-            disabled={lockId}
-            readOnly={lockId}
           />
         </div>
         <div className="form-group">
@@ -278,16 +275,6 @@ function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelF
         </div>
       </div>
       <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Upstream model ID</label>
-          <input
-            className="input input--mono btn--sm"
-            style={{ padding: "var(--space-2) var(--space-3)", fontSize: "0.8125rem" }}
-            placeholder="e.g. openai/gpt-5.2"
-            value={upstreamModelId}
-            onChange={e => setUpstreamModelId(e.target.value)}
-          />
-        </div>
         <div className="form-group">
           <label className="form-label">Reasoning preset</label>
           <select
@@ -314,7 +301,7 @@ function ModelForm({ initial, saving, lockId = false, onSave, onCancel }: ModelF
       </div>
       <div style={{ display: "flex", gap: "var(--space-2)" }}>
         <button type="submit" className="btn btn--primary btn--sm" disabled={saving}>
-          {saving ? "Saving…" : lockId ? "Save" : "Add model"}
+          {saving ? "Saving…" : submitLabel}
         </button>
         <button type="button" className="btn btn--secondary btn--sm" onClick={onCancel}>Cancel</button>
       </div>
@@ -456,7 +443,20 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
   }
 
   async function saveModels(models: GatewayModel[]) {
-    if (hasDuplicateModelIds(models)) {
+    const normalizedModels = models.map((model) => {
+      const reasoningPreset = model.reasoningPreset ?? model.thinking;
+      return {
+        id: model.id,
+        name: model.name,
+        whenToUse: model.whenToUse,
+        description: model.description,
+        modality: model.modality,
+        reasoningPreset,
+        thinking: reasoningPreset ?? model.thinking,
+      };
+    });
+
+    if (hasDuplicateModelIds(normalizedModels)) {
       onError?.("Model IDs must be unique within a gateway.");
       return false;
     }
@@ -464,7 +464,7 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
     const res = await fetch(`/api/v1/user/gateways/${gateway.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ models }),
+      body: JSON.stringify({ models: normalizedModels }),
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
@@ -494,10 +494,10 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
     }
   }
 
-  async function editModel(model: GatewayModel) {
+  async function editModel(originalId: string, model: GatewayModel) {
     setSavingModel(true);
     try {
-      const models = gateway.models.map((entry) => entry.id === model.id ? model : entry);
+      const models = gateway.models.map((entry) => entry.id === originalId ? model : entry);
       if (await saveModels(models)) {
         setEditingModelId(null);
         onStatus?.("Model updated.");
@@ -543,7 +543,6 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
       .map((model) => ({
         id: model.id,
         name: model.name,
-        upstreamModelId: model.id,
         reasoningPreset: "none" as const,
       }));
     const models = [...gateway.models, ...newModels];
@@ -640,6 +639,7 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
           <ModelForm
             initial={addModelSeed}
             saving={savingModel}
+            submitLabel="Add model"
             onSave={addModel}
             onCancel={() => { setAddingModel(false); setAddModelSeed(undefined); }}
           />
@@ -656,9 +656,9 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
                 {editingModelId === model.id ? (
                   <ModelForm
                     initial={model}
-                    lockId
                     saving={savingModel}
-                    onSave={editModel}
+                    submitLabel="Save"
+                    onSave={(nextModel) => editModel(model.id, nextModel)}
                     onCancel={() => setEditingModelId(null)}
                   />
                 ) : (
@@ -670,9 +670,6 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError }: GatewayCardProps
                       <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
                         <span className="badge badge--info" style={{ fontSize: "0.7rem" }}>
                           reasoning {reasoningLabel(model.reasoningPreset ?? "none")}
-                        </span>
-                        <span className="badge badge--info" style={{ fontSize: "0.7rem" }}>
-                          upstream {model.upstreamModelId ?? model.id}
                         </span>
                       </div>
                       <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
