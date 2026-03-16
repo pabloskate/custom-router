@@ -10,15 +10,29 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { GatewayModel } from "@/src/features/gateways/contracts";
+import { GATEWAY_PRESETS } from "./gateway-presets";
 
 export interface RoutingPreset {
   readonly id: string;
   readonly name: string;
   readonly description: string;
+  /** ID from GATEWAY_PRESETS — only show this preset on matching gateways. */
+  readonly gatewayPresetId: string;
   readonly models: readonly GatewayModel[];
   readonly classifierModel: string;
   readonly defaultModel: string;
   readonly routingInstructions: string;
+}
+
+/**
+ * Derives the GATEWAY_PRESETS id (e.g. "openrouter") from a gateway's baseUrl.
+ * Returns undefined for custom / unrecognized providers.
+ */
+export function getGatewayPresetId(baseUrl: string): string | undefined {
+  const normalized = baseUrl.replace(/\/$/, "").toLowerCase();
+  return GATEWAY_PRESETS.find(
+    (p) => normalized.startsWith(p.baseUrl.replace(/\/$/, "").toLowerCase())
+  )?.id;
 }
 
 // ── Presets ───────────────────────────────────────────────────────────────────
@@ -28,6 +42,7 @@ export const ROUTING_PRESETS: readonly RoutingPreset[] = [
     id: "coding-power",
     name: "Coding (Full Power)",
     description: "Premium coding setup with deep reasoning, daily dev, and CLI models",
+    gatewayPresetId: "openrouter",
     classifierModel: "google/gemini-flash-2.0",
     defaultModel: "anthropic/claude-sonnet-4-6",
     models: [

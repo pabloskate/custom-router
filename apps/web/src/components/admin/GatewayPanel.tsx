@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { GATEWAY_PRESETS, CUSTOM_PRESET_ID } from "../../lib/gateway-presets";
-import { ROUTING_PRESETS, type RoutingPreset } from "../../lib/routing-presets";
+import { ROUTING_PRESETS, getGatewayPresetId, type RoutingPreset } from "../../lib/routing-presets";
 import type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -379,14 +379,18 @@ function IconZap({ className }: { className?: string }) {
 }
 
 interface RoutingPresetPickerProps {
+  gatewayBaseUrl: string;
   existingModelCount: number;
   existingProfileIds: string[];
   applying: boolean;
   onApply: (preset: RoutingPreset) => void;
 }
 
-function RoutingPresetPicker({ existingModelCount, existingProfileIds, applying, onApply }: RoutingPresetPickerProps) {
-  if (ROUTING_PRESETS.length === 0) return null;
+function RoutingPresetPicker({ gatewayBaseUrl, existingModelCount, existingProfileIds, applying, onApply }: RoutingPresetPickerProps) {
+  const providerPresetId = getGatewayPresetId(gatewayBaseUrl);
+  const matchingPresets = ROUTING_PRESETS.filter((p) => p.gatewayPresetId === providerPresetId);
+
+  if (matchingPresets.length === 0) return null;
 
   function handleClick(preset: RoutingPreset) {
     if (applying || existingProfileIds.includes(preset.id)) return;
@@ -408,7 +412,7 @@ function RoutingPresetPicker({ existingModelCount, existingProfileIds, applying,
         <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-secondary)" }}>Quick setup</span>
       </div>
       <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-        {ROUTING_PRESETS.map((preset) => {
+        {matchingPresets.map((preset) => {
           const isAdded = existingProfileIds.includes(preset.id);
           return (
             <button
@@ -723,6 +727,7 @@ function GatewayCard({ gateway, onRefresh, onStatus, onError, onApplyRoutingPres
         </div>
 
         <RoutingPresetPicker
+          gatewayBaseUrl={gateway.baseUrl}
           existingModelCount={gateway.models.length}
           existingProfileIds={existingProfileIds}
           applying={applyingPreset}
