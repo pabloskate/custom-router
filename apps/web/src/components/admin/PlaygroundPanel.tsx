@@ -13,18 +13,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import type { RouterProfile } from "@custom-router/core";
+import type { RouteInspectResult } from "@/src/features/routing/contracts";
 
-type RouteResult = {
-  requestId: string;
-  selectedModel: string;
-  fallbackModels: string[];
-  decisionReason: string;
-  classifierInvoked: boolean;
-  classifierModel?: string;
-  isContinuation: boolean;
-  pinUsed: boolean;
-  latencyMs: number;
-};
+type RouteResult = RouteInspectResult;
 
 type Message = {
   id: string;
@@ -369,7 +361,7 @@ function ModeToggle({ routerTestMode, onChange }: { routerTestMode: boolean; onC
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function PlaygroundPanel({ profiles }: { profiles?: import("./ProfilesPanel").RouterProfile[] | null }) {
+export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | null }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [model, setModel] = useState("auto");

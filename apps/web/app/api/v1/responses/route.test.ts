@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthResult } from "@/src/lib/auth";
-import { authenticateRequest, authenticateSession, isSameOriginRequest } from "@/src/lib/auth";
+import {
+  authenticateRequest,
+  authenticateSession,
+  isSameOriginRequest,
+  parseJsonBody,
+  withBrowserSessionOrApiKeyAuth,
+} from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/infra";
-import { routeAndProxy } from "@/src/lib/routing";
+import { routeAndProxy } from "@/src/lib/routing/router-service";
 import { gatewayRowToPublic, loadGatewaysWithMigration } from "@/src/lib/storage";
 import { POST } from "./route";
 
@@ -19,6 +25,8 @@ vi.mock("@/src/lib/auth", () => ({
   authenticateRequest: vi.fn(),
   authenticateSession: vi.fn(),
   isSameOriginRequest: vi.fn(),
+  parseJsonBody: vi.fn(),
+  withBrowserSessionOrApiKeyAuth: vi.fn(),
 }));
 
 vi.mock("@/src/lib/storage", () => ({
@@ -27,6 +35,10 @@ vi.mock("@/src/lib/storage", () => ({
 }));
 
 vi.mock("@/src/lib/routing", () => ({
+  routeAndProxy: vi.fn(),
+}));
+
+vi.mock("@/src/lib/routing/router-service", () => ({
   routeAndProxy: vi.fn(),
 }));
 
@@ -56,6 +68,8 @@ describe("/api/v1/responses route", () => {
   const authRequestMock = vi.mocked(authenticateRequest);
   const authSessionMock = vi.mocked(authenticateSession);
   const sameOriginMock = vi.mocked(isSameOriginRequest);
+  const parseJsonBodyMock = vi.mocked(parseJsonBody);
+  const withBrowserSessionOrApiKeyAuthMock = vi.mocked(withBrowserSessionOrApiKeyAuth);
   const loadGatewaysMock = vi.mocked(loadGatewaysWithMigration);
   const toPublicMock = vi.mocked(gatewayRowToPublic);
   const routeAndProxyMock = vi.mocked(routeAndProxy);
@@ -66,6 +80,16 @@ describe("/api/v1/responses route", () => {
     authRequestMock.mockResolvedValue(createAuth());
     authSessionMock.mockResolvedValue(null);
     sameOriginMock.mockReturnValue(false);
+    parseJsonBodyMock.mockImplementation(async (request) => ({
+      data: await request.json(),
+    }) as any);
+    withBrowserSessionOrApiKeyAuthMock.mockImplementation(async (request, handler) => {
+      const auth = await authRequestMock(request, {} as any);
+      if (!auth) {
+        return new Response(JSON.stringify({ error: "Unauthorized." }), { status: 401 });
+      }
+      return handler(auth as any, { ROUTER_DB: {} as any } as any);
+    });
     loadGatewaysMock.mockResolvedValue([]);
     toPublicMock.mockImplementation((row: any) => row);
   });

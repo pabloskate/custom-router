@@ -1,31 +1,24 @@
-import { verifyAdminSecret } from "@/src/lib/auth";
-import { json, getRuntimeBindings } from "@/src/lib/infra";
+import { withAdminAuth } from "@/src/lib/auth";
+import { json } from "@/src/lib/infra";
 import { getRouterRepository } from "@/src/lib/storage";
 
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ modelId: string }> }
 ): Promise<Response> {
-  const bindings = getRuntimeBindings();
-  if (!bindings.ADMIN_SECRET) {
-    return json({ error: "Server misconfigured." }, 500);
-  }
+  return withAdminAuth(request, async () => {
+    const { modelId } = await params;
+    const decoded = decodeURIComponent(modelId);
 
-  if (!verifyAdminSecret(request, bindings.ADMIN_SECRET)) {
-    return json({ error: "Unauthorized." }, 401);
-  }
+    const repository = getRouterRepository();
+    const existing = await repository.getCatalog();
+    const updated = existing.filter((m) => m.id !== decoded);
 
-  const { modelId } = await params;
-  const decoded = decodeURIComponent(modelId);
+    if (updated.length === existing.length) {
+      return json({ error: `Model not found: ${decoded}` }, 404);
+    }
 
-  const repository = getRouterRepository();
-  const existing = await repository.getCatalog();
-  const updated = existing.filter((m) => m.id !== decoded);
-
-  if (updated.length === existing.length) {
-    return json({ error: `Model not found: ${decoded}` }, 404);
-  }
-
-  await repository.setCatalog(`manual-${Date.now()}`, updated);
-  return json({ ok: true }, 200);
+    await repository.setCatalog(`manual-${Date.now()}`, updated);
+    return json({ ok: true }, 200);
+  });
 }

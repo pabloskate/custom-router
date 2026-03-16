@@ -1,79 +1,8 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// router/inspect/route.ts
-//
-// Dry-run routing endpoint — runs the classifier and returns the routing
-// decision without proxying the request to the upstream model.
-//
-// Used by the playground's Router Test Mode to cheaply inspect how a prompt
-// would be routed without burning tokens on the selected model.
-//
-// POST /api/v1/router/inspect
-//   body: { model: string, messages: [...] }
-//   returns: RouteInspectResult
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { authenticateRequest, authenticateSession, isSameOriginRequest } from "@/src/lib/auth";
-import { json, getRuntimeBindings } from "@/src/lib/infra";
-import { routeAndProxy } from "@/src/lib/routing";
 import { chatCompletionSchema } from "@/src/lib/schemas";
-import { gatewayRowToPublic, loadGatewaysWithMigration } from "@/src/lib/storage";
+import { createRoutedEndpoint } from "@/src/features/routing/server";
 
-export async function POST(request: Request): Promise<Response> {
-  const bindings = getRuntimeBindings();
-
-  if (!bindings.ROUTER_DB) {
-    return json({ error: "Server misconfigured: missing database." }, 500);
-  }
-
-  let auth = await authenticateRequest(request, bindings.ROUTER_DB);
-
-  if (!auth && isSameOriginRequest(request)) {
-    auth = await authenticateSession(request, bindings.ROUTER_DB);
-  }
-
-  if (!auth) {
-    return json({ error: "Unauthorized. Provide a valid API key via Authorization: Bearer <key>." }, 401);
-  }
-
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return json({ error: "Invalid JSON body." }, 400);
-  }
-
-  const parsed = chatCompletionSchema.safeParse(payload);
-  if (!parsed.success) {
-    return json({ error: "Invalid request payload.", issues: parsed.error.issues }, 400);
-  }
-
-  const gatewayRows = await loadGatewaysWithMigration({
-    db: bindings.ROUTER_DB,
-    userId: auth.userId,
-    upstreamBaseUrl: auth.upstreamBaseUrl ?? null,
-    upstreamApiKeyEnc: auth.upstreamApiKeyEnc ?? null,
-    customCatalogJson: auth.customCatalog ? JSON.stringify(auth.customCatalog) : null,
-  }).then((rows) => rows.map(gatewayRowToPublic)).catch(() => []);
-
-  const result = await routeAndProxy({
-    body: parsed.data,
-    apiPath: "/chat/completions",
-    dryRun: true,
-    userConfig: {
-      preferredModels: auth.preferredModels,
-      customCatalog: auth.customCatalog,
-      defaultModel: auth.defaultModel,
-      classifierModel: auth.classifierModel,
-      routingInstructions: auth.routingInstructions,
-      blocklist: auth.blocklist,
-      profiles: auth.profiles,
-      gatewayRows,
-      classifierBaseUrl: auth.classifierBaseUrl,
-      classifierApiKeyEnc: auth.classifierApiKeyEnc,
-      routeTriggerKeywords: auth.routeTriggerKeywords,
-      routingFrequency: auth.routingFrequency,
-    },
-  });
-
-  return result.response;
-}
+export const POST = createRoutedEndpoint({
+  schema: chatCompletionSchema,
+  apiPath: "/chat/completions",
+  dryRun: true,
+});

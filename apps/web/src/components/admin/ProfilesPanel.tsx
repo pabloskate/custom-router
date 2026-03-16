@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import type { RouterProfile } from "@custom-router/core";
 import { SaveActionBar, type SaveActionState } from "./SaveActionBar";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13,17 +14,7 @@ import { SaveActionBar, type SaveActionState } from "./SaveActionBar";
 // - Inline editing with clear save/discard actions
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type RouterProfile = {
-  id: string;
-  name: string;
-  description?: string;
-  overrideModels?: boolean;
-  defaultModel?: string;
-  classifierModel?: string;
-  routingInstructions?: string;
-  blocklist?: string[];
-  catalogFilter?: string[];
-};
+export type { RouterProfile } from "@custom-router/core";
 
 /** Derive overrideModels for backward compat when loading legacy profiles. */
 export function normalizeProfile(p: RouterProfile): RouterProfile {

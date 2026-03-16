@@ -35,6 +35,17 @@ Recommended repo split:
 - Routing explanations, thread pinning, classifier-based selection, and fallback behavior
 - Cloudflare deployment path for D1, KV, Workers, and the ingest worker
 
+## Web App Structure
+
+`packages/core` remains the framework-agnostic routing engine. The Next.js app is now being organized around feature slices under `apps/web/src/features/*`:
+
+- `routing` for routed endpoint/server seams
+- `gateways` for gateway contracts and UI entrypoints
+- `account-settings` for shared user settings DTOs
+- `admin-shell` for admin state orchestration
+
+`app/api/v1/**/route.ts` files stay in place for Next.js, but they should be thin adapters that call shared helpers or feature handlers rather than embedding auth, parsing, and orchestration logic inline.
+
 ## Runtime Behavior
 
 - Routing activates for `model: "auto"` and named routing profiles. Explicit model IDs pass through unchanged.

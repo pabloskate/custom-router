@@ -9,7 +9,7 @@
 // Model IDs use OpenRouter naming convention: provider/model-name
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { GatewayModel } from "../components/admin/GatewayPanel";
+import type { GatewayModel } from "@/src/features/gateways/contracts";
 
 export interface RoutingPreset {
   readonly id: string;

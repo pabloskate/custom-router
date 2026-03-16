@@ -90,6 +90,17 @@ Client
 | `infra/request-id.ts` | Generates `router_<uuid>` IDs used in headers + D1. |
 | `infra/cloudflare-types.ts` | Minimal TypeScript types for D1Database and KVNamespace (avoids the full @cloudflare/workers-types dep). |
 
+### `apps/web/src/features/`
+
+| Path | Responsibility |
+|------|---------------|
+| `routing/` | Feature-owned routing seams: routed endpoint factory, shared routing contracts, and router-service helper modules. |
+| `gateways/` | Shared gateway DTOs and feature entrypoints for gateway UI/server work. |
+| `account-settings/` | Shared user settings DTOs and hydration logic used by `/api/v1/user/me` and the admin UI. |
+| `admin-shell/` | Admin shell state hook (`useAdminData`) and feature-owned shell entrypoint. |
+| `routing-quickstart/` | Feature entrypoint for quickstart/integration guidance UI. |
+| `playground/` | Feature entrypoint for routing playground UI. |
+
 ### `apps/web/app/api/v1/`
 
 Every file is a Next.js route handler. Auth pattern (use route-helpers.ts):
@@ -166,7 +177,8 @@ KV namespace (`ROUTER_KV`):
 ## Adding a New API Route
 
 1. Create `apps/web/app/api/v1/<resource>/route.ts`
-2. Use `route-helpers.ts` for auth — do not repeat the pattern inline:
+2. Keep the route file as an adapter only. It should choose a handler, call one helper, and return a response.
+3. Use `route-helpers.ts` for auth/body parsing — do not repeat the pattern inline:
    ```ts
    export async function GET(request: Request) {
      return withSessionAuth(request, async (auth, bindings) => {
@@ -174,8 +186,12 @@ KV namespace (`ROUTER_KV`):
      });
    }
    ```
-3. Validate the request body with a Zod schema from `schemas.ts`
-4. Use `getRouterRepository()` for D1/KV access
+4. For routed OpenAI-compatible endpoints, use `createRoutedEndpoint(...)` instead of hand-rolling auth + schema + gateway loading.
+5. Validate the request body with a Zod schema from `schemas.ts` or `parseJsonBody(...)`.
+6. Use `getRouterRepository()` for D1/KV access
+
+Route rule:
+- Outside `app/api/v1/auth/*` and `app/api/v1/admin/verify/route.ts`, do not import `authenticateSession`, `authenticateRequest`, `isSameOriginRequest`, or `verifyAdminSecret` directly inside route files.
 
 ---
 
@@ -231,6 +247,18 @@ npm run test -w @custom-router/web
 
 Core tests live in `packages/core/test/`. They cover `RouterEngine` and thread fingerprinting.
 Web tests live alongside the app code under `apps/web/app/api/v1/`, `apps/web/src/lib/routing/`, and `apps/web/src/components/`.
+
+Architecture guardrails are also tested in `apps/web/src/architecture/feature-boundaries.test.ts`.
+
+## Repo-Local Skills
+
+This repo now includes local skills under `.codex/skills/`:
+
+- `custom-router-feature-consistency`
+- `custom-router-routing-safety`
+- `custom-router-release-guard`
+
+Use them when touching feature seams, routing behavior, or release/deploy work.
 
 ---
 

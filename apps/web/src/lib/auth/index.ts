@@ -17,7 +17,15 @@ export { decryptByokSecret, encryptByokSecret, resolveByokEncryptionSecret } fro
 export { isSameOriginRequest } from "./csrf";
 export type { RateLimitResult } from "./rate-limit";
 export { consumeRateLimit, getClientIp } from "./rate-limit";
-export { withApiKeyAuth, withCsrf, withDb, withSessionAuth } from "./route-helpers";
+export {
+  parseJsonBody,
+  withAdminAuth,
+  withApiKeyAuth,
+  withBrowserSessionOrApiKeyAuth,
+  withCsrf,
+  withDb,
+  withSessionAuth,
+} from "./route-helpers";
 export type { InviteCode } from "./invite-store";
 export {
   createInviteCode,

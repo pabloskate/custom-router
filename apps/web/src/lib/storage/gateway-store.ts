@@ -13,8 +13,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CatalogItem } from "@custom-router/core";
+import type { GatewayInfo } from "@/src/features/gateways/contracts";
 import { UPSTREAM } from "../constants";
 import type { D1Database } from "../infra/cloudflare-types";
+
+export type { GatewayInfo } from "@/src/features/gateways/contracts";
 
 // ── Row types ────────────────────────────────────────────────────────────────
 
@@ -27,16 +30,6 @@ export interface GatewayRow {
   models_json: string;  // JSON: CatalogItem[] with native model IDs for this gateway
   created_at: string;
   updated_at: string;
-}
-
-/** Safe public shape returned by the API (no key) */
-export interface GatewayInfo {
-  id: string;
-  name: string;
-  baseUrl: string;
-  models: CatalogItem[];
-  createdAt: string;
-  updatedAt: string;
 }
 
 /** Shape used by router-service: still encrypted, models already parsed */

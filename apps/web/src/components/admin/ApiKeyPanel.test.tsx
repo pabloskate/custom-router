@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { ApiKeyPanel } from "./ApiKeyPanel";
 
 describe("ApiKeyPanel", () => {
-  it("renders OpenAI-compatible quickstart guidance", () => {
+  it("renders the empty-state call to action when no keys exist", () => {
     const markup = renderToStaticMarkup(
       createElement(ApiKeyPanel, {
         keys: [],
@@ -15,17 +15,9 @@ describe("ApiKeyPanel", () => {
       })
     );
 
-    expect(markup).toContain("Quickstart");
-    expect(markup).toContain("OpenAI-compatible");
-    expect(markup).toContain("/api/v1/chat/completions");
-    expect(markup).toContain("/api/v1/responses");
-    expect(markup).toContain('model: &quot;auto&quot;');
-    expect(markup).toContain("baseURL: &quot;/api/v1&quot;");
-    expect(markup).toContain("Authorization: Bearer YOUR_API_KEY");
-    expect(markup).toContain("Copy base URL");
-    expect(markup).toContain("Copy endpoints");
-    expect(markup).toContain("Copy SDK");
-    expect(markup).toContain("Copy curl");
+    expect(markup).toContain("No API Keys Yet");
+    expect(markup).toContain("Generate your first API key");
+    expect(markup).toContain("Generate API Key");
   });
 
   it("renders delete actions for existing keys", () => {

@@ -1,13 +1,13 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import { ApiKeyPanel } from "./ApiKeyPanel";
-import { GatewayPanel } from "./GatewayPanel";
 import { InviteCodePanel } from "./InviteCodePanel";
-import { PlaygroundPanel } from "./PlaygroundPanel";
 import { ProfilesPanel, type RouterProfile } from "./ProfilesPanel";
-import { QuickstartPanel } from "./QuickstartPanel";
 import { RouterConfigPanel } from "./RouterConfigPanel";
 import { type AdminExtensionContext, type AdminTabDefinition, type ApiKeyInfo, type RoutingDraftState, type UserInfo } from "./types";
+import { GatewayPanel } from "@/src/features/gateways/components/GatewayPanel";
+import { PlaygroundPanel } from "@/src/features/playground/PlaygroundPanel";
+import { QuickstartPanel } from "@/src/features/routing-quickstart/QuickstartPanel";
 import { type RegistrationMode } from "@/src/lib/constants";
 
 type BaseAdminTabsArgs = {

@@ -12,7 +12,7 @@
 
 import React, { useEffect, useState } from "react";
 
-import { type RouterProfile } from "./ProfilesPanel";
+import type { RouterProfile } from "@custom-router/core";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

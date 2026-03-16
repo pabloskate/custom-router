@@ -6,6 +6,8 @@ import {
   getUserUpstreamCredentials,
   isSameOriginRequest,
   upsertUserUpstreamCredentials,
+  withCsrf,
+  withSessionAuth,
 } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/infra";
 import { GET, PUT } from "./route";
@@ -28,6 +30,8 @@ vi.mock("@/src/lib/auth", async () => {
     isSameOriginRequest: vi.fn(),
     resolveByokEncryptionSecret: vi.fn(({ byokSecret }: { byokSecret?: string | null }) => byokSecret ?? null),
     upsertUserUpstreamCredentials: vi.fn(),
+    withCsrf: vi.fn(),
+    withSessionAuth: vi.fn(),
   };
 });
 
@@ -69,9 +73,25 @@ describe("/api/v1/user/me route", () => {
   const sameOriginMock = vi.mocked(isSameOriginRequest);
   const upstreamGetMock = vi.mocked(getUserUpstreamCredentials);
   const upstreamUpsertMock = vi.mocked(upsertUserUpstreamCredentials);
+  const withSessionAuthMock = vi.mocked(withSessionAuth);
+  const withCsrfMock = vi.mocked(withCsrf);
 
   beforeEach(() => {
     vi.clearAllMocks();
+    withSessionAuthMock.mockImplementation(async (request, handler) => {
+      const bindings = runtimeMock() ?? { ROUTER_DB: {} as any };
+      const auth = await authMock(request, (bindings as any).ROUTER_DB);
+      if (!auth) {
+        return new Response(JSON.stringify({ error: "Unauthorized." }), { status: 401 });
+      }
+      return handler(auth as any, bindings as any);
+    });
+    withCsrfMock.mockImplementation(async (request, handler) => {
+      if (!sameOriginMock(request)) {
+        return new Response(JSON.stringify({ error: "Invalid origin." }), { status: 403 });
+      }
+      return handler();
+    });
   });
 
   it("GET includes routing fields", async () => {

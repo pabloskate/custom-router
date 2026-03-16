@@ -1,37 +1,16 @@
 import type { ComponentType, ReactNode } from "react";
 
-import { type CatalogItem } from "./CatalogEditorPanel";
-import { type RouterProfile } from "./ProfilesPanel";
 import { type SaveActionState } from "./SaveActionBar";
-import { mergeLegacyRoutingInstructions } from "@/src/lib/routing/profile-config";
+import type { UserInfo } from "@/src/features/account-settings/contracts";
+import type { GatewaySummary } from "@/src/features/gateways/contracts";
+
+export type { ServerUserInfo, UserInfo, hydrateUser } from "@/src/features/account-settings/contracts";
+export type { GatewaySummary } from "@/src/features/gateways/contracts";
 
 export type AdminSection = "configure" | "use" | "account";
 
 export type AdminTabIcon = ComponentType<{ className?: string }>;
-
-export type ServerUserInfo = {
-  id: string;
-  name: string;
-  email?: string;
-  preferredModels: string[];
-  defaultModel: string | null;
-  classifierModel: string | null;
-  routingInstructions?: string | null;
-  blocklist: string[] | null;
-  customCatalog: CatalogItem[] | null;
-  profiles: RouterProfile[] | null;
-  routeTriggerKeywords: string[] | null;
-  routingFrequency: string | null;
-};
-
-export type UserInfo = Omit<ServerUserInfo, "routingInstructions">;
 export type RoutingDraftState = SaveActionState;
-
-export type GatewaySummary = {
-  id: string;
-  name: string;
-  models: Array<{ id: string; name?: string }>;
-};
 
 export type ApiKeyInfo = {
   id: string;
@@ -62,14 +41,3 @@ export type AdminTabDefinition = {
   icon?: AdminTabIcon;
   render: (ctx: AdminExtensionContext) => ReactNode;
 };
-
-export function hydrateUser(user: ServerUserInfo): UserInfo {
-  const { routingInstructions: legacyRoutingInstructions, ...rest } = user;
-  return {
-    ...rest,
-    profiles: mergeLegacyRoutingInstructions({
-      profiles: user.profiles,
-      routingInstructions: legacyRoutingInstructions,
-    }),
-  };
-}

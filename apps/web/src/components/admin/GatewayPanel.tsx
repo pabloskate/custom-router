@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { GATEWAY_PRESETS, CUSTOM_PRESET_ID } from "../../lib/gateway-presets";
 import { ROUTING_PRESETS, type RoutingPreset } from "../../lib/routing-presets";
+import type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GatewayPanel.tsx
@@ -19,24 +20,7 @@ import { ROUTING_PRESETS, type RoutingPreset } from "../../lib/routing-presets";
 
 type ReasoningLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
-export interface GatewayModel {
-  id: string;
-  name: string;
-  whenToUse?: string;
-  description?: string;
-  modality?: string;
-  thinking?: ReasoningLevel;
-  reasoningPreset?: ReasoningLevel;
-}
-
-export interface GatewayInfo {
-  id: string;
-  name: string;
-  baseUrl: string;
-  models: GatewayModel[];
-  createdAt: string;
-  updatedAt: string;
-}
+export type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 
 interface Props {
   onStatus?: (msg: string) => void;
