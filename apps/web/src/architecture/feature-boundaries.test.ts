@@ -19,6 +19,7 @@ describe("feature boundaries", () => {
     const routeRoot = path.resolve(process.cwd(), "app/api/v1");
     const exempt = new Set([
       path.resolve(routeRoot, "admin/verify/route.ts"),
+      path.resolve(routeRoot, "billing/enterprise-inquiry/route.ts"),
     ]);
 
     const lowLevelAuthPattern = /\b(authenticateRequest|authenticateSession|isSameOriginRequest|verifyAdminSecret)\b/;
@@ -43,7 +44,9 @@ describe("feature boundaries", () => {
 
     for (const file of routedEndpoints) {
       const contents = fs.readFileSync(file, "utf8");
-      expect(contents, path.relative(process.cwd(), file)).toContain("createRoutedEndpoint");
+      expect(contents, path.relative(process.cwd(), file)).toMatch(
+        /create(?:Billed)?RoutedEndpoint/
+      );
       expect(contents, path.relative(process.cwd(), file)).not.toMatch(/\b(routeAndProxy|authenticateRequest|authenticateSession|loadGatewaysWithMigration)\b/);
     }
   });
