@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { RouterEngine } from "../src/router-engine";
 import { buildThreadFingerprint } from "../src/threading";
-import type { PinStore, RouterConfig, RouterRequestLike, ThreadPin } from "../src/types";
+import type { PinStore, RouterConfig, RouterProfile, RouterRequestLike, ThreadPin } from "../src/types";
 
 // Mock PinStore
 class MockPinStore implements PinStore {
@@ -33,6 +33,22 @@ describe("RouterEngine (LLM Router)", () => {
         { id: "openai/gpt-4o", name: "GPT-4o" },
         { id: "anthropic/claude-3-opus", name: "Claude 3 Opus" }
     ];
+    const namedProfiles: RouterProfile[] = [
+        {
+            id: "planning-backend",
+            name: "Planning Backend",
+            routingInstructions: "Use claude-3-opus for math.",
+        },
+    ];
+
+    function buildProfileThreadKey(request: RouterRequestLike): string {
+        return buildThreadFingerprint({
+            messages: request.messages,
+            tools: request.tools,
+            previousResponseId: request.previous_response_id,
+            profileId: request.model,
+        });
+    }
 
     it("should bypass routing if specific model requested", async () => {
         const engine = new RouterEngine();
@@ -52,7 +68,7 @@ describe("RouterEngine (LLM Router)", () => {
         expect(decision.explanation.decisionReason).toBe("passthrough");
     });
 
-    it("should call llmRouter when model=auto and use the result", async () => {
+    it("should call llmRouter when a named profile is requested and use the result", async () => {
         const mockLlmRouter = vi.fn().mockResolvedValue({
             selectedModel: "anthropic/claude-3-opus",
             confidence: 0.9,
@@ -61,7 +77,7 @@ describe("RouterEngine (LLM Router)", () => {
 
         const engine = new RouterEngine({ llmRouter: mockLlmRouter });
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             messages: [{ role: "user", content: "What is 2+2?" }]
         };
 
@@ -71,7 +87,8 @@ describe("RouterEngine (LLM Router)", () => {
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
-            pinStore: new MockPinStore()
+            pinStore: new MockPinStore(),
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -87,18 +104,18 @@ describe("RouterEngine (LLM Router)", () => {
         expect(decision.explanation.classificationConfidence).toBe(0.9);
     });
 
-    it("uses the auto profile instructions instead of the legacy global instructions when profiles exist", async () => {
+    it("uses the matched profile instructions instead of the legacy global instructions when profiles exist", async () => {
         const mockLlmRouter = vi.fn().mockResolvedValue({
             selectedModel: "anthropic/claude-3-opus",
             confidence: 0.92,
-            signals: ["profile:auto"],
+            signals: ["profile:planning-backend"],
         });
 
         const engine = new RouterEngine({ llmRouter: mockLlmRouter });
         await engine.decide({
-            requestId: "req-auto-profile-instructions",
+            requestId: "req-planning-profile-instructions",
             request: {
-                model: "auto",
+                model: "planning-backend",
                 messages: [{ role: "user", content: "Plan this migration." }]
             },
             config: defaultConfig,
@@ -106,7 +123,7 @@ describe("RouterEngine (LLM Router)", () => {
             catalogVersion: "v1",
             pinStore: new MockPinStore(),
             profiles: [
-                { id: "auto", name: "Auto", routingInstructions: "Use Claude for planning tasks." },
+                { id: "planning-backend", name: "Planning Backend", routingInstructions: "Use Claude for planning tasks." },
             ],
         });
 
@@ -133,7 +150,7 @@ describe("RouterEngine (LLM Router)", () => {
             catalogVersion: "v1",
             pinStore: new MockPinStore(),
             profiles: [
-                { id: "auto", name: "Auto", routingInstructions: "Use Claude for planning tasks." },
+                { id: "planning-backend", name: "Planning Backend", routingInstructions: "Use Claude for planning tasks." },
                 { id: "auto-cheap", name: "Cheap", classifierModel: "openai/gpt-4o-mini" },
             ],
         });
@@ -151,7 +168,7 @@ describe("RouterEngine (LLM Router)", () => {
 
         const engine = new RouterEngine({ llmRouter: mockLlmRouter });
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             input: "Use claude for this advanced reasoning task."
         };
 
@@ -161,7 +178,8 @@ describe("RouterEngine (LLM Router)", () => {
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
-            pinStore: new MockPinStore()
+            pinStore: new MockPinStore(),
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -181,11 +199,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-3",
-            request: { model: "auto", messages: [] },
+            request: { model: "planning-backend", messages: [] },
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
-            pinStore: new MockPinStore()
+            pinStore: new MockPinStore(),
+            profiles: namedProfiles,
         });
 
         expect(decision.selectedModel).toBe("openai/gpt-4o"); // fell back to default
@@ -199,7 +218,7 @@ describe("RouterEngine (LLM Router)", () => {
         const pinStore = new MockPinStore();
 
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             messages: [
                 { role: "user", content: "Hello" },
                 { role: "assistant", content: "Hi" },
@@ -207,7 +226,7 @@ describe("RouterEngine (LLM Router)", () => {
             ]
         };
 
-        const threadKey = buildThreadFingerprint({ messages: request.messages });
+        const threadKey = buildProfileThreadKey(request);
 
         await pinStore.set({
             threadKey,
@@ -224,7 +243,8 @@ describe("RouterEngine (LLM Router)", () => {
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
-            pinStore
+            pinStore,
+            profiles: namedProfiles,
         });
 
         expect(decision.pinUsed).toBe(true);
@@ -242,7 +262,7 @@ describe("RouterEngine (LLM Router)", () => {
         const pinStore = new MockPinStore();
 
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             messages: [
                 { role: "user", content: "Use opus for planning" },
                 { role: "assistant", content: "Plan drafted." },
@@ -250,7 +270,7 @@ describe("RouterEngine (LLM Router)", () => {
             ],
         };
 
-        const threadKey = buildThreadFingerprint({ messages: request.messages });
+        const threadKey = buildProfileThreadKey(request);
         await pinStore.set({
             threadKey,
             modelId: "anthropic/claude-3-opus",
@@ -267,6 +287,7 @@ describe("RouterEngine (LLM Router)", () => {
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -287,7 +308,7 @@ describe("RouterEngine (LLM Router)", () => {
         const pinStore = new MockPinStore();
 
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             messages: [
                 { role: "user", content: "$$route" },
                 { role: "assistant", content: "Switched." },
@@ -295,7 +316,7 @@ describe("RouterEngine (LLM Router)", () => {
             ],
         };
 
-        const threadKey = buildThreadFingerprint({ messages: request.messages });
+        const threadKey = buildProfileThreadKey(request);
         await pinStore.set({
             threadKey,
             modelId: "anthropic/claude-3-opus",
@@ -312,6 +333,7 @@ describe("RouterEngine (LLM Router)", () => {
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).not.toHaveBeenCalled();
@@ -331,7 +353,7 @@ describe("RouterEngine (LLM Router)", () => {
         const pinStore = new MockPinStore();
 
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             messages: [
                 { role: "user", content: "Write a plan" },
                 { role: "assistant", content: "Here is the plan. [PHASE_COMPLETE_SIGNAL]" },
@@ -340,7 +362,7 @@ describe("RouterEngine (LLM Router)", () => {
             tools: [{ type: "function", function: { name: "apply_patch" } }]
         };
 
-        const threadKey = buildThreadFingerprint({ messages: request.messages, tools: request.tools });
+        const threadKey = buildProfileThreadKey(request);
         await pinStore.set({
             threadKey,
             modelId: "anthropic/claude-3-opus",
@@ -356,7 +378,8 @@ describe("RouterEngine (LLM Router)", () => {
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
-            pinStore
+            pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -376,7 +399,7 @@ describe("RouterEngine (LLM Router)", () => {
         const pinStore = new MockPinStore();
 
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             previous_response_id: "resp_phase_ignore",
             messages: [
                 { role: "user", content: "Write a plan" },
@@ -385,7 +408,7 @@ describe("RouterEngine (LLM Router)", () => {
             ]
         };
 
-        const threadKey = buildThreadFingerprint({ previousResponseId: request.previous_response_id });
+        const threadKey = buildProfileThreadKey(request);
         await pinStore.set({
             threadKey,
             modelId: "anthropic/claude-3-opus",
@@ -401,7 +424,8 @@ describe("RouterEngine (LLM Router)", () => {
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
-            pinStore
+            pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -422,7 +446,7 @@ describe("RouterEngine (LLM Router)", () => {
             catalogVersion: "v1",
             pinStore: new MockPinStore(),
             profiles: [
-                { id: "auto", name: "Auto" },
+                { id: "planning-backend", name: "Planning Backend" },
                 { id: "auto-cheap", name: "Cheap", defaultModel: "anthropic/claude-3-opus" },
             ],
         });
@@ -443,7 +467,7 @@ describe("RouterEngine (LLM Router)", () => {
             catalogVersion: "v1",
             pinStore: new MockPinStore(),
             profiles: [
-                { id: "auto", name: "Auto" },
+                { id: "planning-backend", name: "Planning Backend" },
                 { id: "auto-cheap", name: "Cheap", defaultModel: "anthropic/claude-3-opus" },
             ],
         });
@@ -466,7 +490,7 @@ describe("RouterEngine (LLM Router)", () => {
             { role: "assistant", content: "Here is some code..." },
             { role: "user", content: "Continue the implementation" },
         ];
-        const threadKey = buildThreadFingerprint({ messages });
+        const threadKey = buildProfileThreadKey({ model: "planning-backend", messages });
 
         await pinStore.set({
             threadKey,
@@ -479,11 +503,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-sticky-pin",
-            request: { model: "auto", messages },
+            request: { model: "planning-backend", messages },
             config: { ...defaultConfig, smartPinTurns: 3 },
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -503,11 +528,12 @@ describe("RouterEngine (LLM Router)", () => {
         const engine = new RouterEngine({ llmRouter: mockLlmRouter });
         const decision = await engine.decide({
             requestId: "req-smart-budget",
-            request: { model: "auto", messages: [{ role: "user", content: "Plan this migration." }] },
+            request: { model: "planning-backend", messages: [{ role: "user", content: "Plan this migration." }] },
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
             pinStore: new MockPinStore(),
+            profiles: namedProfiles,
         });
 
         expect(decision.pinRerouteAfterTurns).toBe(2);
@@ -530,7 +556,7 @@ describe("RouterEngine (LLM Router)", () => {
             { role: "assistant", content: "Here is the plan." },
             { role: "user", content: "Now implement it." },
         ];
-        const threadKey = buildThreadFingerprint({ messages });
+        const threadKey = buildProfileThreadKey({ model: "planning-backend", messages });
 
         await pinStore.set({
             threadKey,
@@ -545,11 +571,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-smart-budget-one",
-            request: { model: "auto", messages },
+            request: { model: "planning-backend", messages },
             config: defaultConfig,
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -572,7 +599,7 @@ describe("RouterEngine (LLM Router)", () => {
             { role: "assistant", content: "Sure, I can help." },
             { role: "user", content: "$$route switch for this turn" },
         ];
-        const threadKey = buildThreadFingerprint({ messages });
+        const threadKey = buildProfileThreadKey({ model: "planning-backend", messages });
 
         await pinStore.set({
             threadKey,
@@ -585,11 +612,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-force-reroute",
-            request: { model: "auto", messages },
+            request: { model: "planning-backend", messages },
             config: { ...defaultConfig, smartPinTurns: 3 },
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -613,7 +641,7 @@ describe("RouterEngine (LLM Router)", () => {
             { role: "assistant", content: "Here is some code..." },
             { role: "user", content: "Continue" },
         ];
-        const threadKey = buildThreadFingerprint({ messages });
+        const threadKey = buildProfileThreadKey({ model: "planning-backend", messages });
 
         await pinStore.set({
             threadKey,
@@ -626,11 +654,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-every-message",
-            request: { model: "auto", messages },
+            request: { model: "planning-backend", messages },
             config: { ...defaultConfig, routingFrequency: "every_message" },
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -655,7 +684,7 @@ describe("RouterEngine (LLM Router)", () => {
             { role: "assistant", content: "Sure" },
             { role: "user", content: "$$route switch models" },
         ];
-        const threadKey = buildThreadFingerprint({ messages });
+        const threadKey = buildProfileThreadKey({ model: "planning-backend", messages });
 
         await pinStore.set({
             threadKey,
@@ -668,11 +697,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-new-thread-only",
-            request: { model: "auto", messages },
+            request: { model: "planning-backend", messages },
             config: { ...defaultConfig, routingFrequency: "new_thread_only" },
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -692,11 +722,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-new-thread-only-new",
-            request: { model: "auto", messages: [{ role: "user", content: "Hello" }] },
+            request: { model: "planning-backend", messages: [{ role: "user", content: "Hello" }] },
             config: { ...defaultConfig, routingFrequency: "new_thread_only" },
             catalog,
             catalogVersion: "v1",
             pinStore: new MockPinStore(),
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -719,7 +750,7 @@ describe("RouterEngine (LLM Router)", () => {
             { role: "assistant", content: "Sure" },
             { role: "user", content: "!switch use a faster model" },
         ];
-        const threadKey = buildThreadFingerprint({ messages });
+        const threadKey = buildProfileThreadKey({ model: "planning-backend", messages });
 
         await pinStore.set({
             threadKey,
@@ -732,11 +763,12 @@ describe("RouterEngine (LLM Router)", () => {
 
         const decision = await engine.decide({
             requestId: "req-custom-trigger",
-            request: { model: "auto", messages },
+            request: { model: "planning-backend", messages },
             config: { ...defaultConfig, routeTriggerKeywords: ["!switch"] },
             catalog,
             catalogVersion: "v1",
             pinStore,
+            profiles: namedProfiles,
         });
 
         expect(mockLlmRouter).toHaveBeenCalledOnce();
@@ -750,14 +782,14 @@ describe("RouterEngine (LLM Router)", () => {
         const pinStore = new MockPinStore();
 
         const request: RouterRequestLike = {
-            model: "auto",
+            model: "planning-backend",
             messages: [
                 { role: "user", content: "Do some work" },
                 { role: "assistant", tool_calls: [{ id: "call_123", type: "function", function: { name: "get_weather", arguments: "{}" } }] }
             ]
         };
 
-        const threadKey = buildThreadFingerprint({ messages: request.messages });
+        const threadKey = buildProfileThreadKey(request);
         await pinStore.set({
             threadKey,
             modelId: "anthropic/claude-3-opus",
@@ -773,7 +805,8 @@ describe("RouterEngine (LLM Router)", () => {
             config: { ...defaultConfig, smartPinTurns: 3 },
             catalog,
             catalogVersion: "v1",
-            pinStore
+            pinStore,
+            profiles: namedProfiles,
         });
 
         // Agent loops should keep the pin without consuming the user-turn budget.

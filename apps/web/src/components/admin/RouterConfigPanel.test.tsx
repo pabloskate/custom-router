@@ -19,12 +19,13 @@ describe("RouterConfigPanel", () => {
     );
 
     expect(markup).toContain("Re-routing Behavior");
+    expect(markup).toContain("All changes saved");
     expect(markup).toContain("When to route");
     expect(markup).toContain("Trigger keywords");
     expect(markup).toContain("How Smart Pinning Works");
   });
 
-  it("renders save state text", () => {
+  it("renders autosave state text without a manual save button", () => {
     const markup = renderToStaticMarkup(
       createElement(RouterConfigPanel, {
         config: {
@@ -37,7 +38,7 @@ describe("RouterConfigPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Saving changes...");
-    expect(markup).toContain("Saving...");
+    expect(markup).toContain("Saving in background...");
+    expect(markup).not.toContain("Save re-routing settings");
   });
 });

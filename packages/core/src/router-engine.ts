@@ -7,7 +7,6 @@ import {
   hasForceRouteRequest
 } from "./threading";
 import {
-  AUTO_MODELS,
   type PinStore,
   type RouteDecision,
   type RouterConfig,
@@ -49,12 +48,10 @@ export class RouterEngine {
     const messages = args.request.messages ?? [];
     const tools = args.request.tools ?? [];
 
-    const matchedProfile = AUTO_MODELS.has(requestedModel)
-      ? args.profiles?.find((profile) => profile.id === "auto")
-      : args.profiles?.find((profile) => profile.id === requestedModel);
+    const matchedProfile = args.profiles?.find((profile) => profile.id === requestedModel);
 
-    // Passthrough if not "auto" and not a known profile
-    if (!AUTO_MODELS.has(requestedModel) && !matchedProfile) {
+    // Passthrough when the requested model does not match a named routing profile.
+    if (!matchedProfile) {
       const threadKey = buildThreadFingerprint({
         messages,
         tools,

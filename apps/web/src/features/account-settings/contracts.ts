@@ -1,6 +1,6 @@
 import type { CatalogItem, RouterProfile } from "@custom-router/core";
 
-import { ensureAutoProfile } from "@/src/lib/routing/profile-config";
+import { normalizeProfiles } from "@/src/lib/routing/profile-config";
 
 export type ServerUserInfo = {
   id: string;
@@ -20,6 +20,6 @@ export type UserInfo = ServerUserInfo;
 export function hydrateUser(user: ServerUserInfo): UserInfo {
   return {
     ...user,
-    profiles: user.routingConfigRequiresReset ? null : ensureAutoProfile(user.profiles),
+    profiles: user.routingConfigRequiresReset ? null : normalizeProfiles(user.profiles),
   };
 }

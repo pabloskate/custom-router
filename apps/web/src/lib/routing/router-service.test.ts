@@ -74,6 +74,57 @@ describe("routeAndProxy", () => {
     vi.clearAllMocks();
   });
 
+  it('rejects the deprecated "auto" routing alias', async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      body: {
+        model: "auto",
+        messages: [{ role: "user", content: "route this" }],
+      },
+      userConfig: {
+        profiles: [
+          {
+            id: "planning-backend",
+            name: "Planning Backend",
+            models: [
+              { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
+            ],
+            defaultModel: key("gw_default", "model/alpha"),
+            classifierModel: key("gw_default", "model/alpha"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [{ id: "model/alpha", name: "Alpha" }],
+          },
+        ],
+      },
+    });
+
+    expect(result.response.status).toBe(400);
+    await expect(result.response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("explicit profile ID"),
+      }),
+    );
+    expect(classifierMock).not.toHaveBeenCalled();
+  });
+
   it("uses dedicated classifier BYOK credentials when configured", async () => {
     const secret = "1234567890abcdef";
     const defaultApiKey = "gateway-default-key";
@@ -105,14 +156,13 @@ describe("routeAndProxy", () => {
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
       body: {
-        model: "auto",
+        model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
             ],
@@ -174,14 +224,13 @@ describe("routeAndProxy", () => {
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
       body: {
-        model: "auto",
+        model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
               { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
@@ -232,14 +281,13 @@ describe("routeAndProxy", () => {
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
       body: {
-        model: "auto",
+        model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
             ],
@@ -290,14 +338,13 @@ describe("routeAndProxy", () => {
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
       body: {
-        model: "auto",
+        model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_alpha", modelId: "model/alpha", name: "Alpha" },
               { gatewayId: "gw_classifier", modelId: "model/classifier", name: "Classifier" },
@@ -384,14 +431,13 @@ describe("routeAndProxy", () => {
     const result = await routeAndProxy({
       apiPath: "/responses",
       body: {
-        model: "auto",
+        model: "planning-backend",
         input: "route this",
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
               { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
@@ -445,14 +491,13 @@ describe("routeAndProxy", () => {
       apiPath: "/chat/completions",
       dryRun: true,
       body: {
-        model: "auto",
+        model: "planning-backend",
         messages: [{ role: "user", content: "Plan this task" }],
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
               { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
@@ -516,15 +561,14 @@ describe("routeAndProxy", () => {
     await routeAndProxy({
       apiPath: "/chat/completions",
       body: {
-        model: "auto",
+        model: "planning-backend",
         reasoning: { effort: "xhigh" },
         messages: [{ role: "user", content: "Plan a migration." }],
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
               { gatewayId: "gw_default", modelId: "openai/gpt-5.2:high", name: "GPT-5.2 High" },
@@ -594,15 +638,14 @@ describe("routeAndProxy", () => {
     await routeAndProxy({
       apiPath: "/chat/completions",
       body: {
-        model: "auto",
+        model: "planning-backend",
         reasoning: { effort: "xhigh" },
         messages: [{ role: "user", content: "Plan a migration." }],
       },
       userConfig: {
         profiles: [
           {
-            id: "auto",
-            name: "Auto",
+            id: "planning-backend", name: "Planning Backend",
             models: [
               { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
               { gatewayId: "gw_default", modelId: "openai/gpt-5.2:high", name: "GPT-5.2 High" },

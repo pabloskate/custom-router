@@ -57,11 +57,11 @@ export interface RouterProfileModel {
 }
 
 export interface RouterProfile {
-  id: string;                    // Client-facing model name, e.g. "auto-cheap"
+  id: string;                    // Client-facing routed model name, e.g. "cost-optimized"
   name: string;                  // Display name for UI
   description?: string;          // Shown in /v1/models and admin UI
   defaultModel?: string;         // Gateway-bound fallback selection key for this profile
-  classifierModel?: string;      // Gateway-bound classifier selection key for this profile
+  classifierModel?: string;      // Gateway-bound classifier selection key; may point outside this profile's routed pool
   routingInstructions?: string;  // Classifier instructions scoped to this profile
   models?: RouterProfileModel[]; // Authoritative routed pool for this profile
 }
@@ -209,5 +209,3 @@ export interface CatalogItem {
   description?: string;
   gatewayId?: string;  // injected at catalog-build time; not stored in gateway models_json
 }
-
-export const AUTO_MODELS = new Set(["auto", "router/auto"]);

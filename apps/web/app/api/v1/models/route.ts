@@ -49,8 +49,7 @@ function profileId(profile: unknown): string | null {
  * so clients like Cursor, Continue, Apollo, etc. can discover available models.
  *
  * Requires API key auth and returns:
- * - auto meta-model
- * - named routing profiles (e.g. "auto-cheap", "auto-coding")
+ * - named routing profiles (e.g. "cost-optimized", "fast-coding")
  * - flattened model list from all configured user gateways
  */
 export async function GET(request: Request): Promise<Response> {
@@ -69,8 +68,6 @@ export async function GET(request: Request): Promise<Response> {
 
     const models: OpenAiModelEntry[] = [];
     const seenIds = new Set<string>();
-
-    pushUniqueModelEntry(models, seenIds, "auto", "custom-router");
 
     const sortedProfiles = (Array.isArray(auth.profiles) ? auth.profiles : [])
       .map(profileId)

@@ -17,7 +17,7 @@ import type { RouterProfile } from "@custom-router/core";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TileId = "js" | "python" | "curl" | "cursor" | "vercel";
-type ModeId = "auto" | "direct";
+type ModeId = "profile" | "direct";
 type VercelSubTab = "stream" | "gen" | "route";
 
 interface Props {
@@ -368,6 +368,7 @@ function CursorGuide({
   copiedItem: string | null;
   onCopy: (id: string, value: string) => void;
 }) {
+  const displayedProfileIds = profileIds.length > 0 ? profileIds : ["your-profile-id"];
   const steps = [
     {
       num: "1",
@@ -428,7 +429,7 @@ function CursorGuide({
               marginTop: "0.625rem",
             }}
           >
-            {profileIds.map((id) => (
+            {displayedProfileIds.map((id, index) => (
               <span
                 key={id}
                 style={{
@@ -438,9 +439,9 @@ function CursorGuide({
                   borderRadius: "9999px",
                   fontFamily: "var(--font-mono)",
                   fontSize: "0.8125rem",
-                  background: id === "auto" ? "var(--accent-dim)" : "var(--bg-interactive)",
-                  border: `1px solid ${id === "auto" ? "rgba(103,232,249,0.3)" : "var(--border-default)"}`,
-                  color: id === "auto" ? "var(--accent)" : "var(--text-secondary)",
+                  background: index === 0 ? "var(--accent-dim)" : "var(--bg-interactive)",
+                  border: `1px solid ${index === 0 ? "rgba(103,232,249,0.3)" : "var(--border-default)"}`,
+                  color: index === 0 ? "var(--accent)" : "var(--text-secondary)",
                 }}
               >
                 {id}
@@ -540,10 +541,12 @@ function CursorGuide({
 
 function VercelSnippet({
   baseUrl,
+  profileId,
   copiedItem,
   onCopy,
 }: {
   baseUrl: string;
+  profileId: string;
   copiedItem: string | null;
   onCopy: (id: string, value: string) => void;
 }) {
@@ -557,9 +560,9 @@ const router = createOpenAI({
   baseURL: "${baseUrl}",
 });
 
-// Use smart routing in a Next.js Server Action / Route Handler
+// Route through a named profile in a Next.js Server Action / Route Handler
 const result = await streamText({
-  model: router("auto"),
+  model: router("${profileId}"),
   prompt: "Write a haiku about distributed systems.",
 });
 
@@ -574,7 +577,7 @@ const router = createOpenAI({
 });
 
 const { text } = await generateText({
-  model: router("auto-cheap"),   // cost-optimized profile
+  model: router("${profileId}"),
   prompt: "Summarize this article in 3 bullet points.",
 });`;
 
@@ -590,7 +593,7 @@ export async function POST(req: Request) {
   const { messages } = await req.json();
 
   const result = await streamText({
-    model: router("auto"),
+    model: router("${profileId}"),
     messages,
   });
 
@@ -707,7 +710,7 @@ export async function POST(req: Request) {
 export function QuickstartPanel({ profiles, hasKeys }: Props) {
   const [baseUrl, setBaseUrl] = useState("/api/v1");
   const [selectedTile, setSelectedTile] = useState<TileId>("js");
-  const [selectedMode, setSelectedMode] = useState<ModeId>("auto");
+  const [selectedMode, setSelectedMode] = useState<ModeId>("profile");
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   useEffect(() => {
@@ -716,10 +719,8 @@ export function QuickstartPanel({ profiles, hasKeys }: Props) {
     }
   }, []);
 
-  // Ensure "auto" is always present in the profile list
-  const profileIds = Array.from(
-    new Set(["auto", ...(profiles ?? []).map((p) => p.id)])
-  );
+  const profileIds = Array.from(new Set((profiles ?? []).map((p) => p.id))).sort((a, b) => a.localeCompare(b));
+  const defaultProfileId = profileIds[0] ?? "your-profile-id";
 
   async function copy(id: string, value: string) {
     await navigator.clipboard.writeText(value);
@@ -736,15 +737,15 @@ const client = new OpenAI({
   baseURL: "${baseUrl}",
 });
 
-// Let the router pick the best model automatically
+// Route through a named profile
 const res = await client.chat.completions.create({
-  model: "auto",
+  model: "${defaultProfileId}",
   messages: [{ role: "user", content: "Write a hello world in Python." }],
 });
 
-// Or target a specific routing profile
-const cheap = await client.chat.completions.create({
-  model: "auto-cheap",
+// Or call a gateway model directly
+const direct = await client.chat.completions.create({
+  model: "openai/gpt-4o",
   messages: [{ role: "user", content: "Summarize this text..." }],
 });`;
 
@@ -756,9 +757,9 @@ client = OpenAI(
     base_url="${baseUrl}",
 )
 
-# Smart routing — router selects the best model
+# Named profile routing
 response = client.chat.completions.create(
-    model="auto",
+    model="${defaultProfileId}",
     messages=[{"role": "user", "content": "Write hello world in Python."}],
 )
 
@@ -768,12 +769,12 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "Explain quantum entanglement."}],
 )`;
 
-  const curlCode = `# Smart routing
+const curlCode = `# Named profile routing
 curl ${baseUrl}/chat/completions \\
   -H "Authorization: Bearer $CUSTOM_ROUTER_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "auto",
+    "model": "${defaultProfileId}",
     "messages": [{"role": "user", "content": "Write hello world in Python."}]
   }'
 
@@ -859,8 +860,7 @@ curl ${baseUrl}/chat/completions \\
         </div>
         <div className="card-body">
           <div className="qs-mode-cards" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            {/* Auto routing */}
-            <div className="qs-mode-card" style={modeCardStyle("auto")} onClick={() => setSelectedMode("auto")}>
+            <div className="qs-mode-card" style={modeCardStyle("profile")} onClick={() => setSelectedMode("profile")}>
               <div
                 style={{
                   display: "flex",
@@ -869,11 +869,11 @@ curl ${baseUrl}/chat/completions \\
                   fontWeight: 600,
                   fontSize: "0.875rem",
                   marginBottom: "0.375rem",
-                  color: selectedMode === "auto" ? "var(--accent)" : "var(--text-primary)",
+                  color: selectedMode === "profile" ? "var(--accent)" : "var(--text-primary)",
                 }}
               >
                 <IconLightning />
-                Smart routing
+                Named profile routing
               </div>
               <p
                 style={{
@@ -893,21 +893,9 @@ curl ${baseUrl}/chat/completions \\
                     color: "var(--accent)",
                   }}
                 >
-                  model: &quot;auto&quot;
+                  {`model: "${defaultProfileId}"`}
                 </code>{" "}
-                — an AI classifier picks the best model for each request. Use named profiles like{" "}
-                <code
-                  style={{
-                    padding: "0.05rem 0.3rem",
-                    background: "var(--bg-interactive)",
-                    borderRadius: 4,
-                    fontSize: "0.8125rem",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  auto-cheap
-                </code>{" "}
-                for cost-optimized routing.
+                — the router applies the rules and model pool attached to that profile ID.
               </p>
             </div>
 
@@ -965,7 +953,7 @@ curl ${baseUrl}/chat/completions \\
           </div>
 
           {/* Routing profiles list */}
-          {selectedMode === "auto" && (
+          {selectedMode === "profile" && (
             <div
               style={{
                 marginTop: "1rem",
@@ -982,7 +970,7 @@ curl ${baseUrl}/chat/completions \\
                   marginBottom: "0.625rem",
                 }}
               >
-                Use any of these as the{" "}
+                Use any of these named profile IDs as the{" "}
                 <code
                   style={{
                     padding: "0.05rem 0.3rem",
@@ -994,10 +982,10 @@ curl ${baseUrl}/chat/completions \\
                 >
                   model
                 </code>{" "}
-                field — each has its own routing rules and model pool.
+                field. Routing only activates when you call one of these IDs.
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                {profileIds.map((id) => (
+                {(profileIds.length > 0 ? profileIds : ["Create a profile first"]).map((id, index) => (
                   <span
                     key={id}
                     style={{
@@ -1007,19 +995,27 @@ curl ${baseUrl}/chat/completions \\
                       borderRadius: "9999px",
                       fontFamily: "var(--font-mono)",
                       fontSize: "0.8125rem",
-                      background: id === "auto" ? "var(--accent-dim)" : "var(--bg-interactive)",
-                      border: `1px solid ${id === "auto" ? "rgba(103,232,249,0.3)" : "var(--border-default)"}`,
-                      color: id === "auto" ? "var(--accent)" : "var(--text-secondary)",
+                      background: index === 0 && profileIds.length > 0 ? "var(--accent-dim)" : "var(--bg-interactive)",
+                      border: `1px solid ${index === 0 && profileIds.length > 0 ? "rgba(103,232,249,0.3)" : "var(--border-default)"}`,
+                      color: index === 0 && profileIds.length > 0 ? "var(--accent)" : "var(--text-secondary)",
                     }}
                   >
                     {id}
                   </span>
                 ))}
               </div>
-              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
-                Manage profiles in the{" "}
-                <strong style={{ color: "var(--text-secondary)" }}>Routing</strong> tab.
-              </p>
+              {profileIds.length > 0 ? (
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
+                  Manage profiles in the{" "}
+                  <strong style={{ color: "var(--text-secondary)" }}>Routing</strong> tab.
+                </p>
+              ) : (
+                <div style={{ marginTop: "0.75rem" }}>
+                  <Callout variant="warning">
+                    Create your first named profile in the <strong>Routing</strong> tab before using routed requests. Until then, the examples below use a placeholder profile ID.
+                  </Callout>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1180,6 +1176,7 @@ curl ${baseUrl}/chat/completions \\
             {selectedTile === "vercel" && (
               <VercelSnippet
                 baseUrl={baseUrl}
+                profileId={defaultProfileId}
                 copiedItem={copiedItem}
                 onCopy={copy}
               />

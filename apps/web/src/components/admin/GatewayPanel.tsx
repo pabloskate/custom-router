@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 
 import { CUSTOM_PRESET_ID, GATEWAY_PRESETS } from "../../lib/gateway-presets";
 import type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
+import {
+  buildManualGatewayModel,
+  createManualGatewayModelDraft,
+  mergeFetchedGatewayModels,
+  type ManualGatewayModelDraft,
+} from "@/src/features/gateways/inventory";
 
 export type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 
@@ -143,25 +149,250 @@ function GatewayForm({ initial, isEdit, saving, onSave, onCancel }: GatewayFormP
   );
 }
 
-function mergeFetchedModels(existing: GatewayModel[], fetched: Array<Pick<GatewayModel, "id" | "name">>): GatewayModel[] {
-  const existingById = new Map(existing.map((model) => [model.id, model] as const));
-  for (const fetchedModel of fetched) {
-    if (!existingById.has(fetchedModel.id)) {
-      existingById.set(fetchedModel.id, { id: fetchedModel.id, name: fetchedModel.name });
-    }
+async function saveGatewayModels(gatewayId: string, models: GatewayModel[]): Promise<{
+  error?: string;
+  ok: boolean;
+}> {
+  const response = await fetch(`/api/v1/user/gateways/${gatewayId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ models }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({ error: "Failed to save gateway models." })) as { error?: string };
+    return {
+      ok: false,
+      error: payload.error ?? "Failed to save gateway models.",
+    };
   }
-  return Array.from(existingById.values()).sort((left, right) => left.id.localeCompare(right.id));
+
+  return { ok: true };
 }
 
-function GatewayInventoryPreview({ models }: { models: GatewayModel[] }) {
+async function syncGatewayInventory(gateway: GatewayInfo): Promise<{
+  error?: string;
+  models: GatewayModel[];
+  ok: boolean;
+}> {
+  const response = await fetch(`/api/v1/user/gateways/${gateway.id}/fetch-models`);
+  const payload = await response.json().catch(() => ({ error: "Failed to fetch gateway models." })) as {
+    models?: Array<Pick<GatewayModel, "id" | "name">>;
+    error?: string;
+  };
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      models: gateway.models,
+      error: payload.error ?? "Failed to fetch gateway models.",
+    };
+  }
+
+  const models = mergeFetchedGatewayModels(gateway.models, payload.models ?? []);
+  const saveResult = await saveGatewayModels(gateway.id, models);
+  if (!saveResult.ok) {
+    return {
+      ok: false,
+      models: gateway.models,
+      error: saveResult.error ?? "Failed to save synced models.",
+    };
+  }
+
+  return {
+    ok: true,
+    models,
+  };
+}
+
+interface ManualGatewayModelFormProps {
+  gateway: GatewayInfo;
+  onCancel: () => void;
+  onError?: (message?: string) => void;
+  onRefresh: () => Promise<void>;
+  onStatus?: (message: string) => void;
+}
+
+function ManualGatewayModelForm({
+  gateway,
+  onCancel,
+  onError,
+  onRefresh,
+  onStatus,
+}: ManualGatewayModelFormProps) {
+  const [draft, setDraft] = useState<ManualGatewayModelDraft>(createManualGatewayModelDraft);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const modelId = draft.modelId.trim();
+    if (!modelId) {
+      setError("Model ID is required.");
+      return;
+    }
+
+    if (gateway.models.some((model) => model.id === modelId)) {
+      setError(`Model "${modelId}" already exists in this gateway.`);
+      return;
+    }
+
+    setError("");
+    setSaving(true);
+    try {
+      const nextModels = [...gateway.models, buildManualGatewayModel(draft)].sort((left, right) => left.id.localeCompare(right.id));
+      const result = await saveGatewayModels(gateway.id, nextModels);
+      if (!result.ok) {
+        const message = result.error ?? "Failed to save gateway model.";
+        setError(message);
+        onError?.(message);
+        return;
+      }
+
+      onStatus?.(`Added ${modelId} to ${gateway.name}. You can now use it in Routing Profiles.`);
+      setDraft(createManualGatewayModelDraft());
+      onCancel();
+      await onRefresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-4)",
+        padding: "var(--space-4)",
+        border: "1px solid var(--border-subtle)",
+        borderRadius: "var(--radius-md)",
+        background: "var(--bg-surface)",
+      }}
+    >
+      <div>
+        <div style={{ fontWeight: 600, marginBottom: "var(--space-1)" }}>Add model manually</div>
+        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+          Use this when the provider does not implement <code>/models</code>. Once saved, the model will appear in Routing Profiles for router, fallback, and profile model selection.
+        </p>
+      </div>
+
+      {error ? (
+        <div style={{ padding: "var(--space-3) var(--space-4)", background: "var(--danger-dim)", border: "1px solid var(--danger)", borderRadius: "var(--radius-md)", color: "var(--danger)" }}>
+          {error}
+        </div>
+      ) : null}
+
+      <div className="form-row">
+        <label className="form-group">
+          <span className="form-label">Model ID</span>
+          <input
+            className="input input--mono"
+            value={draft.modelId}
+            onChange={(event) => setDraft((current) => ({ ...current, modelId: event.target.value }))}
+            placeholder="provider/model-id"
+          />
+        </label>
+        <label className="form-group">
+          <span className="form-label">Display name</span>
+          <input
+            className="input"
+            value={draft.name}
+            onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+            placeholder="Defaults to model ID"
+          />
+        </label>
+      </div>
+
+      <div className="form-row">
+        <label className="form-group">
+          <span className="form-label">Modality</span>
+          <input
+            className="input input--mono"
+            value={draft.modality}
+            onChange={(event) => setDraft((current) => ({ ...current, modality: event.target.value }))}
+          />
+        </label>
+        <label className="form-group">
+          <span className="form-label">Reasoning preset</span>
+          <select
+            className="input"
+            value={draft.reasoningPreset}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              reasoningPreset: event.target.value as GatewayModel["reasoningPreset"],
+            }))}
+          >
+            <option value="none">None</option>
+            <option value="minimal">Minimal</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">Extra high</option>
+          </select>
+        </label>
+      </div>
+
+      <label className="form-group">
+        <span className="form-label">When to use</span>
+        <input
+          className="input"
+          value={draft.whenToUse}
+          onChange={(event) => setDraft((current) => ({ ...current, whenToUse: event.target.value }))}
+          placeholder="Optional routing hint"
+        />
+      </label>
+
+      <label className="form-group">
+        <span className="form-label">Description</span>
+        <textarea
+          className="textarea"
+          rows={3}
+          value={draft.description}
+          onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+        />
+      </label>
+
+      <div style={{ display: "flex", gap: "var(--space-3)" }}>
+        <button className="btn btn--primary btn--sm" type="submit" disabled={saving}>
+          <IconPlus />
+          {saving ? "Saving…" : "Save model"}
+        </button>
+        <button className="btn btn--secondary btn--sm" type="button" onClick={onCancel} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function GatewayInventoryPreview({
+  models,
+  onAddManual,
+}: {
+  models: GatewayModel[];
+  onAddManual?: () => void;
+}) {
   const [showInventory, setShowInventory] = useState(false);
   const [query, setQuery] = useState("");
 
   if (models.length === 0) {
     return (
-      <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-        No models synced yet. Use <strong>Sync inventory</strong> so routing profiles can select models from this gateway.
-      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+          No models available yet. Try <strong>Sync inventory</strong>. If this gateway does not expose a <code>/models</code> endpoint,
+          add the first model manually here so Routing Profiles can use it immediately.
+        </p>
+        {onAddManual ? (
+          <div>
+            <button className="btn btn--secondary btn--sm" type="button" onClick={onAddManual}>
+              <IconPlus />
+              Add model manually
+            </button>
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -248,19 +479,31 @@ function GatewayInventoryPreview({ models }: { models: GatewayModel[] }) {
 
 function GatewayCard({
   gateway,
+  openManualModel,
   onRefresh,
+  onManualModelPrimed,
   onStatus,
   onError,
 }: {
   gateway: GatewayInfo;
+  openManualModel?: boolean;
   onRefresh: () => Promise<void>;
+  onManualModelPrimed?: () => void;
   onStatus?: (msg: string) => void;
   onError?: (msg?: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [manualModelOpen, setManualModelOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    if (openManualModel) {
+      setManualModelOpen(true);
+      onManualModelPrimed?.();
+    }
+  }, [onManualModelPrimed, openManualModel]);
 
   async function saveGateway(data: { name: string; baseUrl: string; apiKey: string }) {
     setSaving(true);
@@ -310,31 +553,19 @@ function GatewayCard({
   async function syncModels() {
     setSyncing(true);
     try {
-      const response = await fetch(`/api/v1/user/gateways/${gateway.id}/fetch-models`);
-      const payload = await response.json().catch(() => ({ error: "Failed to fetch gateway models." })) as {
-        models?: Array<Pick<GatewayModel, "id" | "name">>;
-        error?: string;
-      };
-
-      if (!response.ok) {
-        onError?.(payload.error ?? "Failed to fetch gateway models.");
+      const result = await syncGatewayInventory(gateway);
+      if (!result.ok) {
+        setManualModelOpen(true);
+        onError?.(`${result.error ?? "Failed to sync gateway inventory."} Use the manual model form below if this provider does not expose /models.`);
         return;
       }
 
-      const models = mergeFetchedModels(gateway.models, payload.models ?? []);
-      const saveResponse = await fetch(`/api/v1/user/gateways/${gateway.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ models }),
-      });
-
-      if (!saveResponse.ok) {
-        const savePayload = await saveResponse.json().catch(() => ({ error: "Failed to save synced models." })) as { error?: string };
-        onError?.(savePayload.error ?? "Failed to save synced models.");
-        return;
+      if (result.models.length === 0) {
+        setManualModelOpen(true);
+        onStatus?.("No models were returned, so the manual model form is open below. Add your first model to use this gateway in Routing Profiles.");
+      } else {
+        onStatus?.("Gateway inventory synced.");
       }
-
-      onStatus?.("Gateway inventory synced.");
       await onRefresh();
     } finally {
       setSyncing(false);
@@ -355,6 +586,10 @@ function GatewayCard({
           <button className="btn btn--secondary btn--sm" type="button" onClick={() => void syncModels()} disabled={syncing}>
             <IconDownload />
             {syncing ? "Syncing…" : "Sync inventory"}
+          </button>
+          <button className="btn btn--secondary btn--sm" type="button" onClick={() => setManualModelOpen((current) => !current)}>
+            <IconPlus />
+            {manualModelOpen ? "Close model form" : "Add model manually"}
           </button>
           <button className="btn btn--ghost btn--sm" type="button" onClick={() => setEditing((current) => !current)}>
             <IconEdit />
@@ -379,8 +614,18 @@ function GatewayCard({
 
         <div>
           <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>Synced inventory</div>
-          <GatewayInventoryPreview models={gateway.models} />
+          <GatewayInventoryPreview models={gateway.models} onAddManual={() => setManualModelOpen(true)} />
         </div>
+
+        {manualModelOpen ? (
+          <ManualGatewayModelForm
+            gateway={gateway}
+            onCancel={() => setManualModelOpen(false)}
+            onError={onError}
+            onRefresh={onRefresh}
+            onStatus={onStatus}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -388,6 +633,7 @@ function GatewayCard({
 
 export function GatewayPanel({ onStatus, onError }: Props) {
   const [gateways, setGateways] = useState<GatewayInfo[] | null>(null);
+  const [primedManualGatewayId, setPrimedManualGatewayId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -414,12 +660,32 @@ export function GatewayPanel({ onStatus, onError }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      const payload = await response.json().catch(() => ({ error: "Failed to create gateway." })) as { error?: string };
+      const payload = await response.json().catch(() => ({ error: "Failed to create gateway." })) as {
+        error?: string;
+        gateway?: GatewayInfo;
+      };
       if (!response.ok) {
         onError?.(payload.error ?? "Failed to create gateway.");
         return;
       }
-      onStatus?.("Gateway added.");
+
+      let statusMessage = "Gateway added.";
+      if (payload.gateway?.id) {
+        const syncResult = await syncGatewayInventory({
+          ...payload.gateway,
+          models: payload.gateway.models ?? [],
+        });
+
+        if (syncResult.ok && syncResult.models.length > 0) {
+          statusMessage = `Gateway added and synced ${syncResult.models.length} models.`;
+          setPrimedManualGatewayId(null);
+        } else {
+          setPrimedManualGatewayId(payload.gateway.id);
+          statusMessage = "Gateway added. Automatic inventory sync was not available, so the manual model form is open below. Add at least one model to use it in Routing Profiles.";
+        }
+      }
+
+      onStatus?.(statusMessage);
       setShowAddForm(false);
       await load();
     } finally {
@@ -471,7 +737,9 @@ export function GatewayPanel({ onStatus, onError }: Props) {
           <GatewayCard
             key={gateway.id}
             gateway={gateway}
+            openManualModel={gateway.id === primedManualGatewayId}
             onRefresh={load}
+            onManualModelPrimed={() => setPrimedManualGatewayId((current) => (current === gateway.id ? null : current))}
             onStatus={onStatus}
             onError={onError}
           />

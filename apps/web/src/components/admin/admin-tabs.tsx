@@ -127,8 +127,8 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
       id: "routing",
       label: "Routing",
       section: "configure",
-      title: "Routing",
-      subtitle: "Configure model selection, rules, and routing profiles",
+      title: "Routing Profiles",
+      subtitle: "Configure model selection, routing instructions, and profiles",
       order: 200,
       icon: IconRouting,
       render: (ctx: AdminExtensionContext) => (
@@ -154,68 +154,61 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
             </div>
           </div>
 
-          <div className="card">
-            <div className="card-header">
-              <h3>Routing Profiles</h3>
-            </div>
-            <div className="card-body">
-              <ProfilesPanel
-                profiles={ctx.user.profiles ?? null}
-                gateways={args.gateways}
-                onChange={(profiles) => {
-                  args.setUser((current) => (current ? { ...current, profiles } : current));
-                  args.markProfilesDirty();
-                }}
-                saveState={ctx.profilesDraftState}
-                onSave={() => ctx.saveProfilesData({})}
-                routingConfigRequiresReset={ctx.user.routingConfigRequiresReset}
-                routingConfigResetMessage={ctx.user.routingConfigResetMessage}
-                onResetLegacyConfig={async () => {
-                  const resetProfiles: RouterProfile[] = [{ id: "auto", name: "Auto", models: [] }];
-                  args.setUser((current) => current ? {
-                    ...current,
-                    profiles: resetProfiles,
-                    routingConfigRequiresReset: false,
-                    routingConfigResetMessage: null,
-                  } : current);
-                  args.markProfilesDirty();
-                  await ctx.saveProfilesData({
-                    profiles: resetProfiles,
-                    routingConfigRequiresReset: false,
-                    routingConfigResetMessage: null,
-                  });
-                }}
-                onCreateGatewayModel={async (gatewayId, model) => {
-                  const gateway = args.gateways.find((entry) => entry.id === gatewayId);
-                  if (!gateway) {
-                    args.setError("Gateway not found.");
-                    return null;
-                  }
+          <ProfilesPanel
+            profiles={ctx.user.profiles ?? null}
+            gateways={args.gateways}
+            onChange={(profiles) => {
+              args.setUser((current) => (current ? { ...current, profiles } : current));
+              args.markProfilesDirty();
+            }}
+            saveState={ctx.profilesDraftState}
+            onSave={(profiles) => ctx.saveProfilesData({ profiles })}
+            routingConfigRequiresReset={ctx.user.routingConfigRequiresReset}
+            routingConfigResetMessage={ctx.user.routingConfigResetMessage}
+            onResetLegacyConfig={async () => {
+              const resetProfiles: RouterProfile[] = [];
+              args.setUser((current) => current ? {
+                ...current,
+                profiles: resetProfiles,
+                routingConfigRequiresReset: false,
+                routingConfigResetMessage: null,
+              } : current);
+              args.markProfilesDirty();
+              await ctx.saveProfilesData({
+                profiles: resetProfiles,
+                routingConfigRequiresReset: false,
+                routingConfigResetMessage: null,
+              });
+            }}
+            onCreateGatewayModel={async (gatewayId, model) => {
+              const gateway = args.gateways.find((entry) => entry.id === gatewayId);
+              if (!gateway) {
+                args.setError("Gateway not found.");
+                return null;
+              }
 
-                  if (gateway.models.some((entry) => entry.id === model.id)) {
-                    args.setError(`Model "${model.id}" already exists in this gateway.`);
-                    return null;
-                  }
+              if (gateway.models.some((entry) => entry.id === model.id)) {
+                args.setError(`Model "${model.id}" already exists in this gateway.`);
+                return null;
+              }
 
-                  const models: GatewayModel[] = [...gateway.models, model].sort((left, right) => left.id.localeCompare(right.id));
-                  const response = await fetch(`/api/v1/user/gateways/${gatewayId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ models }),
-                  });
-                  const payload = await response.json().catch(() => ({ error: "Failed to save gateway model." })) as { error?: string };
-                  if (!response.ok) {
-                    args.setError(payload.error ?? "Failed to save gateway model.");
-                    return null;
-                  }
+              const models: GatewayModel[] = [...gateway.models, model].sort((left, right) => left.id.localeCompare(right.id));
+              const response = await fetch(`/api/v1/user/gateways/${gatewayId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ models }),
+              });
+              const payload = await response.json().catch(() => ({ error: "Failed to save gateway model." })) as { error?: string };
+              if (!response.ok) {
+                args.setError(payload.error ?? "Failed to save gateway model.");
+                return null;
+              }
 
-                  await args.reloadData();
-                  args.setStatus(`Added ${model.id} to ${gateway.name}.`);
-                  return model;
-                }}
-              />
-            </div>
-          </div>
+              await args.reloadData();
+              args.setStatus(`Added ${model.id} to ${gateway.name}.`);
+              return model;
+            }}
+          />
         </div>
       ),
     },

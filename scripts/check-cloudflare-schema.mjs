@@ -50,6 +50,16 @@ const REQUIRED_TABLES = {
     "expires_at",
     "created_at",
   ],
+  thread_pins: [
+    "thread_key",
+    "model_id",
+    "request_id",
+    "pinned_at",
+    "expires_at",
+    "turn_count",
+    "reroute_after_turns",
+    "budget_source",
+  ],
 };
 
 function parseDatabaseName(tomlPath) {

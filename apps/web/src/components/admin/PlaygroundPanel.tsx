@@ -5,7 +5,7 @@
 //
 // Integrated chat playground for testing routing decisions.
 // A compact, admin-optimized version of the chat tester with:
-// - Quick model selection (auto, profiles, or specific model)
+// - Quick model selection for named routing profiles
 // - Router Test Mode (default): shows only the routing decision, no LLM response
 // - Full Chat Mode: streams the actual model response
 // - Message history with routing metadata
@@ -35,6 +35,19 @@ type StreamChunk = {
   }>;
   model?: string;
 };
+
+async function readResponsePayload(response: Response): Promise<{ json: any | null; text: string | null }> {
+  const rawText = await response.text();
+  if (!rawText) {
+    return { json: null, text: null };
+  }
+
+  try {
+    return { json: JSON.parse(rawText), text: rawText };
+  } catch {
+    return { json: null, text: rawText };
+  }
+}
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 function IconSend({ className, style }: { className?: string; style?: React.CSSProperties }) {
@@ -412,9 +425,13 @@ function ModeToggle({ routerTestMode, onChange }: { routerTestMode: boolean; onC
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | null }) {
+  const profileOptions = (profiles ?? []).map((profile) => ({
+    id: profile.id,
+    label: profile.name ? `${profile.id} (${profile.name})` : profile.id,
+  }));
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState("auto");
+  const [model, setModel] = useState(profileOptions[0]?.id ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentStream, setCurrentStream] = useState("");
@@ -428,8 +445,19 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentStream]);
 
+  useEffect(() => {
+    if (!model && profileOptions[0]?.id) {
+      setModel(profileOptions[0].id);
+      return;
+    }
+
+    if (model && !profileOptions.some((profile) => profile.id === model)) {
+      setModel(profileOptions[0]?.id ?? "");
+    }
+  }, [model, profileOptions]);
+
   const handleSubmit = useCallback(async () => {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || !model) return;
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -457,13 +485,21 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ model, messages: conversationMessages }),
         });
+        const payload = await readResponsePayload(response);
 
         if (!response.ok) {
-          const errData = (await response.json()) as { error?: string };
-          throw new Error(errData.error || `HTTP ${response.status}`);
+          const errorMessage =
+            (payload.json && typeof payload.json === "object" && typeof payload.json.error === "string" && payload.json.error) ||
+            payload.text ||
+            `HTTP ${response.status}`;
+          throw new Error(errorMessage);
         }
 
-        const routeResult = (await response.json()) as RouteResult;
+        if (!payload.json) {
+          throw new Error(`Inspect request returned an empty response (HTTP ${response.status}).`);
+        }
+
+        const routeResult = payload.json as RouteResult;
         const resultMessage: Message = {
           id: `route-${Date.now()}`,
           role: "assistant",
@@ -482,8 +518,12 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
         });
 
         if (!response.ok) {
-          const errData = (await response.json()) as { error?: string };
-          throw new Error(errData.error || `HTTP ${response.status}`);
+          const payload = await readResponsePayload(response);
+          const errorMessage =
+            (payload.json && typeof payload.json === "object" && typeof payload.json.error === "string" && payload.json.error) ||
+            payload.text ||
+            `HTTP ${response.status}`;
+          throw new Error(errorMessage);
         }
 
         if (streaming && response.body) {
@@ -528,7 +568,12 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           setMessages((prev) => [...prev, assistantMessage]);
           setCurrentStream("");
         } else {
-          const data = (await response.json()) as {
+          const payload = await readResponsePayload(response);
+          if (!payload.json) {
+            throw new Error(`Chat request returned an empty response (HTTP ${response.status}).`);
+          }
+
+          const data = payload.json as {
             choices?: Array<{ message?: { content?: string } }>;
             model?: string;
           };
@@ -583,19 +628,34 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
 
             {/* Model */}
             <div className="form-group" style={{ flex: 1, minWidth: 180 }}>
-              <label className="form-label">Model</label>
+              <label className="form-label">Routing profile</label>
               <select
                 className="input"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
+                disabled={profileOptions.length === 0}
               >
-                <option value="auto">auto</option>
-                {profiles?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id} {p.name ? `(${p.name})` : ""}
-                  </option>
-                ))}
+                {profileOptions.length === 0 ? (
+                  <option value="">Create a routing profile first</option>
+                ) : (
+                  profileOptions.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.label}
+                    </option>
+                  ))
+                )}
               </select>
+              {profileOptions.length === 0 ? (
+                <p
+                  style={{
+                    margin: "0.5rem 0 0",
+                    fontSize: "0.75rem",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Create a named routing profile in the Routing tab before using the playground.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -685,7 +745,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           <button
             className="btn btn--primary"
             onClick={handleSubmit}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || !model}
             style={{ alignSelf: "flex-end" }}
           >
             {loading ? (

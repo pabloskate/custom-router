@@ -1,8 +1,7 @@
 import type { CatalogItem, RouterProfile, RouterProfileModel } from "@custom-router/core";
 
-export const AUTO_PROFILE_ID = "auto";
-export const AUTO_PROFILE_NAME = "Auto";
 const PROFILE_MODEL_KEY_SEPARATOR = "::";
+const PROFILE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function sanitizeOptionalString(value: string | null | undefined): string | undefined {
   if (typeof value !== "string") {
@@ -11,6 +10,31 @@ function sanitizeOptionalString(value: string | null | undefined): string | unde
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function normalizeProfileIdInput(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function getProfileIdValidationError(profileId: string): string | null {
+  if (!profileId.trim()) {
+    return "Profile ID is required.";
+  }
+
+  if (profileId === "auto") {
+    return 'Profile ID "auto" is reserved. Use a descriptive named profile ID instead.';
+  }
+
+  if (!PROFILE_ID_PATTERN.test(profileId)) {
+    return "Profile IDs can only use lowercase letters, numbers, and hyphens.";
+  }
+
+  return null;
 }
 
 export function buildProfileModelKey(gatewayId: string, modelId: string): string {
@@ -88,23 +112,8 @@ export function normalizeProfile(profile: RouterProfile): RouterProfile {
   };
 }
 
-export function ensureAutoProfile(profiles: RouterProfile[] | null | undefined): RouterProfile[] {
-  const items = (profiles ?? []).map(normalizeProfile);
-  const autoIndex = items.findIndex((profile) => profile.id === AUTO_PROFILE_ID);
-
-  if (autoIndex === -1) {
-    return [{ id: AUTO_PROFILE_ID, name: AUTO_PROFILE_NAME, models: [] }, ...items];
-  }
-
-  const autoProfile = items[autoIndex] as RouterProfile;
-  items[autoIndex] = {
-    ...autoProfile,
-    id: AUTO_PROFILE_ID,
-    name: sanitizeOptionalString(autoProfile.name) ?? AUTO_PROFILE_NAME,
-    models: Array.isArray(autoProfile.models) ? autoProfile.models : [],
-  };
-
-  return items;
+export function normalizeProfiles(profiles: RouterProfile[] | null | undefined): RouterProfile[] {
+  return (profiles ?? []).map(normalizeProfile);
 }
 
 function profileHasLegacyShape(profile: unknown): boolean {

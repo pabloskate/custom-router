@@ -24,7 +24,7 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
     routingInstructions: null,
     blocklist: null,
     customCatalog: null,
-    profiles: null,
+    profiles: [{ id: "planning-backend", name: "Planning Backend", models: [] }],
     routeTriggerKeywords: null,
     routingFrequency: null,
     routingConfigRequiresReset: false,
@@ -76,7 +76,7 @@ describe("/api/v1/models route", () => {
 
     const body = await response.json() as { data: Array<{ id: string }> };
     expect(body.data.map((item) => item.id)).toEqual(expect.arrayContaining([
-      "auto",
+      "planning-backend",
       "openai/gpt-5.2",
       "openai/gpt-5.2:high",
       "openai/gpt-5.2:xhigh",

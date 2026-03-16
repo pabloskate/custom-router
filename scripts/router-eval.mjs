@@ -18,9 +18,10 @@ function getEvalUpstream() {
 }
 
 function parseArgs(argv) {
+  const envModel = process.env.ROUTER_EVAL_MODEL?.trim();
   const args = {
     mode: "router",
-    model: process.env.ROUTER_EVAL_MODEL || "openai/gpt-5.2",
+    model: envModel || "",
     judgeModel: process.env.ROUTER_EVAL_JUDGE_MODEL || "openai/gpt-5.2",
     spec: DEFAULT_SPEC_PATH,
     outDir: DEFAULT_REPORT_DIR,
@@ -60,6 +61,10 @@ function parseArgs(argv) {
 
   if (!["router", "model"].includes(args.mode)) {
     throw new Error(`Invalid mode: ${args.mode}. Use --mode router|model`);
+  }
+
+  if (!args.model) {
+    args.model = args.mode === "router" ? "planning-backend" : "openai/gpt-5.2";
   }
 
   return args;
@@ -290,7 +295,7 @@ async function runCandidateQuery({ args, prompt }) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "auto",
+        model: args.model,
         messages: [{ role: "user", content: prompt }],
         stream: false
       })
@@ -580,8 +585,8 @@ async function main() {
       candidate = {
         content: `Dry-run answer for ${query.id}`,
         latencyMs: 50,
-        selectedModel: args.mode === "router" ? "router/auto" : args.model,
-        selectedProfile: args.mode === "router" ? "planning_backend" : null,
+        selectedModel: args.mode === "router" ? "dry-run-selected-model" : args.model,
+        selectedProfile: args.mode === "router" ? args.model : null,
         selectedCategory: args.mode === "router" ? "general" : null,
         degraded: false,
         usage: {
@@ -640,7 +645,7 @@ async function main() {
     runId,
     timestamp,
     mode: args.mode,
-    candidate: args.mode === "router" ? "router-auto" : args.model,
+    candidate: args.mode === "router" ? `profile:${args.model}` : args.model,
     judge_model: args.dryRun ? "dry-run" : args.judgeModel,
     dry_run: args.dryRun,
     seed: args.seed,

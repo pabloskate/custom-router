@@ -3,7 +3,7 @@ import type { CatalogItem, RouterConfig, RouterProfile } from "@custom-router/co
 import { parseProfileModelKey, profileModelToCatalogItem } from "@/src/lib/routing/profile-config";
 import { getRouterRepository, type RouterRepository } from "@/src/lib/storage/repository";
 
-import { findMatchedProfile, isRoutedRequestModel } from "./router-decision";
+import { findMatchedProfile, isDeprecatedRoutingAlias, isRoutedRequestModel } from "./router-decision";
 import type { RoutedRequestBody, UserRouterConfig } from "./router-service-types";
 
 export interface ResolvedRoutingContext {
@@ -11,6 +11,7 @@ export interface ResolvedRoutingContext {
   runtimeConfig: RouterConfig;
   catalog: CatalogItem[];
   requestedModel: string;
+  deprecatedAliasRequested: boolean;
   matchedProfile?: RouterProfile;
   routedRequest: boolean;
 }
@@ -38,6 +39,7 @@ export async function resolveUserRoutingContext(args: {
   );
 
   const requestedModel = typeof args.body.model === "string" ? args.body.model : "";
+  const deprecatedAliasRequested = isDeprecatedRoutingAlias(requestedModel);
   const matchedProfile = findMatchedProfile(requestedModel, args.userConfig?.profiles);
   const routedRequest = isRoutedRequestModel(requestedModel, args.userConfig?.profiles);
   const activeProfile = routedRequest ? matchedProfile : undefined;
@@ -60,18 +62,23 @@ export async function resolveUserRoutingContext(args: {
         .filter((model) => model.gatewayId && model.modelId)
         .map((model) => [`${model.gatewayId}::${model.modelId}`, model] as const),
     );
+    const gatewayModels = new Map(
+      gatewayCatalogItems
+        .filter((model) => model.gatewayId)
+        .map((model) => [`${model.gatewayId}::${model.id}`, model] as const),
+    );
 
     const defaultBinding = parseProfileModelKey(activeProfile.defaultModel);
     const classifierBinding = parseProfileModelKey(activeProfile.classifierModel);
     const defaultProfileModel = defaultBinding
       ? selectedProfileModels.get(`${defaultBinding.gatewayId}::${defaultBinding.modelId}`)
       : undefined;
-    const classifierProfileModel = classifierBinding
-      ? selectedProfileModels.get(`${classifierBinding.gatewayId}::${classifierBinding.modelId}`)
+    const classifierGatewayModel = classifierBinding
+      ? gatewayModels.get(`${classifierBinding.gatewayId}::${classifierBinding.modelId}`)
       : undefined;
 
     runtimeConfig.defaultModel = defaultProfileModel?.modelId;
-    runtimeConfig.classifierModel = classifierProfileModel?.modelId;
+    runtimeConfig.classifierModel = classifierGatewayModel?.id;
     runtimeConfig.routingInstructions = activeProfile.routingInstructions;
   } else if (routedRequest) {
     runtimeConfig.defaultModel = undefined;
@@ -84,6 +91,7 @@ export async function resolveUserRoutingContext(args: {
     runtimeConfig,
     catalog,
     requestedModel,
+    deprecatedAliasRequested,
     matchedProfile,
     routedRequest,
   };

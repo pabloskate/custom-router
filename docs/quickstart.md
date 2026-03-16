@@ -36,10 +36,11 @@ Open `http://localhost:3000/admin`, then:
 
 1. Create an account.
 2. Add a gateway or BYOK upstream.
-3. In **Routing**, set global Default Fallback Model and Default Router Model. The `auto` profile is always present.
-4. Optionally add profiles (e.g. `auto-cheap`) and enable "Override global models" to use different models per profile.
-5. Generate a router API key.
-6. Send a request to `/api/v1/chat/completions` with `model: "auto"` or a named profile like `model: "auto-cheap"`.
+3. In **Routing**, create or edit named profiles. Each profile ID is API-facing and should describe the routing behavior it represents.
+4. Use **Quick setup** to create a profile from a template, then bind any unresolved models to your synced gateway inventory.
+5. Profile edits autosave automatically, including routing instructions, model pool changes, fallback selection, and router model selection.
+6. Generate a router API key.
+7. Send a request to `/api/v1/chat/completions` with a named profile ID such as `model: "planning-backend"`.
 
 ## Testing Before Deploy
 

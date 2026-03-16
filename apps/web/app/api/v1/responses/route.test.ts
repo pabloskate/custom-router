@@ -109,7 +109,7 @@ describe("/api/v1/responses route", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "auto",
+          model: "planning-backend",
           input: "$$config show me config",
         }),
       })

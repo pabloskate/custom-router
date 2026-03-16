@@ -8,14 +8,14 @@ import {
 } from "@/src/lib/auth";
 import { json } from "@/src/lib/infra";
 import {
-  AUTO_PROFILE_ID,
-  AUTO_PROFILE_NAME,
-  ensureAutoProfile,
+  getProfileIdValidationError,
+  normalizeProfiles,
   normalizeProfile,
   normalizeProfileModel,
 } from "@/src/lib/routing/profile-config";
 import { routerProfileSchema } from "@/src/lib/schemas";
 import { normalizeAndValidateUpstreamBaseUrl } from "@/src/lib/upstream";
+import { gatewayRowToInfo, loadGatewaysWithMigration } from "@/src/lib/storage";
 import { z } from "zod";
 
 const LEGACY_ROUTING_RESET_MESSAGE =
@@ -39,9 +39,6 @@ function sanitizeRouterProfile(profile: z.infer<typeof routerProfileSchema>): z.
 
   return {
     ...normalized,
-    name: normalized.id === AUTO_PROFILE_ID
-      ? sanitizeOptionalString(normalized.name) ?? AUTO_PROFILE_NAME
-      : normalized.name,
     models: (normalized.models ?? []).map((model) => ({
       ...normalizeProfileModel(model),
       modelId: sanitizeOptionalString(model.modelId) ?? "",
@@ -127,13 +124,31 @@ export async function PUT(request: Request): Promise<Response> {
         return json({ error: "Invalid profiles payload.", issues: profilesParsed?.error.issues ?? [] }, 400);
       }
 
-      if (!profilesParsed.data.some((profile) => profile.id === AUTO_PROFILE_ID)) {
-        return json(
-          { error: "Profiles must include the required 'auto' profile. It cannot be removed or renamed." },
-          400,
-        );
+      const profiles = normalizeProfiles(profilesParsed.data.map(sanitizeRouterProfile));
+      const seenProfileIds = new Set<string>();
+      for (const profile of profiles) {
+        const profileIdError = getProfileIdValidationError(profile.id);
+        if (profileIdError) {
+          return json({ error: `Profile "${profile.id || "<empty>"}" is invalid. ${profileIdError}` }, 400);
+        }
+        if (seenProfileIds.has(profile.id)) {
+          return json({ error: `Duplicate profile id "${profile.id}" is not allowed.` }, 400);
+        }
+        seenProfileIds.add(profile.id);
       }
-      const profiles = ensureAutoProfile(profilesParsed.data.map(sanitizeRouterProfile));
+
+      const gatewayRows = await loadGatewaysWithMigration({
+        db: bindings.ROUTER_DB,
+        userId: auth.userId,
+        upstreamBaseUrl: auth.upstreamBaseUrl ?? null,
+        upstreamApiKeyEnc: auth.upstreamApiKeyEnc ?? null,
+        customCatalogJson: auth.customCatalog ? JSON.stringify(auth.customCatalog) : null,
+      });
+      const validGatewayModelKeys = new Set(
+        gatewayRows.flatMap((row) =>
+          gatewayRowToInfo(row).models.map((model) => `${row.id}::${model.id}`),
+        ),
+      );
 
       for (const profile of profiles) {
         const defaultModel = sanitizeOptionalString(profile.defaultModel);
@@ -148,7 +163,7 @@ export async function PUT(request: Request): Promise<Response> {
           return json({ error: `Profile "${profile.id}" has an invalid fallback model selection.` }, 400);
         }
 
-        if (classifierModel && !resolvedKeys.has(classifierModel)) {
+        if (classifierModel && !validGatewayModelKeys.has(classifierModel)) {
           return json({ error: `Profile "${profile.id}" has an invalid router model selection.` }, 400);
         }
       }

@@ -2,18 +2,18 @@
 
 import React, { useState } from "react";
 
-import { SaveActionBar, type SaveActionState } from "./SaveActionBar";
-
-interface RouterConfigFields {
-  routeTriggerKeywords: string[] | null;
-  routingFrequency: string | null;
-}
+import type { SaveActionState } from "./SaveActionBar";
+import {
+  normalizeRoutingSettingsDraft,
+  useRoutingSettingsAutosave,
+  type RoutingSettingsDraft,
+} from "@/src/features/routing/components/useRoutingSettingsAutosave";
 
 interface Props {
-  config: RouterConfigFields;
-  onChange: (updated: RouterConfigFields) => void;
+  config: RoutingSettingsDraft;
+  onChange: (updated: RoutingSettingsDraft) => void;
   saveState: SaveActionState;
-  onSave: (updates: Partial<RouterConfigFields>) => Promise<boolean>;
+  onSave: (updates: Partial<RoutingSettingsDraft>) => Promise<boolean>;
 }
 
 function IconRefresh({ className, style }: { className?: string; style?: React.CSSProperties }) {
@@ -48,37 +48,69 @@ const FREQUENCY_OPTIONS = [
 function SectionHeader({
   title,
   description,
+  status,
 }: {
   title: string;
   description: string;
+  status?: React.ReactNode;
 }) {
   return (
     <div style={{ marginBottom: "var(--space-6)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}>
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "var(--radius-md)",
-            background: "var(--accent-dim)",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <IconRefresh style={{ width: 16, height: 16, color: "var(--accent)" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-4)", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "var(--radius-md)",
+                background: "var(--accent-dim)",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              <IconRefresh style={{ width: 16, height: 16, color: "var(--accent)" }} />
+            </div>
+            <h4 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>{title}</h4>
+          </div>
+          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", paddingLeft: 44 }}>{description}</p>
         </div>
-        <h4 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>{title}</h4>
+        {status}
       </div>
-      <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", paddingLeft: 44 }}>{description}</p>
+    </div>
+  );
+}
+
+function AutosaveStatus({ state }: { state: SaveActionState }) {
+  const meta = state === "dirty"
+    ? { badgeClass: "badge--warning", label: "Changes pending" }
+    : state === "saving"
+      ? { badgeClass: "badge--info", label: "Saving in background..." }
+      : { badgeClass: "badge--success", label: "All changes saved" };
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        flexShrink: 0,
+        paddingTop: "var(--space-1)",
+      }}
+    >
+      <span className={`badge ${meta.badgeClass}`}>{meta.label}</span>
     </div>
   );
 }
 
 export function RouterConfigPanel({ config, onChange, saveState, onSave }: Props) {
   const [tagInput, setTagInput] = useState("");
-  const activeFrequency = config.routingFrequency ?? "smart";
+  const normalizedConfig = normalizeRoutingSettingsDraft(config);
+  const activeFrequency = normalizedConfig.routingFrequency ?? "smart";
   const activeOption = FREQUENCY_OPTIONS.find((option) => option.value === activeFrequency) ?? FREQUENCY_OPTIONS[1];
-  const tags = config.routeTriggerKeywords ?? [];
+  const tags = normalizedConfig.routeTriggerKeywords ?? [];
   const triggerKeywordsHint =
     activeFrequency === "every_message"
       ? "When any of these keywords appear at the start of a user message, the router re-evaluates and may switch models. In Every message mode this is mostly redundant because routing already runs each turn."
@@ -86,20 +118,25 @@ export function RouterConfigPanel({ config, onChange, saveState, onSave }: Props
         ? "When any of these keywords appear at the start of a user message, the router re-evaluates and may switch models even in New thread only mode."
         : "When any of these keywords appear at the start of a user message, the router re-evaluates and may switch models.";
 
+  useRoutingSettingsAutosave({
+    draft: normalizedConfig,
+    onSave,
+  });
+
   function addTag() {
     const value = tagInput.trim();
     if (value && !tags.includes(value) && value.toLowerCase() !== "$$route") {
-      onChange({ ...config, routeTriggerKeywords: [...tags, value] });
+      onChange({ ...normalizedConfig, routeTriggerKeywords: [...tags, value] });
     }
     setTagInput("");
   }
 
   function removeTag(index: number) {
-    onChange({ ...config, routeTriggerKeywords: tags.filter((_, itemIndex) => itemIndex !== index) });
-  }
-
-  async function handleSave() {
-    await onSave(config);
+    const nextKeywords = tags.filter((_, itemIndex) => itemIndex !== index);
+    onChange({
+      ...normalizedConfig,
+      routeTriggerKeywords: nextKeywords.length > 0 ? nextKeywords : null,
+    });
   }
 
   return (
@@ -107,6 +144,7 @@ export function RouterConfigPanel({ config, onChange, saveState, onSave }: Props
       <SectionHeader
         title="Re-routing Behavior"
         description="Control when the router re-evaluates profile model selection during a conversation."
+        status={<AutosaveStatus state={saveState} />}
       />
 
       <div className="form-group" style={{ marginBottom: "var(--space-5)" }}>
@@ -124,7 +162,7 @@ export function RouterConfigPanel({ config, onChange, saveState, onSave }: Props
             <button
               key={option.value}
               type="button"
-              onClick={() => onChange({ ...config, routingFrequency: option.value })}
+              onClick={() => onChange({ ...normalizedConfig, routingFrequency: option.value })}
               style={{
                 flex: 1,
                 padding: "var(--space-2) var(--space-3)",
@@ -227,10 +265,6 @@ export function RouterConfigPanel({ config, onChange, saveState, onSave }: Props
           <span className="form-hint">
             {triggerKeywordsHint}
           </span>
-        </div>
-
-      <div style={{ marginTop: "var(--space-6)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--border-subtle)" }}>
-        <SaveActionBar state={saveState} onSave={handleSave} saveLabel="Save re-routing settings" />
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   withSessionAuth,
 } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/infra";
+import { gatewayRowToInfo, loadGatewaysWithMigration } from "@/src/lib/storage";
 import { GET, PUT } from "./route";
 
 vi.mock("@/src/lib/infra", async () => {
@@ -36,6 +37,15 @@ vi.mock("@/src/lib/auth", async () => {
   };
 });
 
+vi.mock("@/src/lib/storage", async () => {
+  const actual = await vi.importActual<typeof import("@/src/lib/storage")>("@/src/lib/storage");
+  return {
+    ...actual,
+    gatewayRowToInfo: vi.fn(),
+    loadGatewaysWithMigration: vi.fn(),
+  };
+});
+
 function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
   return {
     userId: "user_1",
@@ -46,7 +56,7 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
     routingInstructions: null,
     blocklist: null,
     customCatalog: null,
-    profiles: [{ id: "auto", name: "Auto", models: [] }],
+    profiles: [{ id: "planning-backend", name: "Planning Backend", models: [] }],
     routeTriggerKeywords: null,
     routingFrequency: null,
     routingConfigRequiresReset: false,
@@ -77,6 +87,8 @@ describe("/api/v1/user/me route", () => {
   const upstreamUpsertMock = vi.mocked(upsertUserUpstreamCredentials);
   const withSessionAuthMock = vi.mocked(withSessionAuth);
   const withCsrfMock = vi.mocked(withCsrf);
+  const loadGatewaysMock = vi.mocked(loadGatewaysWithMigration);
+  const gatewayRowToInfoMock = vi.mocked(gatewayRowToInfo);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -103,6 +115,29 @@ describe("/api/v1/user/me route", () => {
       updated_at: "2026-03-11T00:00:00.000Z",
     });
     upstreamUpsertMock.mockResolvedValue(undefined);
+    loadGatewaysMock.mockResolvedValue([
+      {
+        id: "gw_openrouter",
+        user_id: "user_1",
+        name: "OpenRouter",
+        base_url: "https://openrouter.ai/api/v1",
+        api_key_enc: "enc:key",
+        models_json: "[]",
+        created_at: "2026-03-11T00:00:00.000Z",
+        updated_at: "2026-03-11T00:00:00.000Z",
+      },
+    ] as any);
+    gatewayRowToInfoMock.mockReturnValue({
+      id: "gw_openrouter",
+      name: "OpenRouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      createdAt: "2026-03-11T00:00:00.000Z",
+      updatedAt: "2026-03-11T00:00:00.000Z",
+      models: [
+        { id: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6" },
+        { id: "model/classifier", name: "Classifier" },
+      ],
+    });
   });
 
   it("GET omits removed legacy routing fields and surfaces reset metadata", async () => {
@@ -140,8 +175,8 @@ describe("/api/v1/user/me route", () => {
           preferred_models: [],
           profiles: [
             {
-              id: "auto",
-              name: "Auto",
+              id: "planning-backend",
+              name: "Planning Backend",
               models: [
                 {
                   gatewayId: "gw_openrouter",
@@ -169,8 +204,8 @@ describe("/api/v1/user/me route", () => {
     const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
     expect(JSON.parse(String(bindArgs[1]))).toEqual([
       {
-        id: "auto",
-        name: "Auto",
+        id: "planning-backend",
+        name: "Planning Backend",
         models: [
           {
             gatewayId: "gw_openrouter",
@@ -184,6 +219,39 @@ describe("/api/v1/user/me route", () => {
     ]);
   });
 
+  it("PUT accepts a router model that is not part of the routed profile pool", async () => {
+    const db = createDbMock();
+    runtimeMock.mockReturnValue({ ROUTER_DB: db as any, BYOK_ENCRYPTION_SECRET: "1234567890abcdef" });
+    sameOriginMock.mockReturnValue(true);
+    authMock.mockResolvedValue(createAuth({ userId: "user_1" }));
+
+    const response = await PUT(
+      new Request("http://localhost/api/v1/user/me", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          profiles: [
+            {
+              id: "planning-backend",
+              name: "Planning Backend",
+              models: [
+                {
+                  gatewayId: "gw_openrouter",
+                  modelId: "anthropic/claude-sonnet-4.6",
+                  name: "Claude Sonnet 4.6",
+                },
+              ],
+              defaultModel: "gw_openrouter::anthropic/claude-sonnet-4.6",
+              classifierModel: "gw_openrouter::model/classifier",
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it("PUT rejects removed legacy routing fields", async () => {
     runtimeMock.mockReturnValue({ ROUTER_DB: {} as any });
     sameOriginMock.mockReturnValue(true);
@@ -194,7 +262,7 @@ describe("/api/v1/user/me route", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          profiles: [{ id: "auto", name: "Auto", models: [] }],
+          profiles: [{ id: "planning-backend", name: "Planning Backend", models: [] }],
           default_model: "legacy/default",
         }),
       }),
@@ -205,7 +273,7 @@ describe("/api/v1/user/me route", () => {
     expect(body.error).toContain("Legacy routing fields");
   });
 
-  it("PUT rejects profiles that omit the required auto profile", async () => {
+  it("PUT rejects invalid profile ids", async () => {
     runtimeMock.mockReturnValue({ ROUTER_DB: {} as any });
     sameOriginMock.mockReturnValue(true);
     authMock.mockResolvedValue(createAuth({ userId: "user_1" }));
@@ -215,13 +283,13 @@ describe("/api/v1/user/me route", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          profiles: [{ id: "auto-cheap", name: "Cheap Auto", models: [] }],
+          profiles: [{ id: "Auto With Spaces", name: "Planning Backend", models: [] }],
         }),
       }),
     );
 
     expect(response.status).toBe(400);
     const body = await response.json() as { error: string };
-    expect(body.error).toContain("auto");
+    expect(body.error).toContain("invalid");
   });
 });

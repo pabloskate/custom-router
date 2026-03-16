@@ -22,7 +22,7 @@
 import type { D1Database } from "../infra/cloudflare-types";
 import { AUTH } from "../constants";
 import { ensureUserUpstreamCredentialsTable } from "./user-upstream-store";
-import { ensureAutoProfile, hasLegacyRoutingConfig } from "../routing/profile-config";
+import { hasLegacyRoutingConfig, normalizeProfiles } from "../routing/profile-config";
 
 // Alias constants so the rest of the file reads naturally
 const SESSION_COOKIE_NAME = AUTH.SESSION_COOKIE_NAME;
@@ -128,7 +128,7 @@ function rowToAuthResult(row: AuthRow): AuthResult {
         blocklist,
         profiles: rawProfiles,
     });
-    const profiles = routingConfigRequiresReset ? null : ensureAutoProfile(rawProfiles as any);
+    const profiles = routingConfigRequiresReset ? null : normalizeProfiles(rawProfiles as any);
 
     return {
         userId: row.user_id,

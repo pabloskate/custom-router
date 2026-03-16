@@ -14,7 +14,7 @@ const guardrailModule = await import("@/src/lib/routing/guardrail-manager");
 function createDecision(): RouteDecision {
   return {
     mode: "routed",
-    requestedModel: "auto",
+    requestedModel: "planning-backend",
     selectedModel: "model/alpha",
     catalogVersion: "test",
     threadKey: "thread",

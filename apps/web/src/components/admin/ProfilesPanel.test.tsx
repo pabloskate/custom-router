@@ -19,10 +19,10 @@ const GATEWAYS = [
 ];
 
 describe("ProfilesPanel", () => {
-  it("renders quick setup and the required auto profile", () => {
+  it("renders quick setup and named routing profiles", () => {
     const markup = renderToStaticMarkup(
       createElement(ProfilesPanel, {
-        profiles: [{ id: "auto", name: "Auto", models: [] }],
+        profiles: [{ id: "planning-backend", name: "Planning Backend", models: [] }],
         gateways: GATEWAYS,
         onChange: () => undefined,
         saveState: "dirty",
@@ -30,10 +30,12 @@ describe("ProfilesPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Quick Setup");
-    expect(markup).toContain("Required");
-    expect(markup).toContain("Save profiles");
+    expect(markup).toContain("Quick setup");
+    expect(markup).toContain("All changes saved");
     expect(markup).toContain("Add profile");
+    expect(markup).toContain("Needs setup");
+    expect(markup).toContain("No routing instructions");
+    expect(markup).toContain("planning-backend");
   });
 
   it("renders the reset notice when legacy routing config is detected", () => {

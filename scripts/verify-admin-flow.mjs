@@ -101,9 +101,11 @@ async function main() {
       await page.waitForTimeout(800);
     }
 
-    // 9. Check Global Blocklist or Fallback visible on routing page
-    const routingContent = page.locator("text=Global Blocklist").or(page.locator("text=Default Fallback Model"));
-    await routingContent.first().waitFor({ state: "visible", timeout: 5000 });
+    // 9. Check routing profiles controls and autosave status.
+    await page.getByRole("button", { name: "Quick setup" }).waitFor({ state: "visible", timeout: 5000 });
+    await page.getByRole("button", { name: "Add profile" }).waitFor({ state: "visible", timeout: 5000 });
+    await page.locator("text=All changes saved").first().waitFor({ state: "visible", timeout: 5000 });
+    await page.locator("text=Profiles").first().waitFor({ state: "visible", timeout: 5000 });
     console.log("✓ Routing page loads");
 
     // 10. Click API Keys tab

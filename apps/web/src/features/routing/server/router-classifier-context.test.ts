@@ -15,7 +15,7 @@ describe("resolveClassifierContext", () => {
   it("rejects partial dedicated classifier settings", async () => {
     const result = await resolveClassifierContext({
       requestId: "req_1",
-      requestedModel: "auto",
+      requestedModel: "planning-backend",
       routedRequest: true,
       runtimeConfig,
       catalog: [{ id: "model/classifier", name: "Classifier", gatewayId: "gw_classifier" }],
@@ -32,11 +32,27 @@ describe("resolveClassifierContext", () => {
   it("resolves classifier traffic through the gateway that owns the classifier model", async () => {
     const result = await resolveClassifierContext({
       requestId: "req_2",
-      requestedModel: "auto",
+      requestedModel: "planning-backend",
       routedRequest: true,
       runtimeConfig,
-      catalog: [{ id: "model/classifier", name: "Classifier", gatewayId: "gw_classifier" }],
+      matchedProfile: {
+        id: "planning-backend",
+        name: "Planning Backend",
+        classifierModel: "gw_classifier::model/classifier",
+        models: [{ gatewayId: "gw_default", modelId: "model/default", name: "Default" }],
+      },
+      catalog: [{ id: "model/default", name: "Default", gatewayId: "gw_default" }],
       gatewayMap: new Map([["gw_classifier", { baseUrl: "https://classifier.example/v1", apiKey: "secret" }]]),
+      userConfig: {
+        gatewayRows: [
+          {
+            id: "gw_classifier",
+            baseUrl: "https://classifier.example/v1",
+            apiKeyEnc: "enc:key",
+            models: [{ id: "model/classifier", name: "Classifier" }],
+          },
+        ],
+      },
       byokSecret: "unused",
     });
 

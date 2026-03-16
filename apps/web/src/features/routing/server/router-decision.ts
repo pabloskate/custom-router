@@ -1,5 +1,4 @@
 import {
-  AUTO_MODELS,
   RouterEngine,
   type CatalogItem,
   type RouteDecision,
@@ -9,6 +8,8 @@ import {
 } from "@custom-router/core";
 
 import { routeWithFrontierModel } from "@/src/lib/routing/frontier-classifier";
+
+const DEPRECATED_ROUTING_ALIASES = new Set(["auto", "router/auto"]);
 
 export function createRouterEngine(args: {
   classifierApiKey: string;
@@ -33,15 +34,15 @@ export function createRouterEngine(args: {
 }
 
 export function findMatchedProfile(requestedModel: string, profiles?: RouterProfile[] | null): RouterProfile | undefined {
-  if (AUTO_MODELS.has(requestedModel)) {
-    return profiles?.find((profile) => profile.id === "auto");
-  }
-
   return profiles?.find((profile) => profile.id === requestedModel);
 }
 
 export function isRoutedRequestModel(requestedModel: string, profiles?: RouterProfile[] | null): boolean {
-  return AUTO_MODELS.has(requestedModel) || Boolean(findMatchedProfile(requestedModel, profiles));
+  return Boolean(findMatchedProfile(requestedModel, profiles));
+}
+
+export function isDeprecatedRoutingAlias(requestedModel: string): boolean {
+  return DEPRECATED_ROUTING_ALIASES.has(requestedModel);
 }
 
 export function resolveEffectiveClassifierModel(args: {

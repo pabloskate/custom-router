@@ -83,7 +83,7 @@ If a migration was already applied, you may see a "duplicate column name" or "ta
 
 ## Runtime behavior
 
-- Routing activates only for `model=auto` or `model=router/auto`.
+- Routing activates only when the request `model` matches a named routing profile.
 - Explicit model requests are passed through unchanged.
 - First routed call pins model by thread fingerprint for 1 hour.
 - Continuations reuse pin unless hard failure or constraint violation.

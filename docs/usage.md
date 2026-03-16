@@ -6,8 +6,8 @@ This guide covers how to run, configure, and call CustomRouter as an OpenAI-comp
 
 CustomRouter receives OpenAI-style requests at `/api/v1` and decides whether to:
 
-1. pass a request through unchanged when a non-`auto` model is provided, or
-2. run routing for `model: "auto"` and profile names like `auto-cheap`.
+1. pass a request through unchanged when a direct gateway model is provided, or
+2. run routing when `model` matches a named routing profile such as `planning-backend` or `cost-optimized`.
 
 Routing is done by a cheap LLM classifier with sticky thread pinning and fallback logic, then proxying to your configured BYOK gateways.
 
@@ -76,17 +76,19 @@ For production setup and cron details, see [Deployment](./deployment-cloudflare.
 
 ### Routing model selection
 
-- `auto` and `router/auto` are routing aliases.
-- Any model ID not matching `auto`, `router/auto`, or a named profile performs passthrough.
-- Profiles let you define separate routing policies while using `model: "auto-profile-id"`.
+- Routing only activates when `model` matches a named routing profile.
+- Any model ID not matching a named profile performs passthrough.
+- Profiles let you define separate routing policies while using stable, descriptive IDs like `planning-backend`.
 
-### Profiles and inheritance
+### Profiles
 
 `userConfig.profiles` is persisted on the account and exposed through `/api/v1/user/me`.
 
-- Profiles are always required to include an `auto` profile.
-- `overrideModels: false` makes a profile inherit global defaults where possible.
-- `overrideModels` unset behaves like `true` for legacy behavior.
+- Each profile owns its routed model pool, fallback model, router model, and routing instructions.
+- Profile IDs are API-facing slugs and may only use lowercase letters, numbers, and hyphens.
+- Fallback models must come from the profile's attached routed models.
+- Router models may point to any synced gateway model, even when that classifier model is not part of the routed pool.
+- The admin UI autosaves profile edits; there is no separate "Save profiles" action.
 
 ### Thread pinning and continuation behavior
 
@@ -125,8 +127,9 @@ Routing catalog resolution order for each request:
 1. Open `/admin` in a browser.
 2. Register or login.
 3. Add at least one gateway under `Gateways`.
-4. Generate an API key under `API Keys`.
-5. Start using `model: "auto"` in chat/completions calls.
+4. In `Routing`, create at least one named profile such as `planning-backend`.
+5. Generate an API key under `API Keys`.
+6. Start using that profile ID in chat/completions calls.
 
 ### API key notes
 
@@ -166,12 +169,12 @@ curl -sS "$BASE/api/v1/chat/completions" \
   -H "Authorization: Bearer $CUSTOM_ROUTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "planning-backend",
     "messages": [{"role": "user", "content": "Draft a short architecture decision for event-driven sync."}]
   }'
 ```
 
-Use `"model": "auto"` or a profile name such as `"auto-cheap"`.
+Use a named routing profile such as `"planning-backend"` or `"cost-optimized"`.
 
 OpenAI SDK example:
 
@@ -184,7 +187,7 @@ const client = new OpenAI({
 });
 
 const response = await client.chat.completions.create({
-  model: "auto",
+  model: "planning-backend",
   messages: [{ role: "user", content: "Summarize the latest RFC in one paragraph." }],
 });
 ```
@@ -208,7 +211,6 @@ Authenticated by API key only.
 
 Returns OpenAI `models` list including:
 
-- `auto`
 - profile IDs
 - all reachable gateway model IDs
 

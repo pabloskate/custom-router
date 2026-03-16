@@ -2,6 +2,7 @@ import type { CatalogItem, RouterConfig, RouterProfile, RoutingExplanation } fro
 
 import { decryptByokSecret } from "@/src/lib/auth/byok-crypto";
 import { json } from "@/src/lib/infra";
+import { parseProfileModelKey } from "@/src/lib/routing/profile-config";
 
 import { buildRoutingExplanation, resolveEffectiveClassifierModel } from "./router-decision";
 import type { UserRouterConfig } from "./router-service-types";
@@ -118,9 +119,17 @@ export async function resolveClassifierContext(args: {
     };
   }
 
+  const classifierBinding = parseProfileModelKey(args.matchedProfile?.classifierModel);
+  const boundGatewayHasModel = classifierBinding
+    ? args.userConfig?.gatewayRows?.some(
+        (gateway) => gateway.id === classifierBinding.gatewayId && gateway.models.some((model) => model.id === effectiveClassifierModel),
+      )
+    : false;
   const classifierCatalogItem = args.catalog.find((item) => item.id === effectiveClassifierModel);
-  const gatewayId = classifierCatalogItem?.gatewayId;
-  if (!gatewayId) {
+  const gatewayId = classifierBinding?.gatewayId ?? classifierCatalogItem?.gatewayId;
+  const classifierAvailable = classifierBinding ? boundGatewayHasModel : Boolean(gatewayId);
+
+  if (!classifierAvailable) {
     return {
       failure: {
         explanation: buildRoutingExplanation({
@@ -137,6 +146,25 @@ export async function resolveClassifierContext(args: {
             request_id: args.requestId,
           },
           400
+        ),
+      },
+    };
+  }
+
+  if (!gatewayId) {
+    return {
+      failure: {
+        explanation: buildRoutingExplanation({
+          requestId: args.requestId,
+          catalogVersion: "1.0",
+          requestedModel: args.requestedModel,
+          message: `Classifier gateway could not be resolved for ${effectiveClassifierModel}.`,
+          profileId: args.matchedProfile?.id,
+          classifierModel: effectiveClassifierModel,
+        }),
+        response: json(
+          { error: `Classifier gateway could not be resolved for ${effectiveClassifierModel}.`, request_id: args.requestId },
+          500
         ),
       },
     };
