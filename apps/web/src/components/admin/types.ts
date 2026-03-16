@@ -19,6 +19,8 @@ export type ServerUserInfo = {
   blocklist: string[] | null;
   customCatalog: CatalogItem[] | null;
   profiles: RouterProfile[] | null;
+  routeTriggerKeywords: string[] | null;
+  routingFrequency: string | null;
 };
 
 export type UserInfo = ServerUserInfo;

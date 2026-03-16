@@ -57,6 +57,8 @@ export interface RouterProfile {
   catalogFilter?: string[];      // Allowlist: only route to these model IDs
 }
 
+export type RoutingFrequency = "every_message" | "smart" | "new_thread_only";
+
 export interface RouterConfig {
   version: string;
   defaultModel?: string;
@@ -65,6 +67,8 @@ export interface RouterConfig {
   routingInstructions?: string; // Markdown instructions for the LLM
   cooldownTurns?: number;
   phaseCompleteSignal?: string;
+  routeTriggerKeywords?: string[];       // Custom keywords that trigger re-routing (additive with built-in $$route)
+  routingFrequency?: RoutingFrequency;   // Controls when the classifier re-evaluates: every_message | smart | new_thread_only
 }
 
 export interface LlmRoutingResult {

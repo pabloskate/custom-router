@@ -218,7 +218,7 @@ describe("RouterEngine (LLM Router)", () => {
         expect(decision.pinUsed).toBe(false);
         expect(decision.explanation.decisionReason).toBe("initial_route");
         expect(decision.explanation.notes).toContain(
-            "Force route directive detected in latest user message ($$route). Bypassing thread pin for this turn."
+            "Force route directive detected in latest user message. Bypassing thread pin for this turn."
         );
     });
 
@@ -469,6 +469,155 @@ describe("RouterEngine (LLM Router)", () => {
             requestId: "req-force-reroute",
             request: { model: "auto", messages },
             config: { ...defaultConfig, cooldownTurns: 3 },
+            catalog,
+            catalogVersion: "v1",
+            pinStore,
+        });
+
+        expect(mockLlmRouter).toHaveBeenCalledOnce();
+        expect(decision.pinUsed).toBe(false);
+        expect(decision.selectedModel).toBe("openai/gpt-4o");
+        expect(decision.explanation.pinBypassReason).toBe("force_route");
+    });
+
+    it("every_message mode skips pin and always invokes classifier", async () => {
+        const mockLlmRouter = vi.fn().mockResolvedValue({
+            selectedModel: "openai/gpt-4o",
+            confidence: 0.9,
+            signals: ["every_message"],
+        });
+
+        const engine = new RouterEngine({ llmRouter: mockLlmRouter });
+        const pinStore = new MockPinStore();
+
+        const messages: RouterRequestLike["messages"] = [
+            { role: "user", content: "Write some code" },
+            { role: "assistant", content: "Here is some code..." },
+            { role: "user", content: "Continue" },
+        ];
+        const threadKey = buildThreadFingerprint({ messages });
+
+        await pinStore.set({
+            threadKey,
+            modelId: "anthropic/claude-3-opus",
+            requestId: "old-req",
+            pinnedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 10000).toISOString(),
+            turnCount: 3,
+        });
+
+        const decision = await engine.decide({
+            requestId: "req-every-message",
+            request: { model: "auto", messages },
+            config: { ...defaultConfig, routingFrequency: "every_message" },
+            catalog,
+            catalogVersion: "v1",
+            pinStore,
+        });
+
+        expect(mockLlmRouter).toHaveBeenCalledOnce();
+        expect(decision.pinUsed).toBe(false);
+        expect(decision.shouldPin).toBe(false);
+        expect(decision.selectedModel).toBe("openai/gpt-4o");
+        expect(decision.explanation.pinBypassReason).toBe("routing_frequency_every_message");
+    });
+
+    it("new_thread_only mode suppresses force-route and keeps pin", async () => {
+        const mockLlmRouter = vi.fn().mockResolvedValue({
+            selectedModel: "openai/gpt-4o",
+            confidence: 0.9,
+            signals: ["should_not_run"],
+        });
+
+        const engine = new RouterEngine({ llmRouter: mockLlmRouter });
+        const pinStore = new MockPinStore();
+
+        const messages: RouterRequestLike["messages"] = [
+            { role: "user", content: "Help me" },
+            { role: "assistant", content: "Sure" },
+            { role: "user", content: "$$route switch models" },
+        ];
+        const threadKey = buildThreadFingerprint({ messages });
+
+        await pinStore.set({
+            threadKey,
+            modelId: "anthropic/claude-3-opus",
+            requestId: "old-req",
+            pinnedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 10000).toISOString(),
+            turnCount: 2,
+        });
+
+        const decision = await engine.decide({
+            requestId: "req-new-thread-only",
+            request: { model: "auto", messages },
+            config: { ...defaultConfig, routingFrequency: "new_thread_only" },
+            catalog,
+            catalogVersion: "v1",
+            pinStore,
+        });
+
+        expect(mockLlmRouter).not.toHaveBeenCalled();
+        expect(decision.pinUsed).toBe(true);
+        expect(decision.selectedModel).toBe("anthropic/claude-3-opus");
+        expect(decision.explanation.notes).toEqual(
+            expect.arrayContaining([expect.stringContaining("ignored")])
+        );
+    });
+
+    it("new_thread_only mode routes normally on a new thread", async () => {
+        const mockLlmRouter = vi.fn().mockResolvedValue({
+            selectedModel: "openai/gpt-4o",
+            confidence: 0.85,
+            signals: ["new_thread"],
+        });
+
+        const engine = new RouterEngine({ llmRouter: mockLlmRouter });
+
+        const decision = await engine.decide({
+            requestId: "req-new-thread-only-new",
+            request: { model: "auto", messages: [{ role: "user", content: "Hello" }] },
+            config: { ...defaultConfig, routingFrequency: "new_thread_only" },
+            catalog,
+            catalogVersion: "v1",
+            pinStore: new MockPinStore(),
+        });
+
+        expect(mockLlmRouter).toHaveBeenCalledOnce();
+        expect(decision.selectedModel).toBe("openai/gpt-4o");
+        expect(decision.shouldPin).toBe(true);
+    });
+
+    it("custom trigger keyword bypasses pin in smart mode", async () => {
+        const mockLlmRouter = vi.fn().mockResolvedValue({
+            selectedModel: "openai/gpt-4o",
+            confidence: 0.9,
+            signals: ["custom_trigger"],
+        });
+
+        const engine = new RouterEngine({ llmRouter: mockLlmRouter });
+        const pinStore = new MockPinStore();
+
+        const messages: RouterRequestLike["messages"] = [
+            { role: "user", content: "Help me" },
+            { role: "assistant", content: "Sure" },
+            { role: "user", content: "!switch use a faster model" },
+        ];
+        const threadKey = buildThreadFingerprint({ messages });
+
+        await pinStore.set({
+            threadKey,
+            modelId: "anthropic/claude-3-opus",
+            requestId: "old-req",
+            pinnedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 10000).toISOString(),
+            turnCount: 2,
+        });
+
+        const decision = await engine.decide({
+            requestId: "req-custom-trigger",
+            request: { model: "auto", messages },
+            config: { ...defaultConfig, routeTriggerKeywords: ["!switch"] },
             catalog,
             catalogVersion: "v1",
             pinStore,

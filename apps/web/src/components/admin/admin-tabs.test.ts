@@ -16,6 +16,8 @@ const TEST_USER: UserInfo = {
   blocklist: null,
   customCatalog: null,
   profiles: null,
+  routeTriggerKeywords: null,
+  routingFrequency: null,
 };
 
 function createBaseTabs(registrationMode: "open" | "closed" | "invite" = "closed") {

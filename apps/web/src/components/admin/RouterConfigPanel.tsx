@@ -8,6 +8,8 @@ interface RouterConfigFields {
   classifierModel: string | null;
   routingInstructions: string | null;
   blocklist: string[] | null;
+  routeTriggerKeywords: string[] | null;
+  routingFrequency: string | null;
 }
 
 interface Props {
@@ -335,6 +337,182 @@ function RoutingLogicSection({
   );
 }
 
+// ─── Re-routing Behavior Section ─────────────────────────────────────────────
+
+function IconRefresh({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+    </svg>
+  );
+}
+
+const FREQUENCY_OPTIONS = [
+  {
+    value: "every_message",
+    label: "Every message",
+    description: "Re-evaluate the best model on every user message. The classifier runs each turn — no model stickiness.",
+  },
+  {
+    value: "smart",
+    label: "Smart",
+    description: "Pick a model on the first message and stick with it for the conversation. Use a trigger keyword to force a model switch mid-conversation.",
+  },
+  {
+    value: "new_thread_only",
+    label: "New thread only",
+    description: "Only select a model at the start of a new conversation. Never switch mid-conversation, even with trigger keywords.",
+  },
+] as const;
+
+function ReroutingBehaviorSection({
+  config,
+  onChange,
+}: {
+  config: RouterConfigFields;
+  onChange: (c: RouterConfigFields) => void;
+}) {
+  const [tagInput, setTagInput] = useState("");
+  const activeFrequency = config.routingFrequency ?? "smart";
+  const activeOption = FREQUENCY_OPTIONS.find((o) => o.value === activeFrequency) ?? FREQUENCY_OPTIONS[1];
+  const tags = config.routeTriggerKeywords ?? [];
+
+  function addTag() {
+    const value = tagInput.trim();
+    if (value && !tags.includes(value) && value.toLowerCase() !== "$$route") {
+      onChange({ ...config, routeTriggerKeywords: [...tags, value] });
+      setTagInput("");
+    } else {
+      setTagInput("");
+    }
+  }
+
+  function removeTag(index: number) {
+    onChange({ ...config, routeTriggerKeywords: tags.filter((_, i) => i !== index) });
+  }
+
+  return (
+    <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--border-subtle)" }}>
+      <SectionHeader
+        icon={IconRefresh}
+        title="Re-routing Behavior"
+        description="Control when the router re-evaluates model selection during a conversation"
+      />
+
+      {/* Routing Frequency */}
+      <div className="form-group" style={{ marginBottom: "var(--space-5)" }}>
+        <label className="form-label">When to route</label>
+        <div style={{
+          display: "flex",
+          gap: 0,
+          borderRadius: "var(--radius-md)",
+          border: "1px solid var(--border-default)",
+          overflow: "hidden",
+        }}>
+          {FREQUENCY_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange({ ...config, routingFrequency: option.value })}
+              style={{
+                flex: 1,
+                padding: "var(--space-2) var(--space-3)",
+                border: "none",
+                borderRight: option.value !== "new_thread_only" ? "1px solid var(--border-default)" : "none",
+                background: activeFrequency === option.value ? "var(--accent)" : "transparent",
+                color: activeFrequency === option.value ? "white" : "var(--text-secondary)",
+                cursor: "pointer",
+                fontSize: "0.8125rem",
+                fontWeight: 500,
+                transition: "background 0.15s, color 0.15s",
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <span className="form-hint" style={{ marginTop: "var(--space-2)" }}>
+          {activeOption.description}
+        </span>
+      </div>
+
+      {/* Trigger Keywords — only visible in "smart" mode */}
+      {activeFrequency === "smart" && (
+        <div className="form-group" style={{ marginBottom: "var(--space-5)" }}>
+          <label className="form-label">Trigger keywords</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginBottom: "var(--space-2)" }}>
+            {/* Built-in default (non-removable) */}
+            <span
+              className="badge badge--info"
+              style={{
+                opacity: 0.6,
+                cursor: "default",
+                userSelect: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--space-1)",
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              $$route
+            </span>
+            {/* User-added tags */}
+            {tags.map((tag, i) => (
+              <span
+                key={i}
+                className="badge badge--info"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "var(--space-1)",
+                }}
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => removeTag(i)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "inherit",
+                    cursor: "pointer",
+                    padding: 0,
+                    fontSize: "0.875rem",
+                    lineHeight: 1,
+                    opacity: 0.7,
+                  }}
+                  aria-label={`Remove ${tag}`}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+          <input
+            className="input input--mono"
+            type="text"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addTag();
+              }
+            }}
+            onBlur={() => { if (tagInput.trim()) addTag(); }}
+            placeholder="Type a keyword and press Enter..."
+          />
+          <span className="form-hint">
+            When any of these keywords appear at the start of a user message, the router re-evaluates and may switch models. Press Enter or comma to add.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function RouterConfigPanel({ config, gatewayModelOptions, onChange, saveState, onSave }: Props) {
   async function handleSave() {
@@ -346,6 +524,11 @@ export function RouterConfigPanel({ config, gatewayModelOptions, onChange, saveS
       <RoutingLogicSection
         config={config}
         gatewayModelOptions={gatewayModelOptions}
+        onChange={onChange}
+      />
+
+      <ReroutingBehaviorSection
+        config={config}
         onChange={onChange}
       />
 

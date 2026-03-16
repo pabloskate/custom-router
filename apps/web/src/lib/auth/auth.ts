@@ -60,6 +60,8 @@ export interface AuthResult {
     blocklist: string[] | null;
     customCatalog: any[] | null;
     profiles: any[] | null;  // RouterProfile[] — named routing configurations
+    routeTriggerKeywords: string[] | null;
+    routingFrequency: string | null;
     upstreamBaseUrl: string | null;
     upstreamApiKeyEnc: string | null;
     classifierBaseUrl: string | null;
@@ -76,6 +78,8 @@ interface AuthRow {
     blocklist: string | null;
     custom_catalog: string | null;
     profiles: string | null;
+    route_trigger_keywords: string | null;
+    routing_frequency: string | null;
     upstream_base_url: string | null;
     upstream_api_key_enc: string | null;
     classifier_base_url: string | null;
@@ -116,6 +120,8 @@ function rowToAuthResult(row: AuthRow): AuthResult {
         blocklist: parseStringArray(row.blocklist),
         customCatalog: parseJsonArray(row.custom_catalog),
         profiles: parseJsonArray(row.profiles),
+        routeTriggerKeywords: parseStringArray(row.route_trigger_keywords),
+        routingFrequency: row.routing_frequency,
         upstreamBaseUrl: row.upstream_base_url,
         upstreamApiKeyEnc: row.upstream_api_key_enc,
         classifierBaseUrl: row.classifier_base_url,
@@ -229,6 +235,7 @@ export async function authenticateRequest(
     const row = await db
         .prepare(
             `SELECT ak.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
+                    u.route_trigger_keywords, u.routing_frequency,
                     uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
        FROM api_keys ak
        JOIN users u ON u.id = ak.user_id
@@ -343,6 +350,7 @@ export async function authenticateSession(request: Request, db: D1Database): Pro
 
     const row = await db.prepare(`
         SELECT s.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
+               u.route_trigger_keywords, u.routing_frequency,
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM user_sessions s
         JOIN users u ON u.id = s.user_id

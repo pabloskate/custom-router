@@ -62,6 +62,8 @@ export interface UserRouterConfig {
   gatewayRows?: GatewayRowPublic[];  // per-user gateways; first entry is the default upstream
   classifierBaseUrl?: string | null;
   classifierApiKeyEnc?: string | null;
+  routeTriggerKeywords?: string[] | null;
+  routingFrequency?: string | null;
 }
 
 type RoutedApiPath = "/chat/completions" | "/responses" | "/completions";
@@ -293,6 +295,8 @@ export async function routeAndProxy(args: {
     if (args.userConfig.classifierModel) runtimeConfig.classifierModel = args.userConfig.classifierModel;
     if (args.userConfig.routingInstructions) runtimeConfig.routingInstructions = args.userConfig.routingInstructions;
     if (args.userConfig.blocklist) runtimeConfig.globalBlocklist = args.userConfig.blocklist;
+    if (args.userConfig.routeTriggerKeywords) runtimeConfig.routeTriggerKeywords = args.userConfig.routeTriggerKeywords;
+    if (args.userConfig.routingFrequency) runtimeConfig.routingFrequency = args.userConfig.routingFrequency as RouterConfig["routingFrequency"];
   }
 
   // Build flat catalog from gateway models (with injected gatewayId), falling back

@@ -75,6 +75,56 @@ describe("threading", () => {
     ).toBe(true);
   });
 
+  it("triggers on custom trigger keywords", () => {
+    expect(
+      hasForceRouteRequest({
+        messages: [{ role: "user", content: "!switch use a different model" }],
+        triggerKeywords: ["!switch", "/reroute"],
+      })
+    ).toBe(true);
+
+    expect(
+      hasForceRouteRequest({
+        messages: [{ role: "user", content: "/reroute please" }],
+        triggerKeywords: ["!switch", "/reroute"],
+      })
+    ).toBe(true);
+  });
+
+  it("still triggers on $$route when custom keywords are configured", () => {
+    expect(
+      hasForceRouteRequest({
+        messages: [{ role: "user", content: "$$route now" }],
+        triggerKeywords: ["!switch"],
+      })
+    ).toBe(true);
+  });
+
+  it("does not trigger on custom keyword in middle of message", () => {
+    expect(
+      hasForceRouteRequest({
+        messages: [{ role: "user", content: "please !switch to another model" }],
+        triggerKeywords: ["!switch"],
+      })
+    ).toBe(false);
+  });
+
+  it("works with empty custom keywords array (only $$route)", () => {
+    expect(
+      hasForceRouteRequest({
+        messages: [{ role: "user", content: "$$route" }],
+        triggerKeywords: [],
+      })
+    ).toBe(true);
+
+    expect(
+      hasForceRouteRequest({
+        messages: [{ role: "user", content: "hello" }],
+        triggerKeywords: [],
+      })
+    ).toBe(false);
+  });
+
   it("detects $$route from latest Responses API input item only", () => {
     expect(
       hasForceRouteRequest({

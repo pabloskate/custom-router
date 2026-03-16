@@ -51,9 +51,15 @@ function contentToText(content: unknown): string {
   return "";
 }
 
-function hasForceRouteDirective(text: string): boolean {
-  const escaped = FORCE_ROUTE_KEYWORD.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^${escaped}(?:\\s|$)`, "i").test(text.trim());
+function hasForceRouteDirective(text: string, keywords: string[]): boolean {
+  const trimmed = text.trim();
+  for (const keyword of keywords) {
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`^${escaped}(?:\\s|$)`, "i").test(trimmed)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getLatestUserMessageText(messages: ChatMessage[] = []): string | null {
@@ -142,6 +148,7 @@ function getLatestUserInputText(input: unknown): string | null {
 export function hasForceRouteRequest(args: {
   messages?: ChatMessage[];
   input?: unknown;
+  triggerKeywords?: string[];
 }): boolean {
   const latestUserText =
     args.input === undefined
@@ -152,7 +159,8 @@ export function hasForceRouteRequest(args: {
     return false;
   }
 
-  return hasForceRouteDirective(latestUserText);
+  const keywords = [FORCE_ROUTE_KEYWORD, ...(args.triggerKeywords ?? [])];
+  return hasForceRouteDirective(latestUserText, keywords);
 }
 
 export function isAgentLoop(messages: ChatMessage[] = []): boolean {

@@ -63,6 +63,8 @@ export async function POST(request: Request): Promise<Response> {
       gatewayRows,
       classifierBaseUrl: auth.classifierBaseUrl,
       classifierApiKeyEnc: auth.classifierApiKeyEnc,
+      routeTriggerKeywords: auth.routeTriggerKeywords,
+      routingFrequency: auth.routingFrequency,
     },
   });
 

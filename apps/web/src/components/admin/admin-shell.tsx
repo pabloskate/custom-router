@@ -255,6 +255,8 @@ export function AdminShell() {
       blocklist: updatedUser.blocklist,
       custom_catalog: updatedUser.customCatalog,
       profiles: updatedUser.profiles,
+      route_trigger_keywords: updatedUser.routeTriggerKeywords,
+      routing_frequency: updatedUser.routingFrequency,
     };
 
     const response = await fetch("/api/v1/user/me", {

@@ -70,6 +70,8 @@ export async function GET(request: Request): Promise<Response> {
             blocklist: auth.blocklist,
             customCatalog: auth.customCatalog,
             profiles: auth.profiles,
+            routeTriggerKeywords: auth.routeTriggerKeywords,
+            routingFrequency: auth.routingFrequency,
         }
     });
 }
@@ -102,6 +104,13 @@ export async function PUT(request: Request): Promise<Response> {
     const classifierModel = typeof body.classifier_model === "string" ? body.classifier_model : null;
     const routingInstructions = typeof body.routing_instructions === "string" ? body.routing_instructions : null;
     const customCatalog = Array.isArray(body.custom_catalog) ? body.custom_catalog : null;
+    const routeTriggerKeywords = Array.isArray(body.route_trigger_keywords)
+        ? (body.route_trigger_keywords as unknown[]).filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+        : null;
+    const validFrequencies = ["every_message", "smart", "new_thread_only"];
+    const routingFrequency = typeof body.routing_frequency === "string" && validFrequencies.includes(body.routing_frequency)
+        ? body.routing_frequency
+        : null;
     const clearClassifierApiKey = body.clear_classifier_api_key === true;
 
     // Validate and sanitise profiles array
@@ -188,8 +197,10 @@ export async function PUT(request: Request): Promise<Response> {
                  routing_instructions = ?5,
                  custom_catalog = ?6,
                  profiles = ?7,
-                 updated_at = ?8
-             WHERE id = ?9`
+                 route_trigger_keywords = ?8,
+                 routing_frequency = ?9,
+                 updated_at = ?10
+             WHERE id = ?11`
         )
         .bind(
             preferredModels.length > 0 ? JSON.stringify(preferredModels) : null,
@@ -199,6 +210,8 @@ export async function PUT(request: Request): Promise<Response> {
             routingInstructions,
             customCatalog ? JSON.stringify(customCatalog) : null,
             profiles ? JSON.stringify(profiles) : null,
+            routeTriggerKeywords && routeTriggerKeywords.length > 0 ? JSON.stringify(routeTriggerKeywords) : null,
+            routingFrequency,
             now,
             auth.userId
         )

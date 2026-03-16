@@ -119,9 +119,11 @@ export class RouterEngine {
       tools,
       previousResponseId: args.request.previous_response_id
     });
+    const routingFrequency = effectiveConfig.routingFrequency ?? "smart";
     const forceRoute = hasForceRouteRequest({
       messages,
-      input: args.request.input
+      input: args.request.input,
+      triggerKeywords: effectiveConfig.routeTriggerKeywords,
     });
 
     const threadHasImage = hasImagePayload(messages);
@@ -161,49 +163,95 @@ export class RouterEngine {
     let confidence = 0.5;
     let pinBypassReason: string | undefined;
     let routingError: string | undefined;
+    let shouldPin = true;
 
     if (matchedProfile) {
       notes.push(`Routed via named profile: ${matchedProfile.id}`);
-    }
-    if (forceRoute) {
-      notes.push("Force route directive detected in latest user message ($$route). Bypassing thread pin for this turn.");
-      pinBypassReason = "force_route";
     }
 
     let activePin: ThreadPin | null = null;
     let pinTurnCount: number | undefined;
 
-    if (isContinuation && !forceRoute) {
-      activePin = await args.pinStore.get(threadKey);
-
-      if (activePin) {
-        const isLoop = isAgentLoop(messages);
-        // Verify the pinned model exists in the allowed catalog
-        const exists = allowedCatalog.some(m => m.id === activePin!.modelId);
-        if (exists) {
-          selectedModel = activePin.modelId;
-          pinUsed = true;
-          decisionReason = "thread_pin";
-          pinTurnCount = activePin.turnCount + 1;
-          notes.push(
-            `Reused pinned model from thread: ${activePin.modelId}. Turn count: ${activePin.turnCount} -> ${pinTurnCount}${isLoop ? " (Agent Loop detected)" : ""
-            }`
-          );
-        } else {
-          decisionReason = "pin_invalid";
-          if (threadHasImage && !allowedCatalog.some(m => m.id === activePin!.modelId) && args.catalog.some(m => m.id === activePin!.modelId)) {
-            notes.push(`Image detected but pinned model (${activePin!.modelId}) does not support vision. Breaking cache lock.`);
-            pinBypassReason = "pin_invalid_image";
+    if (routingFrequency === "every_message") {
+      // Re-evaluate on every turn — skip pin entirely, never write pins
+      shouldPin = false;
+      pinBypassReason = "routing_frequency_every_message";
+      if (forceRoute) {
+        notes.push("Force route directive detected but routing frequency is 'every message' — classifier runs every turn regardless.");
+      }
+    } else if (routingFrequency === "new_thread_only") {
+      // Only route on new threads — always use pin on continuations, suppress force-route
+      if (forceRoute) {
+        notes.push("Force route directive detected but ignored — routing frequency is set to 'new thread only'.");
+      }
+      if (isContinuation) {
+        activePin = await args.pinStore.get(threadKey);
+        if (activePin) {
+          const isLoop = isAgentLoop(messages);
+          const exists = allowedCatalog.some(m => m.id === activePin!.modelId);
+          if (exists) {
+            selectedModel = activePin.modelId;
+            pinUsed = true;
+            decisionReason = "thread_pin";
+            pinTurnCount = activePin.turnCount + 1;
+            notes.push(
+              `Reused pinned model from thread: ${activePin.modelId}. Turn count: ${activePin.turnCount} -> ${pinTurnCount}${isLoop ? " (Agent Loop detected)" : ""
+              }`
+            );
           } else {
-            notes.push(`Pinned model invalid (not in catalog): ${activePin!.modelId}`);
-            pinBypassReason = "pin_invalid";
+            decisionReason = "pin_invalid";
+            if (threadHasImage && !allowedCatalog.some(m => m.id === activePin!.modelId) && args.catalog.some(m => m.id === activePin!.modelId)) {
+              notes.push(`Image detected but pinned model (${activePin!.modelId}) does not support vision. Breaking cache lock.`);
+              pinBypassReason = "pin_invalid_image";
+            } else {
+              notes.push(`Pinned model invalid (not in catalog): ${activePin!.modelId}`);
+              pinBypassReason = "pin_invalid";
+            }
           }
+        } else {
+          pinBypassReason = "pin_missing_or_expired";
         }
       } else {
-        pinBypassReason = "pin_missing_or_expired";
+        pinBypassReason = "new_thread";
       }
-    } else if (!isContinuation) {
-      pinBypassReason = "new_thread";
+    } else {
+      // "smart" mode — default current behavior
+      if (forceRoute) {
+        notes.push("Force route directive detected in latest user message. Bypassing thread pin for this turn.");
+        pinBypassReason = "force_route";
+      }
+
+      if (isContinuation && !forceRoute) {
+        activePin = await args.pinStore.get(threadKey);
+
+        if (activePin) {
+          const isLoop = isAgentLoop(messages);
+          const exists = allowedCatalog.some(m => m.id === activePin!.modelId);
+          if (exists) {
+            selectedModel = activePin.modelId;
+            pinUsed = true;
+            decisionReason = "thread_pin";
+            pinTurnCount = activePin.turnCount + 1;
+            notes.push(
+              `Reused pinned model from thread: ${activePin.modelId}. Turn count: ${activePin.turnCount} -> ${pinTurnCount}${isLoop ? " (Agent Loop detected)" : ""
+              }`
+            );
+          } else {
+            decisionReason = "pin_invalid";
+            if (threadHasImage && !allowedCatalog.some(m => m.id === activePin!.modelId) && args.catalog.some(m => m.id === activePin!.modelId)) {
+              notes.push(`Image detected but pinned model (${activePin!.modelId}) does not support vision. Breaking cache lock.`);
+              pinBypassReason = "pin_invalid_image";
+            } else {
+              notes.push(`Pinned model invalid (not in catalog): ${activePin!.modelId}`);
+              pinBypassReason = "pin_invalid";
+            }
+          }
+        } else {
+          pinBypassReason = "pin_missing_or_expired";
+        }
+      } else if (!isContinuation) {
+        pinBypassReason = "new_thread";
+      }
     }
 
     if (!pinUsed) {
@@ -288,7 +336,7 @@ export class RouterEngine {
       pinUsed,
       degraded: false,
       fallbackModels,
-      shouldPin: true,
+      shouldPin,
       pinTurnCount,
       explanation: {
         requestId: args.requestId,
