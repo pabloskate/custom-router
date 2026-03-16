@@ -4,6 +4,7 @@ import type { AuthResult } from "@/src/lib/auth";
 import {
   authenticateSession,
   getUserUpstreamCredentials,
+  hasUsersSmartPinTurnsColumn,
   isSameOriginRequest,
   upsertUserUpstreamCredentials,
   withCsrf,
@@ -27,6 +28,7 @@ vi.mock("@/src/lib/auth", async () => {
     authenticateSession: vi.fn(),
     encryptByokSecret: vi.fn(async ({ plaintext }: { plaintext: string }) => `enc:${plaintext}`),
     getUserUpstreamCredentials: vi.fn(),
+    hasUsersSmartPinTurnsColumn: vi.fn(),
     isSameOriginRequest: vi.fn(),
     resolveByokEncryptionSecret: vi.fn(({ byokSecret }: { byokSecret?: string | null }) => byokSecret ?? null),
     upsertUserUpstreamCredentials: vi.fn(),
@@ -71,6 +73,7 @@ function createDbMock() {
 describe("/api/v1/user/me route", () => {
   const runtimeMock = vi.mocked(getRuntimeBindings);
   const authMock = vi.mocked(authenticateSession);
+  const hasUsersSmartPinTurnsColumnMock = vi.mocked(hasUsersSmartPinTurnsColumn);
   const sameOriginMock = vi.mocked(isSameOriginRequest);
   const upstreamGetMock = vi.mocked(getUserUpstreamCredentials);
   const upstreamUpsertMock = vi.mocked(upsertUserUpstreamCredentials);
@@ -93,6 +96,7 @@ describe("/api/v1/user/me route", () => {
       }
       return handler();
     });
+    hasUsersSmartPinTurnsColumnMock.mockResolvedValue(true);
   });
 
   it("GET includes routing fields", async () => {
@@ -158,6 +162,50 @@ describe("/api/v1/user/me route", () => {
     expect(updateSql).not.toContain("config_agent_search_model");
     const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
     expect(bindArgs[9]).toBe(5);
+  });
+
+  it("PUT omits smart_pin_turns when the users table has not been migrated", async () => {
+    const db = createDbMock();
+    runtimeMock.mockReturnValue({ ROUTER_DB: db as any, BYOK_ENCRYPTION_SECRET: "1234567890abcdef" });
+    sameOriginMock.mockReturnValue(true);
+    authMock.mockResolvedValue(createAuth({ userId: "user_1" }));
+    hasUsersSmartPinTurnsColumnMock.mockResolvedValue(false);
+    upstreamGetMock.mockResolvedValue({
+      user_id: "user_1",
+      upstream_base_url: null,
+      upstream_api_key_enc: null,
+      classifier_base_url: null,
+      classifier_api_key_enc: null,
+      updated_at: "2026-03-11T00:00:00.000Z",
+    });
+    upstreamUpsertMock.mockResolvedValue(undefined);
+
+    const response = await PUT(
+      new Request("http://localhost/api/v1/user/me", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          preferred_models: [],
+          blocklist: [],
+          default_model: null,
+          classifier_model: null,
+          routing_instructions: null,
+          custom_catalog: null,
+          profiles: null,
+          route_trigger_keywords: ["reroute"],
+          routing_frequency: "smart",
+          smart_pin_turns: 5,
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const updateSql = db.prepare.mock.calls.find((entry: [string]) => entry[0].includes("UPDATE users"))?.[0] ?? "";
+    expect(updateSql).not.toContain("smart_pin_turns");
+    const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
+    expect(bindArgs).toHaveLength(11);
+    expect(bindArgs[9]).toMatch(/T/);
+    expect(bindArgs[10]).toBe("user_1");
   });
 
   it("PUT migrates legacy routing instructions into the auto profile", async () => {

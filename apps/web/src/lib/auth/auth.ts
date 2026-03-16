@@ -89,6 +89,12 @@ interface AuthRow {
     classifier_api_key_enc: string | null;
 }
 
+interface TableInfoRow {
+    name?: string | null;
+}
+
+const usersSmartPinTurnsColumnCache = new WeakMap<D1Database, Promise<boolean>>();
+
 function parseJsonArray(value: string | null): any[] | null {
     if (!value) {
         return null;
@@ -136,6 +142,52 @@ function rowToAuthResult(row: AuthRow): AuthResult {
         classifierBaseUrl: row.classifier_base_url,
         classifierApiKeyEnc: row.classifier_api_key_enc,
     };
+}
+
+export function hasUsersSmartPinTurnsColumn(db: D1Database): Promise<boolean> {
+    const cached = usersSmartPinTurnsColumnCache.get(db);
+    if (cached) {
+        return cached;
+    }
+
+    const lookup = db
+        .prepare("PRAGMA table_info(users)")
+        .all<TableInfoRow>()
+        .then(({ results }) => results.some((column) => column.name === "smart_pin_turns"))
+        .catch(() => false);
+
+    usersSmartPinTurnsColumnCache.set(db, lookup);
+    return lookup;
+}
+
+function buildAuthSelectQuery(includeSmartPinTurns: boolean): string {
+    const smartPinTurnsSelect = includeSmartPinTurns ? "u.smart_pin_turns" : "NULL AS smart_pin_turns";
+
+    return `
+        SELECT ak.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
+               u.route_trigger_keywords, u.routing_frequency, ${smartPinTurnsSelect},
+               uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
+        FROM api_keys ak
+        JOIN users u ON u.id = ak.user_id
+        LEFT JOIN user_upstream_credentials uc ON uc.user_id = u.id
+        WHERE ak.key_hash = ?1 AND ak.revoked_at IS NULL
+        LIMIT 1
+    `;
+}
+
+function buildSessionSelectQuery(includeSmartPinTurns: boolean): string {
+    const smartPinTurnsSelect = includeSmartPinTurns ? "u.smart_pin_turns" : "NULL AS smart_pin_turns";
+
+    return `
+        SELECT s.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
+               u.route_trigger_keywords, u.routing_frequency, ${smartPinTurnsSelect},
+               uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
+        FROM user_sessions s
+        JOIN users u ON u.id = s.user_id
+        LEFT JOIN user_upstream_credentials uc ON uc.user_id = u.id
+        WHERE s.id = ?1 AND s.expires_at > ?2
+        LIMIT 1
+    `;
 }
 
 function extractBearerToken(request: Request): string | null {
@@ -240,18 +292,10 @@ export async function authenticateRequest(
     const keyHash = await hashKey(rawKey);
 
     await ensureUserUpstreamCredentialsTable(db);
+    const includeSmartPinTurns = await hasUsersSmartPinTurnsColumn(db);
 
     const row = await db
-        .prepare(
-            `SELECT ak.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
-                    u.route_trigger_keywords, u.routing_frequency, u.smart_pin_turns,
-                    uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
-       FROM api_keys ak
-       JOIN users u ON u.id = ak.user_id
-       LEFT JOIN user_upstream_credentials uc ON uc.user_id = u.id
-       WHERE ak.key_hash = ?1 AND ak.revoked_at IS NULL
-       LIMIT 1`
-        )
+        .prepare(buildAuthSelectQuery(includeSmartPinTurns))
         .bind(keyHash)
         .first<AuthRow>();
 
@@ -354,19 +398,11 @@ export async function authenticateSession(request: Request, db: D1Database): Pro
     }
     const sessionTokenHash = await hashKey(sessionToken);
     await ensureUserUpstreamCredentialsTable(db);
+    const includeSmartPinTurns = await hasUsersSmartPinTurnsColumn(db);
 
     const now = new Date().toISOString();
 
-    const row = await db.prepare(`
-        SELECT s.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
-               u.route_trigger_keywords, u.routing_frequency, u.smart_pin_turns,
-               uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
-        FROM user_sessions s
-        JOIN users u ON u.id = s.user_id
-        LEFT JOIN user_upstream_credentials uc ON uc.user_id = u.id
-        WHERE s.id = ?1 AND s.expires_at > ?2
-        LIMIT 1
-    `).bind(sessionTokenHash, now).first<AuthRow>();
+    const row = await db.prepare(buildSessionSelectQuery(includeSmartPinTurns)).bind(sessionTokenHash, now).first<AuthRow>();
 
     if (!row) {
         return null;

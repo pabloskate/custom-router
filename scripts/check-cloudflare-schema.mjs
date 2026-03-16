@@ -19,6 +19,7 @@ const REQUIRED_TABLES = {
     "profiles",
     "route_trigger_keywords",
     "routing_frequency",
+    "smart_pin_turns",
     "config_agent_enabled",
     "config_agent_orchestrator_model",
     "config_agent_search_model",

@@ -1,6 +1,7 @@
 import {
     encryptByokSecret,
     getUserUpstreamCredentials,
+    hasUsersSmartPinTurnsColumn,
     resolveByokEncryptionSecret,
     upsertUserUpstreamCredentials,
     withCsrf,
@@ -206,9 +207,9 @@ export async function PUT(request: Request): Promise<Response> {
             }
 
             const now = new Date().toISOString();
-            await bindings.ROUTER_DB
-                .prepare(
-                    `UPDATE users
+            const includeSmartPinTurns = await hasUsersSmartPinTurnsColumn(bindings.ROUTER_DB);
+            const updateSql = includeSmartPinTurns
+                ? `UPDATE users
                      SET preferred_models = ?1,
                          blocklist = ?2,
                          default_model = ?3,
@@ -221,22 +222,54 @@ export async function PUT(request: Request): Promise<Response> {
                          smart_pin_turns = ?10,
                          updated_at = ?11
                      WHERE id = ?12`
-                )
-                .bind(
-                    preferredModels.length > 0 ? JSON.stringify(preferredModels) : null,
-                    blocklist.length > 0 ? JSON.stringify(blocklist) : null,
-                    defaultModel,
-                    classifierModel,
-                    null,
-                    customCatalog ? JSON.stringify(customCatalog) : null,
-                    profiles ? JSON.stringify(profiles) : null,
-                    routeTriggerKeywords && routeTriggerKeywords.length > 0 ? JSON.stringify(routeTriggerKeywords) : null,
-                    routingFrequency,
-                    smartPinTurns,
-                    now,
-                    auth.userId
-                )
-                .run();
+                : `UPDATE users
+                     SET preferred_models = ?1,
+                         blocklist = ?2,
+                         default_model = ?3,
+                         classifier_model = ?4,
+                         routing_instructions = ?5,
+                         custom_catalog = ?6,
+                         profiles = ?7,
+                         route_trigger_keywords = ?8,
+                         routing_frequency = ?9,
+                         updated_at = ?10
+                     WHERE id = ?11`;
+            const updateStatement = bindings.ROUTER_DB.prepare(updateSql);
+
+            if (includeSmartPinTurns) {
+                await updateStatement
+                    .bind(
+                        preferredModels.length > 0 ? JSON.stringify(preferredModels) : null,
+                        blocklist.length > 0 ? JSON.stringify(blocklist) : null,
+                        defaultModel,
+                        classifierModel,
+                        null,
+                        customCatalog ? JSON.stringify(customCatalog) : null,
+                        profiles ? JSON.stringify(profiles) : null,
+                        routeTriggerKeywords && routeTriggerKeywords.length > 0 ? JSON.stringify(routeTriggerKeywords) : null,
+                        routingFrequency,
+                        smartPinTurns,
+                        now,
+                        auth.userId
+                    )
+                    .run();
+            } else {
+                await updateStatement
+                    .bind(
+                        preferredModels.length > 0 ? JSON.stringify(preferredModels) : null,
+                        blocklist.length > 0 ? JSON.stringify(blocklist) : null,
+                        defaultModel,
+                        classifierModel,
+                        null,
+                        customCatalog ? JSON.stringify(customCatalog) : null,
+                        profiles ? JSON.stringify(profiles) : null,
+                        routeTriggerKeywords && routeTriggerKeywords.length > 0 ? JSON.stringify(routeTriggerKeywords) : null,
+                        routingFrequency,
+                        now,
+                        auth.userId
+                    )
+                    .run();
+            }
 
             await upsertUserUpstreamCredentials({
                 db: bindings.ROUTER_DB,

@@ -7,6 +7,7 @@ export {
   createSession,
   generateApiKey,
   getSessionTokenFromRequest,
+  hasUsersSmartPinTurnsColumn,
   hashKey,
   hashPassword,
   shouldUseSecureCookies,
