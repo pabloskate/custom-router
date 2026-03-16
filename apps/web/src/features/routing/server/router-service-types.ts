@@ -32,6 +32,7 @@ export interface UserRouterConfig {
   classifierApiKeyEnc?: string | null;
   routeTriggerKeywords?: string[] | null;
   routingFrequency?: string | null;
+  smartPinTurns?: number | null;
 }
 
 export type RoutedApiPath = "/chat/completions" | "/responses" | "/completions";

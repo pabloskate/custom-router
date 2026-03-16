@@ -453,7 +453,7 @@ describe("RouterEngine (LLM Router)", () => {
         expect(decision.selectedModel).toBe("openai/gpt-4o");
     });
 
-    it("keeps the pin even after cooldownTurns has been exceeded", async () => {
+    it("re-evaluates when smart pin turns have been exhausted", async () => {
         const mockLlmRouter = vi.fn().mockResolvedValue({
             selectedModel: "openai/gpt-4o",
             confidence: 0.9,
@@ -482,16 +482,16 @@ describe("RouterEngine (LLM Router)", () => {
         const decision = await engine.decide({
             requestId: "req-sticky-pin",
             request: { model: "auto", messages },
-            config: { ...defaultConfig, cooldownTurns: 3 },
+            config: { ...defaultConfig, smartPinTurns: 3 },
             catalog,
             catalogVersion: "v1",
             pinStore,
         });
 
-        expect(mockLlmRouter).not.toHaveBeenCalled();
-        expect(decision.pinUsed).toBe(true);
-        expect(decision.selectedModel).toBe("anthropic/claude-3-opus");
-        expect(decision.pinTurnCount).toBe(6);
+        expect(mockLlmRouter).toHaveBeenCalledOnce();
+        expect(decision.pinUsed).toBe(false);
+        expect(decision.selectedModel).toBe("openai/gpt-4o");
+        expect(decision.explanation.pinBypassReason).toBe("smart_pin_turn_limit");
     });
 
     it("reroutes only when the latest user message explicitly forces it", async () => {
@@ -523,7 +523,7 @@ describe("RouterEngine (LLM Router)", () => {
         const decision = await engine.decide({
             requestId: "req-force-reroute",
             request: { model: "auto", messages },
-            config: { ...defaultConfig, cooldownTurns: 3 },
+            config: { ...defaultConfig, smartPinTurns: 3 },
             catalog,
             catalogVersion: "v1",
             pinStore,
@@ -709,7 +709,7 @@ describe("RouterEngine (LLM Router)", () => {
         const decision = await engine.decide({
             requestId: "req-agent-loop",
             request,
-            config: { ...defaultConfig, cooldownTurns: 3 },
+            config: { ...defaultConfig, smartPinTurns: 3 },
             catalog,
             catalogVersion: "v1",
             pinStore

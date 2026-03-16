@@ -36,6 +36,9 @@ export async function resolveUserRoutingContext(args: {
     if (args.userConfig.routingFrequency) {
       runtimeConfig.routingFrequency = args.userConfig.routingFrequency as RouterConfig["routingFrequency"];
     }
+    if (typeof args.userConfig.smartPinTurns === "number") {
+      runtimeConfig.smartPinTurns = args.userConfig.smartPinTurns;
+    }
   }
 
   const gatewayCatalogItems: CatalogItem[] = (args.userConfig?.gatewayRows ?? []).flatMap((gateway) =>

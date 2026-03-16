@@ -130,6 +130,7 @@ export class RouterEngine {
       previousResponseId: args.request.previous_response_id
     });
     const routingFrequency = effectiveConfig.routingFrequency ?? "smart";
+    const smartPinTurns = effectiveConfig.smartPinTurns ?? effectiveConfig.cooldownTurns ?? 3;
     const forceRoute = hasForceRouteRequest({
       messages,
       input: args.request.input,
@@ -238,14 +239,19 @@ export class RouterEngine {
           const isLoop = isAgentLoop(messages);
           const exists = allowedCatalog.some(m => m.id === activePin!.modelId);
           if (exists) {
-            selectedModel = activePin.modelId;
-            pinUsed = true;
-            decisionReason = "thread_pin";
-            pinTurnCount = activePin.turnCount + 1;
-            notes.push(
-              `Reused pinned model from thread: ${activePin.modelId}. Turn count: ${activePin.turnCount} -> ${pinTurnCount}${isLoop ? " (Agent Loop detected)" : ""
-              }`
-            );
+            if (isLoop || activePin.turnCount < smartPinTurns) {
+              selectedModel = activePin.modelId;
+              pinUsed = true;
+              decisionReason = "thread_pin";
+              pinTurnCount = activePin.turnCount + 1;
+              notes.push(
+                `Reused pinned model from thread: ${activePin.modelId}. Turn count: ${activePin.turnCount} -> ${pinTurnCount}${isLoop ? " (Agent Loop detected)" : ""
+                }`
+              );
+            } else {
+              notes.push(`Smart pin limit reached (${activePin.turnCount} >= ${smartPinTurns}). Re-evaluating router.`);
+              pinBypassReason = "smart_pin_turn_limit";
+            }
           } else {
             decisionReason = "pin_invalid";
             if (threadHasImage && !allowedCatalog.some(m => m.id === activePin!.modelId) && args.catalog.some(m => m.id === activePin!.modelId)) {

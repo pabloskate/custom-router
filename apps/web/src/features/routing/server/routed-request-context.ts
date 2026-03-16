@@ -29,5 +29,6 @@ export async function buildUserRouterConfig(args: {
     classifierApiKeyEnc: args.auth.classifierApiKeyEnc,
     routeTriggerKeywords: args.auth.routeTriggerKeywords,
     routingFrequency: args.auth.routingFrequency,
+    smartPinTurns: args.auth.smartPinTurns,
   };
 }

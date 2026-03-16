@@ -66,6 +66,7 @@ export interface RouterConfig {
   globalBlocklist: string[];
   routingInstructions?: string; // Legacy fallback when no profile-scoped instructions exist
   cooldownTurns?: number;
+  smartPinTurns?: number;
   phaseCompleteSignal?: string;
   routeTriggerKeywords?: string[];       // Custom keywords that trigger re-routing (additive with built-in $$route)
   routingFrequency?: RoutingFrequency;   // Controls when the classifier re-evaluates: every_message | smart | new_thread_only

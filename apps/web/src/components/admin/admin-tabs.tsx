@@ -158,6 +158,7 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
                   blocklist: ctx.user.blocklist ?? null,
                   routeTriggerKeywords: ctx.user.routeTriggerKeywords ?? null,
                   routingFrequency: ctx.user.routingFrequency ?? null,
+                  smartPinTurns: ctx.user.smartPinTurns ?? null,
                 }}
                 gatewayModelOptions={args.gatewayModelOptions}
                 onChange={(updated) => {

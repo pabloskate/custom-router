@@ -9,6 +9,7 @@ interface RouterConfigFields {
   blocklist: string[] | null;
   routeTriggerKeywords: string[] | null;
   routingFrequency: string | null;
+  smartPinTurns: number | null;
 }
 
 interface Props {
@@ -326,7 +327,7 @@ const FREQUENCY_OPTIONS = [
   {
     value: "smart",
     label: "Smart",
-    description: "Pick a model on the first message and stick with it for the conversation. Use a trigger keyword to force a model switch mid-conversation.",
+    description: "Pick a model, keep it pinned for a configurable number of turns, then re-evaluate. Trigger keywords can force an earlier switch.",
   },
   {
     value: "new_thread_only",
@@ -346,6 +347,7 @@ function ReroutingBehaviorSection({
   const activeFrequency = config.routingFrequency ?? "smart";
   const activeOption = FREQUENCY_OPTIONS.find((o) => o.value === activeFrequency) ?? FREQUENCY_OPTIONS[1];
   const tags = config.routeTriggerKeywords ?? [];
+  const smartPinTurns = config.smartPinTurns ?? 3;
 
   function addTag() {
     const value = tagInput.trim();
@@ -405,6 +407,27 @@ function ReroutingBehaviorSection({
           {activeOption.description}
         </span>
       </div>
+
+      {activeFrequency === "smart" && (
+        <div className="form-group" style={{ marginBottom: "var(--space-5)" }}>
+          <label className="form-label">Pin turns</label>
+          <input
+            className="input input--mono"
+            type="number"
+            min={1}
+            max={100}
+            step={1}
+            value={smartPinTurns}
+            onChange={(e) => {
+              const next = Number.parseInt(e.target.value, 10);
+              onChange({ ...config, smartPinTurns: Number.isFinite(next) && next >= 1 ? next : 1 });
+            }}
+          />
+          <span className="form-hint">
+            In Smart mode, keep the current model for this many turns before the router re-evaluates automatically.
+          </span>
+        </div>
+      )}
 
       {/* Trigger Keywords — only visible in "smart" mode */}
       {activeFrequency === "smart" && (

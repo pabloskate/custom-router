@@ -269,5 +269,6 @@ export const DEFAULT_ROUTER_CONFIG: RouterConfig = {
   version: "1",
   globalBlocklist: [],
   routingInstructions: DEFAULT_ROUTING_INSTRUCTIONS,
-  cooldownTurns: 3
+  cooldownTurns: 3,
+  smartPinTurns: 3
 };

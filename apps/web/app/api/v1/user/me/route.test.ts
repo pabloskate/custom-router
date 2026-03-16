@@ -48,6 +48,7 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
     profiles: null,
     routeTriggerKeywords: null,
     routingFrequency: null,
+    smartPinTurns: null,
     upstreamBaseUrl: null,
     upstreamApiKeyEnc: null,
     classifierBaseUrl: null,
@@ -113,6 +114,7 @@ describe("/api/v1/user/me route", () => {
     expect(body.user.profiles).toEqual([
       { id: "auto", name: "Auto", routingInstructions: "Use model/default for coding." },
     ]);
+    expect(body.user.smartPinTurns).toBeNull();
     expect(body.user.configAgentEnabled).toBeUndefined();
   });
 
@@ -143,6 +145,7 @@ describe("/api/v1/user/me route", () => {
           routing_instructions: null,
           custom_catalog: null,
           profiles: null,
+          smart_pin_turns: 5,
         }),
       })
     );
@@ -153,6 +156,8 @@ describe("/api/v1/user/me route", () => {
     expect(updateSql).not.toContain("config_agent_enabled");
     expect(updateSql).not.toContain("config_agent_orchestrator_model");
     expect(updateSql).not.toContain("config_agent_search_model");
+    const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
+    expect(bindArgs[9]).toBe(5);
   });
 
   it("PUT migrates legacy routing instructions into the auto profile", async () => {
@@ -182,6 +187,7 @@ describe("/api/v1/user/me route", () => {
           routing_instructions: "Use the cheapest model for simple tasks.",
           custom_catalog: null,
           profiles: [{ id: "auto", name: "Auto" }],
+          smart_pin_turns: 3,
         }),
       })
     );

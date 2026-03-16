@@ -17,6 +17,7 @@ const TEST_USER: UserInfo = {
   profiles: null,
   routeTriggerKeywords: null,
   routingFrequency: null,
+  smartPinTurns: null,
 };
 
 function createBaseTabs(registrationMode: "open" | "closed" | "invite" = "closed") {

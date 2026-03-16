@@ -96,6 +96,7 @@ export async function GET(request: Request): Promise<Response> {
                 profiles: auth.profiles,
                 routeTriggerKeywords: auth.routeTriggerKeywords,
                 routingFrequency: auth.routingFrequency,
+                smartPinTurns: auth.smartPinTurns,
             }
         });
     });
@@ -123,6 +124,9 @@ export async function PUT(request: Request): Promise<Response> {
             const validFrequencies = ["every_message", "smart", "new_thread_only"];
             const routingFrequency = typeof body.routing_frequency === "string" && validFrequencies.includes(body.routing_frequency)
                 ? body.routing_frequency
+                : null;
+            const smartPinTurns = typeof body.smart_pin_turns === "number" && Number.isInteger(body.smart_pin_turns) && body.smart_pin_turns >= 1 && body.smart_pin_turns <= 100
+                ? body.smart_pin_turns
                 : null;
             const clearClassifierApiKey = body.clear_classifier_api_key === true;
 
@@ -214,8 +218,9 @@ export async function PUT(request: Request): Promise<Response> {
                          profiles = ?7,
                          route_trigger_keywords = ?8,
                          routing_frequency = ?9,
-                         updated_at = ?10
-                     WHERE id = ?11`
+                         smart_pin_turns = ?10,
+                         updated_at = ?11
+                     WHERE id = ?12`
                 )
                 .bind(
                     preferredModels.length > 0 ? JSON.stringify(preferredModels) : null,
@@ -227,6 +232,7 @@ export async function PUT(request: Request): Promise<Response> {
                     profiles ? JSON.stringify(profiles) : null,
                     routeTriggerKeywords && routeTriggerKeywords.length > 0 ? JSON.stringify(routeTriggerKeywords) : null,
                     routingFrequency,
+                    smartPinTurns,
                     now,
                     auth.userId
                 )

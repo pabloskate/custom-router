@@ -108,6 +108,7 @@ export function useAdminData() {
       profiles: updatedUser.profiles,
       route_trigger_keywords: updatedUser.routeTriggerKeywords,
       routing_frequency: updatedUser.routingFrequency,
+      smart_pin_turns: updatedUser.smartPinTurns,
     };
 
     const response = await fetch("/api/v1/user/me", {

@@ -15,6 +15,7 @@ export type ServerUserInfo = {
   profiles: RouterProfile[] | null;
   routeTriggerKeywords: string[] | null;
   routingFrequency: string | null;
+  smartPinTurns: number | null;
 };
 
 export type UserInfo = Omit<ServerUserInfo, "routingInstructions">;
