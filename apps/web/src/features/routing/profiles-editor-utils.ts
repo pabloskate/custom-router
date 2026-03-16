@@ -37,12 +37,62 @@ function sanitizeOptionalString(value: string | null | undefined): string | unde
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function getGatewayModel(gateways: GatewayInfo[], gatewayId?: string, modelId?: string): GatewayModel | undefined {
-  if (!gatewayId || !modelId) {
+function modelBindingCandidates(modelId?: string): string[] {
+  const normalized = sanitizeOptionalString(modelId);
+  if (!normalized) {
+    return [];
+  }
+
+  const separatorIndex = normalized.indexOf(":");
+  if (separatorIndex <= 0) {
+    return [normalized];
+  }
+
+  const baseModelId = normalized.slice(0, separatorIndex);
+  return baseModelId && baseModelId !== normalized ? [normalized, baseModelId] : [normalized];
+}
+
+function resolveGatewayModelMatch(
+  gateways: GatewayInfo[],
+  args: { gatewayId?: string; modelId?: string },
+): { gatewayId: string; model: GatewayModel } | undefined {
+  const candidates = modelBindingCandidates(args.modelId);
+  if (candidates.length === 0) {
     return undefined;
   }
 
-  return gateways.find((gateway) => gateway.id === gatewayId)?.models.find((model) => model.id === modelId);
+  if (args.gatewayId) {
+    const gateway = gateways.find((candidate) => candidate.id === args.gatewayId);
+    if (!gateway) {
+      return undefined;
+    }
+
+    for (const modelId of candidates) {
+      const model = gateway.models.find((candidate) => candidate.id === modelId);
+      if (model) {
+        return { gatewayId: gateway.id, model };
+      }
+    }
+
+    return undefined;
+  }
+
+  const matches = gateways.flatMap((gateway) => {
+    for (const modelId of candidates) {
+      const model = gateway.models.find((candidate) => candidate.id === modelId);
+      if (model) {
+        return [{ gatewayId: gateway.id, model }];
+      }
+    }
+
+    return [];
+  });
+
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+export function getGatewayModel(gateways: GatewayInfo[], gatewayId?: string, modelId?: string): GatewayModel | undefined {
+  return resolveGatewayModelMatch(gateways, { gatewayId, modelId })?.model;
 }
 
 export function gatewayName(gateways: GatewayInfo[], gatewayId?: string): string {
@@ -95,8 +145,15 @@ export function sanitizeProfileSelections(profile: RouterProfile, gateways: Gate
 export function normalizeProfilesForEditor(profiles: RouterProfile[] | null | undefined, gateways: GatewayInfo[]): RouterProfile[] {
   return (profiles ?? []).map((profile) => {
     const normalized = normalizeProfile(profile);
+    const models = (normalized.models ?? []).map((model) => {
+      const resolved = resolveGatewayModelMatch(gateways, model);
+      const withGatewayId = resolved ? { ...model, gatewayId: resolved.gatewayId } : model;
+      return syncProfileModelFromGateway(gateways, withGatewayId);
+    });
+
     return sanitizeProfileSelections({
       ...normalized,
+      models,
       routingInstructions: typeof profile.routingInstructions === "string"
         ? profile.routingInstructions
         : normalized.routingInstructions,
@@ -210,15 +267,11 @@ export function createCustomModelDraft(gateways: GatewayInfo[]): CustomModelDraf
 }
 
 function createSuggestedProfileModel(gateways: GatewayInfo[], presetModel: GatewayModel): RouterProfileModel {
-  const matches = gateways.flatMap((gateway) =>
-    gateway.models
-      .filter((model) => model.id === presetModel.id)
-      .map((model) => ({ gatewayId: gateway.id, model })),
-  );
+  const match = resolveGatewayModelMatch(gateways, { modelId: presetModel.id });
 
-  if (matches.length === 1) {
+  if (match) {
     return {
-      gatewayId: matches[0]?.gatewayId,
+      gatewayId: match.gatewayId,
       modelId: presetModel.id,
       name: presetModel.name,
       modality: presetModel.modality,
