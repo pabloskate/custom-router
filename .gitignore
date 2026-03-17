@@ -10,3 +10,4 @@ coverage
 *.tsbuildinfo
 *.log
 security_best_practices_report.md
+prototype/
