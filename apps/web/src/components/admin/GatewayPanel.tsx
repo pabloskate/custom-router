@@ -12,7 +12,6 @@ import {
 } from "@/src/features/gateways/inventory";
 import {
   GATEWAY_RECOMMENDATIONS,
-  GATEWAY_SPEND_GUIDANCE,
   getDirectProviderPresets,
   getGatewayFormHint,
   getRecommendedGatewayPresets,
@@ -66,73 +65,17 @@ function IconTrash({ className }: { className?: string }) {
   );
 }
 
-function GatewayRecommendationsCard() {
-  return (
-    <div className="card">
-      <div className="card-header">
-        <div>
-          <h3>Recommended setup</h3>
-          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "var(--space-1)", marginBottom: 0 }}>
-            Connect a gateway that already aggregates models. CustomRouter handles routing logic; your gateway handles provider access, billing, and spend controls.
-          </p>
-        </div>
-      </div>
-      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "var(--space-3)",
-          }}
-        >
-          {GATEWAY_RECOMMENDATIONS.map((recommendation) => (
-            <div
-              key={recommendation.id}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-2)",
-                padding: "var(--space-4)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: "var(--radius-md)",
-                background: "var(--bg-surface)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-2)", flexWrap: "wrap" }}>
-                <strong>{recommendation.name}</strong>
-                <span className="badge badge--info">{recommendation.badge}</span>
-              </div>
-              <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-primary)" }}>
-                {recommendation.summary}
-              </p>
-              <p style={{ margin: 0, fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                {recommendation.setup}
-              </p>
-              {!recommendation.quickSetup ? (
-                <code className="code" style={{ fontSize: "0.75rem", wordBreak: "break-all" }}>
-                  {recommendation.baseUrlHint}
-                </code>
-              ) : null}
-            </div>
-          ))}
-        </div>
-        <p style={{ margin: 0, fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-          {GATEWAY_SPEND_GUIDANCE}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 interface GatewayFormProps {
   initial?: { name: string; baseUrl: string };
+  /** When set (create flow only), pre-selects this preset and fills name/base URL. */
+  initialPresetId?: string;
   isEdit?: boolean;
   saving?: boolean;
   onSave: (data: { name: string; baseUrl: string; apiKey: string }) => Promise<void>;
   onCancel: () => void;
 }
 
-function GatewayForm({ initial, isEdit, saving, onSave, onCancel }: GatewayFormProps) {
+function GatewayForm({ initial, initialPresetId, isEdit, saving, onSave, onCancel }: GatewayFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
@@ -141,6 +84,23 @@ function GatewayForm({ initial, isEdit, saving, onSave, onCancel }: GatewayFormP
 
   const isPresetSelected = selectedPreset !== "" && selectedPreset !== CUSTOM_PRESET_ID;
   const formHint = getGatewayFormHint(selectedPreset || undefined);
+
+  useEffect(() => {
+    if (isEdit || initialPresetId === undefined) {
+      return;
+    }
+    setSelectedPreset(initialPresetId);
+    if (initialPresetId === "" || initialPresetId === CUSTOM_PRESET_ID) {
+      setName("");
+      setBaseUrl("");
+      return;
+    }
+    const preset = GATEWAY_PRESETS.find((entry) => entry.id === initialPresetId);
+    if (preset) {
+      setName(preset.name);
+      setBaseUrl(preset.baseUrl);
+    }
+  }, [isEdit, initialPresetId]);
 
   function handlePresetChange(presetId: string) {
     setSelectedPreset(presetId);
@@ -711,7 +671,24 @@ export function GatewayPanel({ onStatus, onError }: Props) {
   const [gateways, setGateways] = useState<GatewayInfo[] | null>(null);
   const [primedManualGatewayId, setPrimedManualGatewayId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  /** Preset id (or CUSTOM_PRESET_ID) when opening the form from a tile; undefined = blank form. */
+  const [addFormPresetId, setAddFormPresetId] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
+
+  function closeAddGatewayForm() {
+    setShowAddForm(false);
+    setAddFormPresetId(undefined);
+  }
+
+  function openAddGatewayBlank() {
+    setAddFormPresetId(undefined);
+    setShowAddForm(true);
+  }
+
+  function openAddGatewayWithPreset(presetId: string) {
+    setAddFormPresetId(presetId);
+    setShowAddForm(true);
+  }
 
   async function load() {
     const response = await fetch("/api/v1/user/gateways", { cache: "no-store" });
@@ -762,7 +739,7 @@ export function GatewayPanel({ onStatus, onError }: Props) {
       }
 
       onStatus?.(statusMessage);
-      setShowAddForm(false);
+      closeAddGatewayForm();
       await load();
     } finally {
       setSaving(false);
@@ -777,60 +754,141 @@ export function GatewayPanel({ onStatus, onError }: Props) {
     );
   }
 
+  const hasGateways = gateways.length > 0;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-      <GatewayRecommendationsCard />
+      {!hasGateways ? (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h3>Connect a gateway</h3>
+              <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "var(--space-1)", marginBottom: 0 }}>
+                CustomRouter routes requests; your gateway or provider supplies models, keys, and billing.
+              </p>
+            </div>
+            <button
+              className="btn btn--primary btn--sm"
+              type="button"
+              onClick={() => (showAddForm ? closeAddGatewayForm() : openAddGatewayBlank())}
+            >
+              <IconPlus />
+              {showAddForm ? "Close" : "Add gateway"}
+            </button>
+          </div>
+          {showAddForm ? (
+            <div className="card-body">
+              <GatewayForm
+                key={addFormPresetId ?? "blank"}
+                initialPresetId={addFormPresetId}
+                saving={saving}
+                onSave={createGateway}
+                onCancel={closeAddGatewayForm}
+              />
+            </div>
+          ) : (
+            <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "var(--space-3)",
+                }}
+              >
+                {GATEWAY_RECOMMENDATIONS.map((recommendation) => (
+                  <button
+                    key={recommendation.id}
+                    type="button"
+                    className="gateway-choice-tile"
+                    onClick={() => openAddGatewayWithPreset(recommendation.presetId)}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-2)", flexWrap: "wrap", width: "100%" }}>
+                      <strong>{recommendation.name}</strong>
+                      <span className="badge badge--info">{recommendation.badge}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-muted)", lineHeight: 1.45 }}>
+                      {recommendation.summary}
+                    </p>
+                  </button>
+                ))}
+              </div>
+              <details style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "var(--space-4)" }}>
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    color: "var(--text-muted)",
+                    userSelect: "none",
+                  }}
+                >
+                  Don&apos;t have a gateway account?
+                </summary>
+                <div
+                  style={{
+                    marginTop: "var(--space-3)",
+                    fontSize: "0.875rem",
+                    color: "var(--text-muted)",
+                    lineHeight: 1.55,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--space-3)",
+                  }}
+                >
+                  <p style={{ margin: 0 }}>
+                    A gateway (or provider) exposes an OpenAI-compatible API: you get a base URL and API key. CustomRouter
+                    uses those to call models when routing.
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    If you are new to this, create an account with a provider such as OpenRouter, copy your key, then use
+                    the <strong>OpenRouter</strong> tile above or <strong>Add gateway</strong> and pick it from the list.
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    After saving, use <strong>Sync inventory</strong> on the gateway card. If <code className="code">/models</code>{" "}
+                    is not available, add model IDs manually from that card.
+                  </p>
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
+      ) : null}
 
-      <div className="card">
-        <div className="card-header">
+      {hasGateways
+        ? gateways.map((gateway) => (
+            <GatewayCard
+              key={gateway.id}
+              gateway={gateway}
+              openManualModel={gateway.id === primedManualGatewayId}
+              onRefresh={load}
+              onManualModelPrimed={() => setPrimedManualGatewayId((current) => (current === gateway.id ? null : current))}
+              onStatus={onStatus}
+              onError={onError}
+            />
+          ))
+        : null}
+
+      {hasGateways ? (
+        showAddForm ? (
+          <div className="card">
+            <div className="card-body">
+              <GatewayForm
+                key={addFormPresetId ?? "blank"}
+                initialPresetId={addFormPresetId}
+                saving={saving}
+                onSave={createGateway}
+                onCancel={closeAddGatewayForm}
+              />
+            </div>
+          </div>
+        ) : (
           <div>
-            <h3>Gateway credentials</h3>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "var(--space-1)", marginBottom: 0 }}>
-              Connect composite gateways like OpenRouter or Vercel AI Gateway, sync their model inventory, then build routing profiles on top.
-            </p>
+            <button className="btn btn--secondary btn--sm" type="button" onClick={() => openAddGatewayBlank()}>
+              <IconPlus />
+              Add gateway
+            </button>
           </div>
-          <button className="btn btn--primary btn--sm" type="button" onClick={() => setShowAddForm((current) => !current)}>
-            <IconPlus />
-            {showAddForm ? "Close" : "Add gateway"}
-          </button>
-        </div>
-        {showAddForm && (
-          <div className="card-body">
-            <GatewayForm saving={saving} onSave={createGateway} onCancel={() => setShowAddForm(false)} />
-          </div>
-        )}
-      </div>
-
-      {gateways.length === 0 && !showAddForm ? (
-        <div className="empty-state" style={{ padding: "var(--space-10) var(--space-6)" }}>
-          <div className="empty-state-title">Start with a composite gateway</div>
-          <p className="empty-state-desc">Use one gateway that exposes multiple models, then build routing profiles on top of that inventory.</p>
-          <div style={{ display: "grid", gap: "var(--space-2)", textAlign: "left", maxWidth: 460 }}>
-            <div>1. Create a gateway account.</div>
-            <div>2. Paste its base URL and API key here.</div>
-            <div>3. Sync models, then choose them in Routing Profiles.</div>
-          </div>
-          <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            If your gateway does not expose <code>/models</code>, add the model IDs manually after saving.
-          </p>
-          <button className="btn btn--primary" type="button" onClick={() => setShowAddForm(true)}>
-            <IconPlus />
-            Add your first gateway
-          </button>
-        </div>
-      ) : (
-        gateways.map((gateway) => (
-          <GatewayCard
-            key={gateway.id}
-            gateway={gateway}
-            openManualModel={gateway.id === primedManualGatewayId}
-            onRefresh={load}
-            onManualModelPrimed={() => setPrimedManualGatewayId((current) => (current === gateway.id ? null : current))}
-            onStatus={onStatus}
-            onError={onError}
-          />
-        ))
-      )}
+        )
+      ) : null}
     </div>
   );
 }

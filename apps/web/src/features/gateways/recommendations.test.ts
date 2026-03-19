@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   GATEWAY_RECOMMENDATIONS,
-  GATEWAY_SPEND_GUIDANCE,
   getDirectProviderPresets,
   getGatewayFormHint,
   getRecommendedGatewayPresets,
@@ -10,12 +9,14 @@ import {
 } from "@/src/features/gateways/recommendations";
 
 describe("gateway recommendations", () => {
-  it("keeps the recommended gateway order stable", () => {
-    expect(GATEWAY_RECOMMENDATIONS.map((entry) => entry.id)).toEqual([
-      "openrouter",
-      "vercel",
-      "cloudflare",
-    ]);
+  it("keeps the gateway tile order stable", () => {
+    expect(GATEWAY_RECOMMENDATIONS.map((entry) => entry.id)).toEqual(["openrouter", "vercel", "custom"]);
+  });
+
+  it("maps each tile to a valid preset id", () => {
+    for (const entry of GATEWAY_RECOMMENDATIONS) {
+      expect(entry.presetId).toBeTruthy();
+    }
   });
 
   it("limits quick setup presets to openrouter and vercel", () => {
@@ -31,13 +32,8 @@ describe("gateway recommendations", () => {
   });
 
   it("provides hints for default, custom, and direct provider setups", () => {
-    expect(getGatewayFormHint()).toContain("OpenRouter");
-    expect(getGatewayFormHint("__custom__")).toContain("Cloudflare AI Gateway");
+    expect(getGatewayFormHint()).toContain("dropdown");
+    expect(getGatewayFormHint("__custom__")).toContain("OpenAI-compatible");
     expect(getGatewayFormHint("openai")).toContain("Direct providers");
-  });
-
-  it("keeps spend guidance aligned with upstream billing expectations", () => {
-    expect(GATEWAY_SPEND_GUIDANCE).toContain("CustomRouter routes requests");
-    expect(GATEWAY_SPEND_GUIDANCE).toContain("spend caps");
   });
 });

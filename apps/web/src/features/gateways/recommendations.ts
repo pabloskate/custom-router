@@ -1,13 +1,12 @@
-import { GATEWAY_PRESETS, type GatewayPreset } from "@/src/lib/gateway-presets";
+import { CUSTOM_PRESET_ID, GATEWAY_PRESETS, type GatewayPreset } from "@/src/lib/gateway-presets";
 
 export interface GatewayRecommendation {
-  id: "openrouter" | "vercel" | "cloudflare";
+  id: "openrouter" | "vercel" | "custom";
   name: string;
   badge: string;
   summary: string;
-  setup: string;
-  quickSetup: boolean;
-  baseUrlHint: string;
+  /** Preset id from `GATEWAY_PRESETS` or `CUSTOM_PRESET_ID` for Other / Custom. */
+  presetId: string;
 }
 
 export const QUICK_SETUP_GATEWAY_PRESET_IDS = ["openrouter", "vercel"] as const;
@@ -27,38 +26,30 @@ function requirePreset(id: string): GatewayPreset {
 const OPENROUTER_PRESET = requirePreset("openrouter");
 const VERCEL_PRESET = requirePreset("vercel");
 
+/** Short tiles for the empty Gateways screen; each maps to a form preset. */
 export const GATEWAY_RECOMMENDATIONS: readonly GatewayRecommendation[] = [
   {
     id: "openrouter",
     name: OPENROUTER_PRESET.name,
-    badge: "Best default",
-    summary: "Fastest path to a multi-provider inventory with one key.",
-    setup: "Choose OpenRouter below, save the key, then sync models. Quick setup profiles work here today.",
-    quickSetup: true,
-    baseUrlHint: OPENROUTER_PRESET.baseUrl,
+    badge: "Recommended",
+    summary: "One key, many providers. Best default for routing profiles.",
+    presetId: "openrouter",
   },
   {
     id: "vercel",
     name: VERCEL_PRESET.name,
-    badge: "Best if you use Vercel",
-    summary: "Strong fit when you already want gateway-side budgets, fallbacks, and usage tracking in Vercel.",
-    setup: "Choose Vercel AI Gateway below, save the key, then sync models. Quick setup profiles work here today.",
-    quickSetup: true,
-    baseUrlHint: VERCEL_PRESET.baseUrl,
+    badge: "Vercel",
+    summary: "If you already run AI traffic through Vercel.",
+    presetId: "vercel",
   },
   {
-    id: "cloudflare",
-    name: "Cloudflare AI Gateway",
-    badge: "Best if you use Cloudflare",
-    summary: "Good fit for Cloudflare-native observability, caching, and rate limiting across providers.",
-    setup: "Use Other / Custom below and paste your full OpenAI-compatible Cloudflare endpoint.",
-    quickSetup: false,
-    baseUrlHint: "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/compat",
+    id: "custom",
+    name: "Other / Custom",
+    badge: "Advanced",
+    summary: "Cloudflare AI Gateway, a direct provider, or any OpenAI-compatible base URL.",
+    presetId: CUSTOM_PRESET_ID,
   },
 ];
-
-export const GATEWAY_SPEND_GUIDANCE =
-  "Set budget limits, spend alerts, and rate limits in your upstream gateway or provider account. CustomRouter routes requests, but it does not enforce upstream spend caps.";
 
 export function isQuickSetupGatewayPreset(presetId?: string | null): presetId is (typeof QUICK_SETUP_GATEWAY_PRESET_IDS)[number] {
   return typeof presetId === "string" && QUICK_SETUP_GATEWAY_PRESET_ID_SET.has(presetId);
@@ -74,7 +65,7 @@ export function getDirectProviderPresets(): GatewayPreset[] {
 
 export function getGatewayFormHint(presetId?: string): string {
   if (!presetId) {
-    return "Start with OpenRouter unless you already manage AI traffic in Vercel or Cloudflare.";
+    return "Choose a gateway from the dropdown, or Other / Custom to enter your own base URL.";
   }
 
   if (presetId === "openrouter") {
@@ -86,7 +77,7 @@ export function getGatewayFormHint(presetId?: string): string {
   }
 
   if (presetId === "__custom__") {
-    return "Use this for Cloudflare AI Gateway or any other custom OpenAI-compatible composite endpoint.";
+    return "Paste your OpenAI-compatible base URL (e.g. Cloudflare AI Gateway compat endpoint) and API key.";
   }
 
   return "Direct providers still work, but composite gateways are the best fit when you want cross-provider routing and upstream budget controls.";
