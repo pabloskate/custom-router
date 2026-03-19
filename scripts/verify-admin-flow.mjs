@@ -102,7 +102,7 @@ async function main() {
     }
 
     // 9. Check routing profile controls and autosave status.
-    // "Quick setup" is conditional on gateway inventory, so use the stable
+    // "Quick setup" is conditional on gateway models, so use the stable
     // empty-state/profile controls instead of requiring that card.
     await page.getByRole("button", { name: "Add profile" }).waitFor({ state: "visible", timeout: 5000 });
     await page.locator("text=All changes saved").first().waitFor({ state: "visible", timeout: 5000 });

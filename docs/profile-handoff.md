@@ -9,7 +9,7 @@ Generate valid profile JSON that can be pasted into this project as user profile
 The external agent should not need repo access. It only needs:
 
 - this document
-- the available gateway inventory you provide
+- the available gateway models you provide
 - the behavior you want each profile to have
 
 ## Output requirement
@@ -173,7 +173,7 @@ Example:
 ```
 
 - It does not have to be part of the profile's routed `models` pool.
-- It does need to exist in the available gateway inventory you provide to the external agent.
+- It does need to exist in the gateway models you provide to the external agent.
 
 ## Important distinction
 
@@ -200,7 +200,7 @@ When generating profile JSON:
 
 - Do not invent gateway IDs.
 - Do not invent model IDs.
-- Use only models from the gateway inventory provided in the prompt.
+- Use only models from the gateway models list provided in the prompt.
 - Keep profile IDs stable and descriptive.
 - Prefer 2 to 5 routed models per profile unless asked otherwise.
 - Include a fallback model whenever possible.
@@ -282,13 +282,13 @@ Generate [one profile / an array of profiles] using this schema:
 - description: optional
 - routingInstructions: recommended
 - defaultModel: "<gatewayId>::<modelId>", and it must point to a model inside that profile
-- classifierModel: "<gatewayId>::<modelId>", and it may point to any model in the provided gateway inventory
+- classifierModel: "<gatewayId>::<modelId>", and it may point to any model in the provided gateway models list
 - models: array of model objects with gatewayId and modelId
 
-Do not invent gateway IDs or model IDs. Use only the inventory below.
+Do not invent gateway IDs or model IDs. Use only the models below.
 
-Available gateway inventory:
-[PASTE INVENTORY HERE]
+Available gateway models:
+[PASTE MODELS HERE]
 
 Goal for the profile(s):
 [PASTE GOAL HERE]
@@ -299,7 +299,7 @@ Preferred style for routingInstructions:
 - default rule at the end
 ```
 
-## Optional gateway inventory format to give the external agent
+## Optional gateway models format to give the external agent
 
 This format works well:
 
@@ -328,5 +328,5 @@ Before using generated JSON, verify:
 - every profile has a `name`
 - no profile duplicates the same `modelId` internally
 - every `defaultModel` points to a model inside that same profile
-- every `classifierModel` exists in your real gateway inventory
+- every `classifierModel` exists in your real gateway models
 - the external agent returned raw JSON, not Markdown

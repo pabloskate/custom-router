@@ -20,9 +20,10 @@ describe("RouterConfigPanel", () => {
 
     expect(markup).toContain("Re-routing Behavior");
     expect(markup).toContain("All changes saved");
-    expect(markup).toContain("When to route");
+    expect(markup).toContain("Routing frequency");
     expect(markup).toContain("Trigger keywords");
-    expect(markup).toContain("How Smart Pinning Works");
+    expect(markup).toContain("Pins model for 1-6 turns, then re-evaluates");
+    expect(markup).toContain("Keywords at the start of a message force re-routing.");
   });
 
   it("renders autosave state text without a manual save button", () => {

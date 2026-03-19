@@ -108,7 +108,7 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
       label: "Gateways",
       section: "configure",
       title: "Gateways",
-      subtitle: "Register upstream API providers and keep their inventories in sync",
+      subtitle: "Register upstream API providers and keep their models in sync",
       order: 100,
       icon: IconGateway,
       render: (ctx: AdminExtensionContext) => (

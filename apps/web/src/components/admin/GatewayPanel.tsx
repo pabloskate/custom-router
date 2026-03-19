@@ -9,7 +9,7 @@ import {
   createManualGatewayModelDraft,
   mergeFetchedGatewayModels,
   type ManualGatewayModelDraft,
-} from "@/src/features/gateways/inventory";
+} from "@/src/features/gateways/gateway-models";
 import {
   GATEWAY_RECOMMENDATIONS,
   getDirectProviderPresets,
@@ -19,7 +19,7 @@ import {
 
 export type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 
-const INVENTORY_PREVIEW_LIMIT = 10;
+const MODELS_PREVIEW_LIMIT = 10;
 const RECOMMENDED_GATEWAY_PRESETS = getRecommendedGatewayPresets();
 const DIRECT_PROVIDER_PRESETS = getDirectProviderPresets();
 
@@ -206,7 +206,7 @@ async function saveGatewayModels(gatewayId: string, models: GatewayModel[]): Pro
   return { ok: true };
 }
 
-async function syncGatewayInventory(gateway: GatewayInfo): Promise<{
+async function syncGatewayModelsFromFetch(gateway: GatewayInfo): Promise<{
   error?: string;
   models: GatewayModel[];
   ok: boolean;
@@ -404,21 +404,21 @@ function ManualGatewayModelForm({
   );
 }
 
-function GatewayInventoryPreview({
+function GatewayModelsPreview({
   models,
   onAddManual,
 }: {
   models: GatewayModel[];
   onAddManual?: () => void;
 }) {
-  const [showInventory, setShowInventory] = useState(false);
+  const [showAllModels, setShowAllModels] = useState(false);
   const [query, setQuery] = useState("");
 
   if (models.length === 0) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
         <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-          No models yet. Try <strong>Sync inventory</strong>. If this gateway does not expose <code>/models</code>, add the first model manually so Routing Profiles can use it.
+          No models yet. Try <strong>Sync models</strong>. If this gateway does not expose <code>/models</code>, add the first model manually so Routing Profiles can use it.
         </p>
         {onAddManual ? (
           <div>
@@ -436,7 +436,7 @@ function GatewayInventoryPreview({
   const filteredModels = normalizedQuery
     ? models.filter((model) => model.id.toLowerCase().includes(normalizedQuery) || model.name?.toLowerCase().includes(normalizedQuery))
     : models;
-  const previewModels = models.slice(0, INVENTORY_PREVIEW_LIMIT);
+  const previewModels = models.slice(0, MODELS_PREVIEW_LIMIT);
   const hiddenCount = Math.max(models.length - previewModels.length, 0);
 
   return (
@@ -451,14 +451,14 @@ function GatewayInventoryPreview({
         }}
       >
         <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-          This inventory powers Routing Profiles. Choose models there; keep this list lean here.
+          These models power Routing Profiles. Choose bindings there; keep this list lean here.
         </p>
-        <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowInventory((current) => !current)}>
-          {showInventory ? "Hide inventory" : `View inventory (${models.length})`}
+        <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowAllModels((current) => !current)}>
+          {showAllModels ? "Hide models" : `View models (${models.length})`}
         </button>
       </div>
 
-      {!showInventory ? (
+      {!showAllModels ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
           {previewModels.map((model) => (
             <span key={model.id} className="badge badge--info" title={model.name}>
@@ -589,10 +589,10 @@ function GatewayCard({
   async function syncModels() {
     setSyncing(true);
     try {
-      const result = await syncGatewayInventory(gateway);
+      const result = await syncGatewayModelsFromFetch(gateway);
       if (!result.ok) {
         setManualModelOpen(true);
-        onError?.(`${result.error ?? "Failed to sync gateway inventory."} Add the model manually below if this gateway does not expose /models.`);
+        onError?.(`${result.error ?? "Failed to sync gateway models."} Add the model manually below if this gateway does not expose /models.`);
         return;
       }
 
@@ -600,7 +600,7 @@ function GatewayCard({
         setManualModelOpen(true);
         onStatus?.("No models were returned. Add your first model manually below to use this gateway in Routing Profiles.");
       } else {
-        onStatus?.("Gateway inventory synced.");
+        onStatus?.("Gateway models synced.");
       }
       await onRefresh();
     } finally {
@@ -621,7 +621,7 @@ function GatewayCard({
           <span className="badge badge--info">{gateway.models.length} synced models</span>
           <button className="btn btn--secondary btn--sm" type="button" onClick={() => void syncModels()} disabled={syncing}>
             <IconDownload />
-            {syncing ? "Syncing…" : "Sync inventory"}
+            {syncing ? "Syncing…" : "Sync models"}
           </button>
           <button className="btn btn--secondary btn--sm" type="button" onClick={() => setManualModelOpen((current) => !current)}>
             <IconPlus />
@@ -649,8 +649,8 @@ function GatewayCard({
         )}
 
         <div>
-          <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>Synced inventory</div>
-          <GatewayInventoryPreview models={gateway.models} onAddManual={() => setManualModelOpen(true)} />
+          <div style={{ fontWeight: 600, marginBottom: "var(--space-2)" }}>Synced models</div>
+          <GatewayModelsPreview models={gateway.models} onAddManual={() => setManualModelOpen(true)} />
         </div>
 
         {manualModelOpen ? (
@@ -724,7 +724,7 @@ export function GatewayPanel({ onStatus, onError }: Props) {
 
       let statusMessage = "Gateway added.";
       if (payload.gateway?.id) {
-        const syncResult = await syncGatewayInventory({
+        const syncResult = await syncGatewayModelsFromFetch({
           ...payload.gateway,
           models: payload.gateway.models ?? [],
         });
@@ -734,7 +734,7 @@ export function GatewayPanel({ onStatus, onError }: Props) {
           setPrimedManualGatewayId(null);
         } else {
           setPrimedManualGatewayId(payload.gateway.id);
-          statusMessage = "Gateway added. Automatic inventory sync was not available, so add your first model manually below.";
+          statusMessage = "Gateway added. Automatic model sync was not available, so add your first model manually below.";
         }
       }
 
@@ -843,7 +843,7 @@ export function GatewayPanel({ onStatus, onError }: Props) {
                     the <strong>OpenRouter</strong> tile above or <strong>Add gateway</strong> and pick it from the list.
                   </p>
                   <p style={{ margin: 0 }}>
-                    After saving, use <strong>Sync inventory</strong> on the gateway card. If <code className="code">/models</code>{" "}
+                    After saving, use <strong>Sync models</strong> on the gateway card. If <code className="code">/models</code>{" "}
                     is not available, add model IDs manually from that card.
                   </p>
                 </div>

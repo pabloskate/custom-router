@@ -18,6 +18,7 @@ import {
   summarizeInstructions,
 } from "@/src/features/routing/profiles-editor-utils";
 import type { RoutingPreset } from "@/src/lib/routing-presets";
+import { SearchableSelect } from "@/src/components/ui/SearchableSelect";
 
 import {
   type RoutingProfilesEditorProps,
@@ -215,6 +216,32 @@ function autosaveMeta(state: ReturnType<typeof useRoutingProfilesEditor>["autosa
   }
 
   return { label: "All changes saved", tone: "success" as const, icon: <IconCheck /> };
+}
+
+function modalityOptions(gateways: GatewayInfo[], selectedValues: Array<string | undefined>): string[] {
+  const values = new Set<string>(["text->text", "text,image->text"]);
+  for (const gateway of gateways) {
+    for (const model of gateway.models) {
+      const modality = model.modality?.trim();
+      if (modality) {
+        values.add(modality);
+      }
+    }
+  }
+
+  for (const selectedValue of selectedValues) {
+    const modality = selectedValue?.trim();
+    if (modality) {
+      values.add(modality);
+    }
+  }
+
+  const sorted = Array.from(values).sort((a, b) => a.localeCompare(b));
+  if (!sorted.includes("text->text")) {
+    return sorted;
+  }
+
+  return ["text->text", ...sorted.filter((value) => value !== "text->text")];
 }
 
 function ProfileCard({
@@ -426,16 +453,12 @@ function ProfileCard({
             </label>
             <label className="form-group">
               <span className="form-label">Router model</span>
-              <select
-                className="input"
+              <SearchableSelect
+                options={classifierOptions}
                 value={profile.classifierModel ?? ""}
-                onChange={(event) => editor.updateClassifierModel(profile.id, event.target.value)}
-              >
-                <option value="">Select a router model</option>
-                {classifierOptions.map((option) => (
-                  <option key={option.key} value={option.key}>{option.label}</option>
-                ))}
-              </select>
+                onChange={(value) => editor.updateClassifierModel(profile.id, value)}
+                placeholder="Search router models..."
+              />
             </label>
           </div>
 
@@ -479,6 +502,10 @@ export function RoutingProfilesEditor(props: RoutingProfilesEditorProps) {
     : undefined;
   const currentGateway = props.gateways.find((gateway) => gateway.id === editor.modelEditor.draft.gatewayId);
   const modelOptions = availableGatewayModels(currentGateway, modelEditorProfile ?? { id: "", name: "", models: [] }, editor.modelEditor.rowIndex ?? undefined);
+  const availableModalities = modalityOptions(props.gateways, [
+    editor.modelEditor.draft.modality,
+    editor.customModel.draft.modality,
+  ]);
 
   return (
     <div className="routing-profiles">
@@ -771,14 +798,19 @@ export function RoutingProfilesEditor(props: RoutingProfilesEditorProps) {
                   </label>
                   <label className="form-group">
                     <span className="form-label">Modality</span>
-                    <input
-                      className="input input--mono"
+                    <select
+                      className="input"
                       value={editor.modelEditor.draft.modality}
                       onChange={(event) => editor.setModelEditor((current) => ({
                         ...current,
                         draft: { ...current.draft, modality: event.target.value },
                       }))}
-                    />
+                    >
+                      <option value="">Use gateway modality</option>
+                      {availableModalities.map((modality) => (
+                        <option key={modality} value={modality}>{modality}</option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                 <label className="form-group">
@@ -818,7 +850,7 @@ export function RoutingProfilesEditor(props: RoutingProfilesEditorProps) {
       {editor.customModel.open ? (
         <ModalShell
           title="Create custom model"
-          description="Add a model to a gateway inventory, then attach it to this routing profile."
+          description="Add a model to a gateway (sync or manual), then attach it to this routing profile."
           onClose={editor.closeCustomModel}
         >
           <div className="routing-profiles-modal__body">
@@ -871,14 +903,18 @@ export function RoutingProfilesEditor(props: RoutingProfilesEditorProps) {
             <div className="routing-profiles-modal__grid">
               <label className="form-group">
                 <span className="form-label">Modality</span>
-                <input
-                  className="input input--mono"
+                <select
+                  className="input"
                   value={editor.customModel.draft.modality}
                   onChange={(event) => editor.setCustomModel((current) => ({
                     ...current,
                     draft: { ...current.draft, modality: event.target.value },
                   }))}
-                />
+                >
+                  {availableModalities.map((modality) => (
+                    <option key={modality} value={modality}>{modality}</option>
+                  ))}
+                </select>
               </label>
               <label className="form-group">
                 <span className="form-label">Reasoning preset</span>

@@ -4,10 +4,10 @@ import {
   buildManualGatewayModel,
   createManualGatewayModelDraft,
   mergeFetchedGatewayModels,
-} from "@/src/features/gateways/inventory";
+} from "@/src/features/gateways/gateway-models";
 
-describe("gateway inventory helpers", () => {
-  it("preserves existing manual metadata when fetched inventory overlaps", () => {
+describe("gateway model merge helpers", () => {
+  it("preserves existing manual metadata when fetched models overlap", () => {
     const models = mergeFetchedGatewayModels(
       [
         {
