@@ -247,6 +247,7 @@ export interface RouteDecision {
   isContinuation: boolean;
   pinUsed: boolean;
   degraded: boolean;
+  classifierAccepted?: boolean;
   explanation: RoutingExplanation;
   fallbackModels: string[];
   shouldPin: boolean;

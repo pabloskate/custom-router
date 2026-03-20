@@ -19,6 +19,7 @@ export function createPassthroughDecision(args: {
     isContinuation: args.isContinuation,
     pinUsed: false,
     degraded: false,
+    classifierAccepted: false,
     fallbackModels: [],
     shouldPin: false,
     explanation: {
@@ -142,6 +143,7 @@ export function buildRouteDecision(args: {
     isContinuation: args.isContinuation,
     pinUsed: args.pinState.pinUsed,
     degraded: false,
+    classifierAccepted: args.telemetry.classifierAccepted,
     fallbackModels,
     shouldPin: args.pinState.shouldPin,
     pinTurnCount: args.pinState.pinTurnCount,

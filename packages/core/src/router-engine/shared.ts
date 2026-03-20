@@ -87,6 +87,7 @@ export interface PinEvaluation {
 
 export interface ResolutionTelemetry {
   confidence: number;
+  classifierAccepted: boolean;
   signals: string[];
   pinRerouteAfterTurns?: number;
   pinBudgetSource?: "classifier" | "default";

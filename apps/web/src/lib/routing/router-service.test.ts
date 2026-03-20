@@ -53,6 +53,7 @@ function createRepository() {
   };
 
   return {
+    pinStore,
     getConfig: vi.fn(async () => config),
     getCatalog: vi.fn(async () => []),
     getPinStore: vi.fn(() => pinStore),
@@ -616,7 +617,11 @@ describe("routeAndProxy", () => {
       output: Array<{ content: Array<{ text: string }> }>;
     };
     expect(body.output[0]?.content[0]?.text).toBe("ok");
-    expect(result.response.headers.get("x-router-model-selected")).toBeNull();
+    expect(result.response.headers.get("x-router-model-selected")).toBe("model/alpha");
+    expect(result.response.headers.get("x-router-score-version")).toBe("1.0");
+    expect(result.response.headers.get("x-router-request-id")).toBe("router_test_request");
+    expect(result.response.headers.get("x-router-confidence")).toBe("0.91");
+    expect(result.response.headers.get("x-router-degraded")).toBeNull();
   });
 
   it("returns smart pin inspect fields during dry-run routing", async () => {
@@ -681,6 +686,7 @@ describe("routeAndProxy", () => {
     });
 
     const body = await result.response.json() as {
+      classificationConfidence?: number;
       selectedFamily?: string;
       selectedEffort?: string;
       pinRerouteAfterTurns?: number;
@@ -688,12 +694,279 @@ describe("routeAndProxy", () => {
       pinConsumedUserTurns?: number;
       isAgentLoop?: boolean;
     };
+    expect(body.classificationConfidence).toBe(0.91);
     expect(body.selectedFamily).toBe("model/alpha");
     expect(body.selectedEffort).toBe("low");
     expect(body.pinRerouteAfterTurns).toBe(2);
     expect(body.pinBudgetSource).toBe("classifier");
     expect(body.pinConsumedUserTurns).toBe(0);
     expect(body.isAgentLoop).toBe(false);
+  });
+
+  it("omits inspect confidence for passthrough requests", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      dryRun: true,
+      body: {
+        model: "auto",
+        messages: [{ role: "user", content: "route this" }],
+      },
+      userConfig: {
+        profiles: [
+          {
+            id: "planning-backend",
+            name: "Planning Backend",
+            models: [
+              { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
+            ],
+            defaultModel: key("gw_default", "model/alpha"),
+            classifierModel: key("gw_default", "model/alpha"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [{ id: "auto", name: "Auto Model" }],
+          },
+        ],
+      },
+    });
+
+    const body = await result.response.json() as {
+      classificationConfidence?: number;
+      selectedModel: string;
+    };
+
+    expect(body.selectedModel).toBe("auto");
+    expect(body.classificationConfidence).toBeUndefined();
+  });
+
+  it("omits inspect confidence when a thread pin is reused", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    vi.mocked(repository.pinStore.get).mockResolvedValue({
+      threadKey: "thread:pinned",
+      modelId: "model/alpha",
+      requestId: "pin_req",
+      pinnedAt: "2026-03-20T00:00:00.000Z",
+      expiresAt: "2026-03-21T00:00:00.000Z",
+      turnCount: 0,
+    });
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      dryRun: true,
+      body: {
+        model: "planning-backend",
+        messages: [
+          { role: "assistant", content: "Previous answer" },
+          { role: "user", content: "Continue" },
+        ],
+      },
+      userConfig: {
+        profiles: [
+          {
+            id: "planning-backend", name: "Planning Backend",
+            models: [
+              { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
+              { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
+            ],
+            defaultModel: key("gw_default", "model/alpha"),
+            classifierModel: key("gw_default", "model/classifier"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [
+              { id: "model/classifier", name: "Classifier" },
+              { id: "model/alpha", name: "Alpha" },
+            ],
+          },
+        ],
+      },
+    });
+
+    const body = await result.response.json() as {
+      classificationConfidence?: number;
+      classifierInvoked: boolean;
+      pinUsed: boolean;
+    };
+
+    expect(body.classifierInvoked).toBe(false);
+    expect(body.pinUsed).toBe(true);
+    expect(body.classificationConfidence).toBeUndefined();
+  });
+
+  it("omits live confidence headers when the classifier is not invoked", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    vi.mocked(repository.pinStore.get).mockResolvedValue({
+      threadKey: "thread:pinned",
+      modelId: "model/alpha",
+      requestId: "pin_req",
+      pinnedAt: "2026-03-20T00:00:00.000Z",
+      expiresAt: "2026-03-21T00:00:00.000Z",
+      turnCount: 0,
+    });
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+    upstreamMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      response: new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    });
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      body: {
+        model: "planning-backend",
+        messages: [
+          { role: "assistant", content: "Previous answer" },
+          { role: "user", content: "Continue" },
+        ],
+      },
+      userConfig: {
+        profiles: [
+          {
+            id: "planning-backend", name: "Planning Backend",
+            models: [
+              { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
+              { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
+            ],
+            defaultModel: key("gw_default", "model/alpha"),
+            classifierModel: key("gw_default", "model/classifier"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [
+              { id: "model/classifier", name: "Classifier" },
+              { id: "model/alpha", name: "Alpha" },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.response.headers.get("x-router-model-selected")).toBe("model/alpha");
+    expect(result.response.headers.get("x-router-request-id")).toBe("router_test_request");
+    expect(result.response.headers.get("x-router-confidence")).toBeNull();
+    expect(result.response.headers.get("x-router-degraded")).toBeNull();
+  });
+
+  it("omits confidence headers and marks degraded responses on fallback-after-failure", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+    classifierMock.mockResolvedValue({
+      selectedModel: "model/alpha",
+      confidence: 0.88,
+      signals: ["frontier_classification"],
+    });
+    upstreamMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        errorBody: "alpha failed",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        response: new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      });
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      body: {
+        model: "planning-backend",
+        messages: [{ role: "user", content: "route this" }],
+      },
+      userConfig: {
+        profiles: [
+          {
+            id: "planning-backend", name: "Planning Backend",
+            models: [
+              { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
+              { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
+              { gatewayId: "gw_default", modelId: "model/beta", name: "Beta" },
+            ],
+            defaultModel: key("gw_default", "model/beta"),
+            classifierModel: key("gw_default", "model/classifier"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [
+              { id: "model/classifier", name: "Classifier" },
+              { id: "model/alpha", name: "Alpha" },
+              { id: "model/beta", name: "Beta" },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.get("x-router-model-selected")).toBe("model/beta");
+    expect(result.response.headers.get("x-router-score-version")).toBe("1.0");
+    expect(result.response.headers.get("x-router-request-id")).toBe("router_test_request");
+    expect(result.response.headers.get("x-router-confidence")).toBeNull();
+    expect(result.response.headers.get("x-router-degraded")).toBe("true");
   });
 
   it("passes the selected model through unchanged for OpenRouter gateways", async () => {

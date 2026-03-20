@@ -16,7 +16,7 @@
 import { RouterEngine } from "@custom-router/core";
 
 import { decryptByokSecret, resolveByokEncryptionSecret } from "../auth/byok-crypto";
-import { json } from "../infra/http";
+import { attachRouterHeaders, json } from "../infra/http";
 import { requestId as makeRequestId } from "../infra/request-id";
 import { getRuntimeBindings } from "../infra/runtime-bindings";
 import {
@@ -47,6 +47,19 @@ export type {
   RouteInspectResult,
   UserRouterConfig,
 } from "@/src/features/routing/server/router-service-types";
+
+function getClassifierConfidence(args: {
+  classifierInvoked: boolean;
+  classifierAccepted?: boolean;
+  classificationConfidence: number;
+  usedFallbackAttempt?: boolean;
+}): number | undefined {
+  if (!args.classifierInvoked || !args.classifierAccepted || args.usedFallbackAttempt) {
+    return undefined;
+  }
+
+  return args.classificationConfidence;
+}
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
@@ -216,6 +229,11 @@ export async function routeAndProxy(args: {
     const inspectResult: RouteInspectResult = {
       requestId,
       selectedModel: decision.selectedModel,
+      classificationConfidence: getClassifierConfidence({
+        classifierInvoked,
+        classifierAccepted: decision.classifierAccepted,
+        classificationConfidence: decision.explanation.classificationConfidence,
+      }),
       selectedFamily: decision.selectedFamily,
       previousFamily: decision.previousFamily,
       selectedEffort: decision.selectedEffort,
@@ -309,9 +327,24 @@ export async function routeAndProxy(args: {
     });
     persistExplanation(repository, explanation);
 
+    const response = decision.mode === "routed"
+      ? attachRouterHeaders(result.response, {
+          model: attempt.modelId,
+          catalogVersion: decision.catalogVersion,
+          requestId,
+          degraded: decision.degraded || index > 0,
+          confidence: getClassifierConfidence({
+            classifierInvoked,
+            classifierAccepted: decision.classifierAccepted,
+            classificationConfidence: decision.explanation.classificationConfidence,
+            usedFallbackAttempt: index > 0,
+          }),
+        })
+      : result.response;
+
     return {
       requestId,
-      response: result.response,
+      response,
     };
   }
 

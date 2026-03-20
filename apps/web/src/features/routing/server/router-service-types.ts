@@ -17,6 +17,7 @@ export interface RouteAndProxyResult {
 export interface RouteInspectResult {
   requestId: string;
   selectedModel: string;
+  classificationConfidence?: number;
   selectedFamily?: string;
   previousFamily?: string;
   selectedEffort?: ReasoningEffort;

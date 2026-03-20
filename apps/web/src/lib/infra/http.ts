@@ -49,6 +49,7 @@ export function attachRouterHeaders(
     catalogVersion: string;
     requestId: string;
     degraded: boolean;
+    confidence?: number;
   }
 ): Response {
   const nextHeaders = new Headers(response.headers);
@@ -58,6 +59,14 @@ export function attachRouterHeaders(
 
   if (metadata.degraded) {
     nextHeaders.set("x-router-degraded", "true");
+  } else {
+    nextHeaders.delete("x-router-degraded");
+  }
+
+  if (typeof metadata.confidence === "number" && Number.isFinite(metadata.confidence)) {
+    nextHeaders.set("x-router-confidence", String(metadata.confidence));
+  } else {
+    nextHeaders.delete("x-router-confidence");
   }
 
   return new Response(response.body, {

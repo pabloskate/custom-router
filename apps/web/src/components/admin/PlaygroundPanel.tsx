@@ -12,9 +12,13 @@
 // - Request preview for debugging
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { RouterProfile } from "@custom-router/core";
 import type { RouteInspectResult } from "@/src/features/routing/contracts";
+import {
+  formatRoutingConfidence,
+  readRoutedResponseMetadata,
+} from "@/src/features/playground/routing-metadata";
 
 type RouteResult = RouteInspectResult;
 
@@ -24,6 +28,7 @@ type Message = {
   content: string;
   model?: string;
   routedModel?: string;
+  routingConfidence?: number;
   requestTime?: number;
   routeResult?: RouteResult;
 };
@@ -136,9 +141,10 @@ function DECISION_REASON_LABEL(reason: string): string {
   return labels[reason] ?? reason;
 }
 
-function RouteCard({ result, latencyMs }: { result: RouteResult; latencyMs?: number }) {
+export function RouteCard({ result, latencyMs }: { result: RouteResult; latencyMs?: number }) {
   const ms = result.latencyMs ?? latencyMs;
   const isPinned = result.isContinuation || result.pinUsed;
+  const formattedConfidence = formatRoutingConfidence(result.classificationConfidence);
   const pinBudgetLabel =
     typeof result.pinRerouteAfterTurns === "number"
       ? `${result.pinRerouteAfterTurns} future user turn${result.pinRerouteAfterTurns === 1 ? "" : "s"}`
@@ -218,6 +224,15 @@ function RouteCard({ result, latencyMs }: { result: RouteResult; latencyMs?: num
           </>
         )}
 
+        {formattedConfidence && (
+          <>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Confidence</span>
+            <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+              {formattedConfidence}
+            </span>
+          </>
+        )}
+
         {isPinned && (
           <>
             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Thread</span>
@@ -280,7 +295,7 @@ function RouteCard({ result, latencyMs }: { result: RouteResult; latencyMs?: num
   );
 }
 
-function MessageBubble({
+export function MessageBubble({
   message,
   isStreaming,
 }: {
@@ -288,6 +303,7 @@ function MessageBubble({
   isStreaming?: boolean;
 }) {
   const isUser = message.role === "user";
+  const formattedConfidence = formatRoutingConfidence(message.routingConfidence);
 
   if (message.routeResult) {
     return (
@@ -315,6 +331,12 @@ function MessageBubble({
           <span className="message-model">
             <IconModel />
             {message.routedModel}
+          </span>
+        )}
+
+        {formattedConfidence && (
+          <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontFamily: "var(--font-mono, monospace)" }}>
+            confidence {formattedConfidence}
           </span>
         )}
 
@@ -516,6 +538,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ model, messages: conversationMessages, stream: streaming }),
         });
+        const routedResponseMetadata = readRoutedResponseMetadata(response.headers);
 
         if (!response.ok) {
           const payload = await readResponsePayload(response);
@@ -530,7 +553,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let fullContent = "";
-          let routedModel: string | undefined;
+          let routedModel = routedResponseMetadata.routedModel;
 
           while (true) {
             const { done, value } = await reader.read();
@@ -563,6 +586,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
             content: fullContent,
             model,
             routedModel,
+            routingConfidence: routedResponseMetadata.classificationConfidence,
             requestTime: Date.now() - startTime,
           };
           setMessages((prev) => [...prev, assistantMessage]);
@@ -582,7 +606,8 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
             role: "assistant",
             content: data.choices?.[0]?.message?.content || "",
             model,
-            routedModel: data.model,
+            routedModel: routedResponseMetadata.routedModel ?? data.model,
+            routingConfidence: routedResponseMetadata.classificationConfidence,
             requestTime: Date.now() - startTime,
           };
           setMessages((prev) => [...prev, assistantMessage]);

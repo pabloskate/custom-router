@@ -214,7 +214,17 @@ Authenticated by API key or browser session.
 ### Response behavior
 
 On routed success responses, the upstream provider payload is forwarded as-is.
-For diagnostic metadata, use `/api/v1/router/inspect` or stored explanations.
+Diagnostic headers may also be attached on routed success responses:
+
+- `x-router-model-selected`
+- `x-router-score-version`
+- `x-router-request-id`
+- `x-router-degraded` when a fallback model was served after live failure
+- `x-router-confidence` when the final served model came directly from a real classifier decision
+
+`x-router-confidence` is a heuristic `0-1` classifier score, not a guarantee. It is omitted for passthrough requests, reused pins, default fallback routing, and live failover-selected fallback responses.
+
+For richer diagnostic metadata, use `/api/v1/router/inspect` or stored explanations.
 
 #### `GET /api/v1/models`
 
@@ -234,6 +244,7 @@ Same auth as routing endpoints.
 Returns routing decision metadata without proxying upstream:
 
 - `selectedModel`
+- `classificationConfidence` when a real classifier decision was used
 - `fallbackModels`
 - `decisionReason`
 - `classifierInvoked`

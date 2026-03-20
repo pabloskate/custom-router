@@ -36,6 +36,7 @@ function buildFallbackResult(args: {
       selection: buildEmptySelection(args.previousFamily),
       telemetry: {
         confidence: 0.5,
+        classifierAccepted: false,
         signals: [],
         pinRerouteAfterTurns: undefined,
         pinBudgetSource: undefined,
@@ -57,6 +58,7 @@ function buildFallbackResult(args: {
     }),
     telemetry: {
       confidence: 0.5,
+      classifierAccepted: false,
       signals: [],
       pinRerouteAfterTurns: args.defaultSmartPinTurns,
       pinBudgetSource: "default",
@@ -246,6 +248,7 @@ export async function resolveClassifierSelection(args: {
       },
       telemetry: {
         confidence: result.confidence,
+        classifierAccepted: true,
         signals: result.signals,
         pinRerouteAfterTurns: result.rerouteAfterTurns ?? args.defaultSmartPinTurns,
         pinBudgetSource: result.rerouteAfterTurns ? "classifier" : "default",

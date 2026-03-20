@@ -139,6 +139,7 @@ export class RouterEngine {
     let selection = pinState.selection;
     let telemetry: ResolutionTelemetry = {
       confidence: 0.5,
+      classifierAccepted: false,
       signals: [],
       pinRerouteAfterTurns: pinState.pinRerouteAfterTurns,
       pinBudgetSource: pinState.pinBudgetSource,
