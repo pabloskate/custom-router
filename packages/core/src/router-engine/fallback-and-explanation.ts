@@ -70,16 +70,22 @@ export function buildFallbackSelection(args: {
 export function applyVisionCapabilityOverride(args: {
   selection: ResolvedSelection;
   allowedCatalog: CatalogItem[];
-  threadHasImage: boolean;
+  hasImageInput: boolean;
+  requiresImageOutput: boolean;
 }): { selection: ResolvedSelection; notes: string[] } {
-  if (!args.threadHasImage || !args.selection.selectedModel || args.allowedCatalog.some((item) => item.id === args.selection.selectedModel)) {
+  const requestNeedsImageCapabilities = args.hasImageInput || args.requiresImageOutput;
+  if (
+    !requestNeedsImageCapabilities
+    || !args.selection.selectedModel
+    || args.allowedCatalog.some((item) => item.id === args.selection.selectedModel)
+  ) {
     return { selection: args.selection, notes: [] };
   }
 
   if (args.allowedCatalog.length === 0) {
     return {
       selection: args.selection,
-      notes: ["Warning: Thread contains image but no vision models found in catalog."],
+      notes: ["Warning: Request needs image-capable routing but no compatible models were found in the catalog."],
     };
   }
 
@@ -97,9 +103,13 @@ export function applyVisionCapabilityOverride(args: {
       switchMode: args.selection.previousFamily && args.selection.previousFamily === selectedFamily
         ? "shift_within_family"
         : "switch_family",
-      switchReason: "vision_capability_override",
+      switchReason: "image_capability_override",
     },
-    notes: [`Thread has an image but selected model doesn't support vision. Forcing vision model: ${selectedModel}`],
+    notes: [
+      args.requiresImageOutput
+        ? `Request requires image output but selected model cannot generate images. Forcing image-capable model: ${selectedModel}`
+        : `Request includes image input but selected model does not support vision. Forcing image-capable model: ${selectedModel}`,
+    ],
   };
 }
 

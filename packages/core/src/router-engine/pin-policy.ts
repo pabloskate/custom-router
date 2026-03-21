@@ -23,17 +23,21 @@ function buildPinSelection(args: {
 
 function describeInvalidPin(args: {
   activePin: ThreadPin;
-  threadHasImage: boolean;
+  hasImageInput: boolean;
+  requiresImageOutput: boolean;
   allowedCatalog: CatalogItem[];
   fullCatalog: CatalogItem[];
 }): { note: string; bypassReason: string } {
   if (
-    args.threadHasImage
+    (args.hasImageInput || args.requiresImageOutput)
     && !args.allowedCatalog.some((model) => model.id === args.activePin.modelId)
     && args.fullCatalog.some((model) => model.id === args.activePin.modelId)
   ) {
+    const requestNeed = args.requiresImageOutput
+      ? (args.hasImageInput ? "image input/output" : "image output")
+      : "image input";
     return {
-      note: `Image detected but pinned model (${args.activePin.modelId}) does not support vision. Breaking cache lock.`,
+      note: `Request needs ${requestNeed}, but pinned model (${args.activePin.modelId}) is not compatible. Breaking cache lock.`,
       bypassReason: "pin_invalid_image",
     };
   }
@@ -54,7 +58,8 @@ export async function resolvePinPolicy(args: {
   defaultSmartPinTurns: number;
   allowedCatalog: CatalogItem[];
   fullCatalog: CatalogItem[];
-  threadHasImage: boolean;
+  hasImageInput: boolean;
+  requiresImageOutput: boolean;
 }): Promise<PinEvaluation> {
   const notes: string[] = [];
   let activePin: ThreadPin | null = null;
@@ -100,7 +105,8 @@ export async function resolvePinPolicy(args: {
           decisionReason = "pin_invalid";
           const invalid = describeInvalidPin({
             activePin,
-            threadHasImage: args.threadHasImage,
+            hasImageInput: args.hasImageInput,
+            requiresImageOutput: args.requiresImageOutput,
             allowedCatalog: args.allowedCatalog,
             fullCatalog: args.fullCatalog,
           });
@@ -141,7 +147,8 @@ export async function resolvePinPolicy(args: {
           decisionReason = "pin_invalid";
           const invalid = describeInvalidPin({
             activePin,
-            threadHasImage: args.threadHasImage,
+            hasImageInput: args.hasImageInput,
+            requiresImageOutput: args.requiresImageOutput,
             allowedCatalog: args.allowedCatalog,
             fullCatalog: args.fullCatalog,
           });

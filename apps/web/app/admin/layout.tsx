@@ -6,17 +6,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <>
       <header className="topbar">
         <div className="topbar-brand">
-          <Link href="/" style={{ textDecoration: "none" }}>
+          <Link href="/">
             <span className="topbar-logo-lockup">
               <Image
-                src="/crlogo.svg"
-                alt="CustomRouter logo"
-                width={32}
-                height={32}
-                className="topbar-logo-mark"
+                src="/brand/custom-router-wordmark.webp"
+                alt="CustomRouter"
+                width={240}
+                height={61}
+                className="topbar-wordmark"
                 priority
               />
-              <span className="topbar-logo">CustomRouter</span>
             </span>
           </Link>
           <span className="topbar-tagline">Self-hostable router</span>

@@ -39,6 +39,7 @@ import {
   type ProfileBuilderGatewayPresetId,
   type ProfileBuilderKnowledgeModel,
 } from "./profile-builder-knowledge";
+import { listModelRegistryForLens } from "./model-registry";
 import { validateModelId } from "@/src/lib/upstream/openrouter-models";
 
 interface BuilderGateway extends GatewayRowPublic {
@@ -87,7 +88,9 @@ const SUPPORTED_GATEWAY_PRESET_IDS = new Set<ProfileBuilderGatewayPresetId>(["op
 const EXECUTOR_MODEL_PREFERENCE = [
   "openai/gpt-5.4-mini",
   "anthropic/claude-haiku-4.5",
-  "google/gemini-2.5-flash",
+  "google/gemini-3.1-flash-lite-preview",
+  "google/gemini-3-flash-preview",
+  "google/gemini-3-flash",
 ] as const;
 
 function runId(prefix: string): string {
@@ -112,6 +115,28 @@ function normalizeAdditionalContext(value?: string): string | undefined {
 
 function includesImage(modality?: string): boolean {
   return modality?.toLowerCase().includes("image") ?? false;
+}
+
+function outputsGeneratedImage(modality?: string): boolean {
+  const output = modality?.split("->")[1]?.toLowerCase();
+  return output?.includes("image") ?? false;
+}
+
+function inferSyntheticCapabilities(model: CatalogItem, taskFamilies: readonly ProfileBuilderTaskFamily[], structuredOutput: boolean, toolUse: boolean): ProfileBuilderKnowledgeModel["capabilities"] {
+  const modality = model.modality?.toLowerCase() ?? "";
+  const hintText = `${model.whenToUse ?? ""} ${model.description ?? ""} ${model.name ?? ""}`.toLowerCase();
+
+  return {
+    nativeSearch: model.id.includes("search") || hintText.includes("web search"),
+    groundedSearch: model.id.includes("grounding") || hintText.includes("grounded"),
+    documentReasoning: taskFamilies.includes("long_context") || hintText.includes("document"),
+    imageGeneration: outputsGeneratedImage(model.modality),
+    imageEditing: hintText.includes("image edit") || hintText.includes("image editing"),
+    fileInput: modality.includes("file"),
+    audioInput: modality.includes("audio"),
+    videoInput: modality.includes("video"),
+    recommendedAsClassifier: structuredOutput && !outputsGeneratedImage(model.modality),
+  };
 }
 
 function syntheticContextBand(model: CatalogItem): "standard" | "long" | "ultra" {
@@ -176,6 +201,21 @@ function synthesizeKnowledge(model: CatalogItem, gatewayPresetId: ProfileBuilder
     id: model.id,
     name: model.name ?? model.id,
     supportedGateways: [gatewayPresetId],
+    gatewayMappings: [
+      {
+        gatewayPresetId,
+        modelId: model.id,
+        displayName: model.name ?? model.id,
+        operational: {
+          structuredOutput,
+          toolUse,
+          vision: includesImage(model.modality),
+          verifiedAt: PROFILE_BUILDER_LAST_VERIFIED,
+          sources: [],
+          note: "Derived from synced gateway model metadata; registry-backed gateway operational facts were not available.",
+        },
+      },
+    ],
     modality: model.modality,
     contextBand: syntheticContextBand(model),
     costTier: syntheticCostTier(model),
@@ -188,7 +228,11 @@ function synthesizeKnowledge(model: CatalogItem, gatewayPresetId: ProfileBuilder
     reliability: structuredOutput ? 2 : 1,
     taskFamilies,
     strengths: [model.whenToUse ?? "Derived from synced gateway model metadata."],
+    caveats: [],
     whenToUse: model.whenToUse ?? model.description ?? "Derived from synced gateway model metadata.",
+    metrics: [],
+    lenses: [],
+    capabilities: inferSyntheticCapabilities(model, taskFamilies, structuredOutput, toolUse),
     lastVerified: PROFILE_BUILDER_LAST_VERIFIED,
     sources: [
       {
@@ -219,26 +263,175 @@ function modelMatchesTerms(model: CatalogItem, knowledge: ProfileBuilderKnowledg
     return false;
   }
   const haystack = `${model.id}\n${model.name ?? ""}\n${knowledge.name}\n${knowledge.whenToUse}\n${knowledge.strengths.join(" ")}`
+    + `\n${knowledge.caveats.join(" ")}`
+    + `\n${Object.entries(knowledge.capabilities).filter(([, enabled]) => enabled).map(([name]) => name).join(" ")}`
     .toLowerCase();
   return terms.some((term) => haystack.includes(term));
 }
 
-function scoreCandidate(knowledge: ProfileBuilderKnowledgeModel, request: ProfileBuilderRequest): number {
+function getGatewayOperationalData(
+  knowledge: ProfileBuilderKnowledgeModel,
+  gatewayPresetId: ProfileBuilderGatewayPresetId,
+) {
+  return knowledge.gatewayMappings.find((mapping) => mapping.gatewayPresetId === gatewayPresetId)?.operational;
+}
+
+function getMetricNumber(knowledge: ProfileBuilderKnowledgeModel, metricId: string): number | undefined {
+  const metric = knowledge.metrics.find((entry) => entry.metricId === metricId);
+  return typeof metric?.value === "number" ? metric.value : undefined;
+}
+
+function getLensRank(knowledge: ProfileBuilderKnowledgeModel, lens: string): number | undefined {
+  return knowledge.lenses.find((entry) => entry.lens === lens)?.rank;
+}
+
+function rankBonus(rank: number | undefined, maxPoints: number): number {
+  if (!rank || rank <= 0) {
+    return 0;
+  }
+  return Math.max(maxPoints - rank + 1, 0);
+}
+
+function scorePriceByMillion(totalPricePerMillion: number | undefined): number {
+  if (typeof totalPricePerMillion !== "number" || !Number.isFinite(totalPricePerMillion)) {
+    return 0;
+  }
+  if (totalPricePerMillion <= 0.75) {
+    return 4;
+  }
+  if (totalPricePerMillion <= 2) {
+    return 3;
+  }
+  if (totalPricePerMillion <= 6) {
+    return 2;
+  }
+  if (totalPricePerMillion <= 15) {
+    return 1;
+  }
+  return -2;
+}
+
+function scoreThroughput(outputTps: number | undefined): number {
+  if (typeof outputTps !== "number" || !Number.isFinite(outputTps)) {
+    return 0;
+  }
+  if (outputTps >= 250) {
+    return 4;
+  }
+  if (outputTps >= 150) {
+    return 3;
+  }
+  if (outputTps >= 80) {
+    return 2;
+  }
+  if (outputTps >= 40) {
+    return 1;
+  }
+  return 0;
+}
+
+function scoreTtft(ttftSeconds: number | undefined): number {
+  if (typeof ttftSeconds !== "number" || !Number.isFinite(ttftSeconds)) {
+    return 0;
+  }
+  if (ttftSeconds <= 1) {
+    return 4;
+  }
+  if (ttftSeconds <= 2) {
+    return 3;
+  }
+  if (ttftSeconds <= 5) {
+    return 1;
+  }
+  return -1;
+}
+
+function scoreContextWindow(contextWindow: number | undefined): number {
+  if (typeof contextWindow !== "number" || !Number.isFinite(contextWindow)) {
+    return 0;
+  }
+  if (contextWindow >= 1_000_000) {
+    return 5;
+  }
+  if (contextWindow >= 400_000) {
+    return 4;
+  }
+  if (contextWindow >= 200_000) {
+    return 3;
+  }
+  if (contextWindow >= 128_000) {
+    return 2;
+  }
+  return 0;
+}
+
+function requestSignalsFrontendWork(request: ProfileBuilderRequest): boolean {
+  const haystack = `${request.displayName}\n${request.additionalContext ?? ""}\n${request.mustUse ?? ""}`.toLowerCase();
+  return /(frontend|website|landing page|ui component|ui\b|design system|react|tailwind|component library)/.test(haystack);
+}
+
+export function scoreBuilderCandidate(args: {
+  knowledge: ProfileBuilderKnowledgeModel;
+  gatewayPresetId: ProfileBuilderGatewayPresetId;
+  request: ProfileBuilderRequest;
+}): number {
+  const { knowledge, gatewayPresetId, request } = args;
+  const gatewayOperational = getGatewayOperationalData(knowledge, gatewayPresetId);
+  const outputTps = getMetricNumber(knowledge, "artificial_analysis_output_tps");
+  const ttftSeconds = getMetricNumber(knowledge, "artificial_analysis_ttft_seconds");
+  const totalGatewayPricePerMillion =
+    typeof gatewayOperational?.inputPricePerMillion === "number" && typeof gatewayOperational?.outputPricePerMillion === "number"
+      ? gatewayOperational.inputPricePerMillion + gatewayOperational.outputPricePerMillion
+      : undefined;
+  const contextWindow = gatewayOperational?.contextWindow;
   let score = 0;
 
   if (request.optimizeFor === "quality") {
-    score += knowledge.quality * 6 + knowledge.reliability * 3;
+    score += knowledge.quality * 4 + knowledge.reliability * 2;
   } else if (request.optimizeFor === "speed") {
-    score += knowledge.speed * 6 + knowledge.cost * 2;
+    score += knowledge.speed * 2 + knowledge.cost;
   } else if (request.optimizeFor === "cost") {
-    score += knowledge.cost * 6 + knowledge.speed * 2;
+    score += knowledge.cost * 2 + knowledge.speed;
   } else {
-    score += knowledge.quality * 4 + knowledge.reliability * 3 + knowledge.speed * 2 + knowledge.cost * 2;
+    score += knowledge.quality * 2 + knowledge.reliability * 2 + knowledge.speed + knowledge.cost;
+  }
+
+  if (request.optimizeFor === "quality") {
+    score += rankBonus(getLensRank(knowledge, "overall_quality"), 5);
+    if (request.taskFamilies.includes("coding")) {
+      score += rankBonus(getLensRank(knowledge, "coding_quality"), 4);
+    }
+    if (request.taskFamilies.includes("research")) {
+      score += rankBonus(getLensRank(knowledge, "research"), 4);
+    }
+  } else if (request.optimizeFor === "speed") {
+    score += scoreThroughput(outputTps) * 2;
+    score += scoreTtft(ttftSeconds) * 2;
+    score += rankBonus(getLensRank(knowledge, "throughput"), 4);
+    score += rankBonus(getLensRank(knowledge, "ttft"), 4);
+  } else if (request.optimizeFor === "cost") {
+    score += scorePriceByMillion(totalGatewayPricePerMillion) * 3;
+    if (request.taskFamilies.includes("coding")) {
+      score += rankBonus(getLensRank(knowledge, "coding_value"), 4);
+    }
+    score += rankBonus(getLensRank(knowledge, "budget_text"), 4);
+  } else {
+    score += rankBonus(getLensRank(knowledge, "overall_quality"), 3);
+    score += scorePriceByMillion(totalGatewayPricePerMillion);
+    score += scoreThroughput(outputTps);
+    score += scoreTtft(ttftSeconds);
   }
 
   if (request.budgetPosture === "budget_first") {
-    score += knowledge.cost * 3;
-    if (knowledge.costTier === "premium") {
+    if (typeof totalGatewayPricePerMillion === "number") {
+      score += scorePriceByMillion(totalGatewayPricePerMillion) * 2;
+    } else {
+      score += knowledge.cost * 2;
+    }
+    if (
+      knowledge.costTier === "premium"
+      || (typeof totalGatewayPricePerMillion === "number" && totalGatewayPricePerMillion > 15)
+    ) {
       score -= 6;
     }
   } else if (request.budgetPosture === "quality_first") {
@@ -246,14 +439,47 @@ function scoreCandidate(knowledge: ProfileBuilderKnowledgeModel, request: Profil
   }
 
   if (request.latencySensitivity === "high") {
-    score += knowledge.speed * 3;
+    if (typeof outputTps === "number" || typeof ttftSeconds === "number") {
+      score += scoreThroughput(outputTps) * 2;
+      score += scoreTtft(ttftSeconds) * 2;
+    } else {
+      score += knowledge.speed * 2;
+    }
   } else if (request.latencySensitivity === "medium") {
-    score += knowledge.speed;
+    if (typeof outputTps === "number" || typeof ttftSeconds === "number") {
+      score += scoreThroughput(outputTps);
+      score += scoreTtft(ttftSeconds);
+    } else {
+      score += knowledge.speed;
+    }
   }
 
   for (const family of request.taskFamilies) {
     if (knowledge.taskFamilies.includes(family)) {
       score += 4;
+    }
+
+    if (family === "coding") {
+      score += rankBonus(getLensRank(knowledge, request.optimizeFor === "cost" ? "coding_value" : "coding_quality"), 3);
+    }
+
+    if (family === "research") {
+      score += rankBonus(getLensRank(knowledge, "research"), 3);
+      if (knowledge.capabilities.nativeSearch || knowledge.capabilities.groundedSearch) {
+        score += 3;
+      }
+      if (knowledge.capabilities.documentReasoning) {
+        score += 2;
+      }
+    }
+
+    if (family === "long_context") {
+      score += rankBonus(getLensRank(knowledge, "long_context"), 3);
+      score += scoreContextWindow(contextWindow);
+    }
+
+    if (family === "multimodal") {
+      score += rankBonus(getLensRank(knowledge, "multimodal"), 3);
     }
   }
 
@@ -261,7 +487,11 @@ function scoreCandidate(knowledge: ProfileBuilderKnowledgeModel, request: Profil
     score += knowledge.vision ? 4 : -20;
   }
   if (request.needsLongContext) {
-    score += knowledge.contextBand === "ultra" ? 6 : knowledge.contextBand === "long" ? 3 : -12;
+    if (typeof contextWindow === "number") {
+      score += contextWindow >= 1_000_000 ? 8 : contextWindow >= 400_000 ? 5 : contextWindow >= 200_000 ? 2 : -12;
+    } else {
+      score += knowledge.contextBand === "ultra" ? 6 : knowledge.contextBand === "long" ? 3 : -12;
+    }
   }
 
   if (knowledge.structuredOutput) {
@@ -269,6 +499,12 @@ function scoreCandidate(knowledge: ProfileBuilderKnowledgeModel, request: Profil
   }
   if (knowledge.toolUse && request.taskFamilies.includes("agentic_coding")) {
     score += 3;
+  }
+  if (requestSignalsFrontendWork(request)) {
+    score += rankBonus(getLensRank(knowledge, "frontend_ui"), 5);
+  }
+  if (request.taskFamilies.includes("research") && knowledge.capabilities.fileInput) {
+    score += 1;
   }
 
   return score;
@@ -425,8 +661,31 @@ export function selectProfileBuilderExecutor(candidates: BuilderCandidate[]): Bu
   return structured[0] ?? candidates[0] ?? null;
 }
 
-function selectClassifierCandidate(selected: BuilderCandidate[], allCandidates: BuilderCandidate[]): BuilderCandidate | null {
-  const preferredIds = ["openai/gpt-5.4-mini", "openai/gpt-5-mini", "google/gemini-2.5-flash-lite", "google/gemini-2.5-flash", "anthropic/claude-haiku-4.5"];
+export function selectClassifierCandidate(selected: BuilderCandidate[], allCandidates: BuilderCandidate[]): BuilderCandidate | null {
+  const gatewayPresetIds = [...new Set(allCandidates.map((candidate) => candidate.gatewayPresetId))];
+  for (const gatewayPresetId of gatewayPresetIds) {
+    for (const registryEntry of listModelRegistryForLens({ lens: "classifier_candidate", gatewayPresetId })) {
+      const mapping = registryEntry.gatewayMappings.find((entry) => entry.gatewayPresetId === gatewayPresetId);
+      if (!mapping) {
+        continue;
+      }
+      const match = allCandidates.find((candidate) =>
+        candidate.gatewayPresetId === gatewayPresetId
+        && (candidate.model.id === mapping.modelId || candidate.model.id === registryEntry.canonicalModelId),
+      );
+      if (match) {
+        return match;
+      }
+    }
+  }
+
+  const preferredIds = [
+    "google/gemini-3.1-flash-lite-preview",
+    "google/gemini-3-flash-preview",
+    "google/gemini-3-flash",
+    "openai/gpt-5.4-mini",
+    "anthropic/claude-haiku-4.5",
+  ];
   for (const modelId of preferredIds) {
     const match = allCandidates.find((candidate) => candidate.model.id === modelId);
     if (match) {
@@ -551,6 +810,23 @@ async function callProfileBuilderExecutor(args: {
     whenToUse: candidate.model.whenToUse ?? candidate.knowledge.whenToUse,
     taskFamilies: candidate.knowledge.taskFamilies,
     strengths: candidate.knowledge.strengths,
+    caveats: candidate.knowledge.caveats,
+    capabilities: candidate.knowledge.capabilities,
+    lenses: candidate.knowledge.lenses,
+    metrics: candidate.knowledge.metrics.map((metric) => ({
+      metricId: metric.metricId,
+      label: metric.label,
+      value: metric.value,
+      unit: metric.unit,
+      direction: metric.direction,
+      sourceLabel: metric.source.label,
+      verifiedAt: metric.verifiedAt,
+      note: metric.note,
+    })),
+    gatewayDeployment:
+      candidate.knowledge.gatewayMappings.find((mapping) => mapping.gatewayPresetId === candidate.gatewayPresetId)
+      ?? null,
+    lastVerified: candidate.knowledge.lastVerified,
     score: candidate.score,
     contextSummary: candidate.contextSummary,
     costSummary: candidate.costSummary,
@@ -562,6 +838,7 @@ async function callProfileBuilderExecutor(args: {
     "You may only choose model ids that appear in the provided candidate list.",
     "Select 3 to 5 routedModelIds with differentiated roles.",
     "Use the cheapest strong structured-output-capable model as classifierModelId when possible.",
+    "Prefer explicit benchmark, capability, caveat, and gateway-deployment evidence over generic summaries when the candidate payload includes it.",
     "Keep routingInstructions durable and capability-focused, not benchmark- or price-heavy.",
   ].join(" ");
 
@@ -685,7 +962,11 @@ function buildCandidatePool(gateway: BuilderGateway, request: ProfileBuilderRequ
   const avoidTerms = splitTerms(request.avoid);
   const allCandidates = gateway.models.map((model) => {
     const knowledge = findCandidateKnowledge(model, gateway.presetId);
-    let score = scoreCandidate(knowledge, request);
+    let score = scoreBuilderCandidate({
+      knowledge,
+      gatewayPresetId: gateway.presetId,
+      request,
+    });
     if (modelMatchesTerms(model, knowledge, mustUseTerms)) {
       score += 8;
     }
@@ -701,7 +982,15 @@ function buildCandidatePool(gateway: BuilderGateway, request: ProfileBuilderRequ
   });
 
   const filteredOut: BuilderCandidate[] = [];
-  const eligible = allCandidates.filter((candidate) => {
+  const baseEligible = allCandidates.filter((candidate) => {
+    if (outputsGeneratedImage(candidate.model.modality ?? candidate.knowledge.modality)) {
+      filteredOut.push(candidate);
+      return false;
+    }
+    return true;
+  });
+
+  const eligible = baseEligible.filter((candidate) => {
     if (request.needsVision && !candidate.knowledge.vision) {
       filteredOut.push(candidate);
       return false;
@@ -717,7 +1006,7 @@ function buildCandidatePool(gateway: BuilderGateway, request: ProfileBuilderRequ
     return true;
   });
 
-  const shortlist = (eligible.length > 0 ? eligible : allCandidates)
+  const shortlist = (eligible.length > 0 ? eligible : baseEligible)
     .sort((left, right) => right.score - left.score)
     .slice(0, 8);
 

@@ -1,6 +1,6 @@
 ---
 name: custom-router-default-profile-research
-description: Add or update benchmark-backed default routing profile presets for CustomRouter. Use when Codex needs to create a new quick-setup routing profile, refresh stale preset model choices, re-select classifier or default models after benchmark, pricing, availability, or capability changes, or prepare evidence for edits in apps/web/src/lib/routing-presets.ts.
+description: Add or update benchmark-backed default routing profile presets for CustomRouter. Use when Codex needs to create a new quick-setup routing profile, refresh stale preset model choices, re-select classifier or default models after benchmark, pricing, availability, or capability changes, or prepare evidence for edits in the model registry and apps/web/src/lib/routing-presets.ts.
 ---
 
 # CustomRouter Default Profile Research
@@ -10,9 +10,10 @@ Use this skill for repo-local preset work in `/Users/pablomartinez/Downloads/aut
 ## Required Workflow
 
 1. Confirm the seam before changing anything.
-   - V1 scope is named quick-setup/default routing profile presets in `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/routing-presets.ts`.
+   - The canonical research seam is `/Users/pablomartinez/Downloads/auto router/apps/web/src/features/routing/server/model-registry.ts`.
+   - V1 preset-consumer seam is named quick-setup/default routing profile presets in `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/routing-presets.ts`.
    - Use the existing preset-binding/editor flow in `/Users/pablomartinez/Downloads/auto router/apps/web/src/features/routing/profiles-editor-utils.ts`.
-   - Do not expand into `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/storage/defaults.ts` unless the user explicitly asks for seeded global catalog/default changes.
+   - Do not expand into `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/storage/defaults.ts` unless the user explicitly asks for legacy fallback cleanup.
 
 2. Load repo guardrails before mutating repo code.
    - Read `/Users/pablomartinez/Downloads/auto router/.codex/skills/custom-router-feature-consistency/SKILL.md`.
@@ -31,12 +32,14 @@ Use this skill for repo-local preset work in `/Users/pablomartinez/Downloads/aut
    - Use `references/profile-research-playbook.md` for the scoring process.
 
 5. Choose the preset shape with explicit evidence.
+   - Update the model registry first when facts, rankings, pricing, latency, or gateway support have changed.
    - Select the routed pool, default model, primary classifier model, and one classifier fallback candidate.
    - Use `references/classifier-rubric.md` to rank classifier candidates.
    - Record rejected alternatives and why they lost.
    - Keep volatile benchmark numbers and prices out of long-lived preset copy unless the current change explicitly needs them. Prefer stable capability language in preset descriptions, model hints, and routing instructions.
 
 6. Follow the required repo mutation path.
+   - Update `/Users/pablomartinez/Downloads/auto router/apps/web/src/features/routing/server/model-registry.ts` when the recommendation knowledge changed.
    - Update `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/routing-presets.ts`.
    - Update focused tests beside the preset/editor seam.
    - Touch docs only if quick-setup behavior, user-facing workflow, or evaluation guidance changes.
@@ -57,6 +60,7 @@ Before editing repo code, fill out `references/preset-change-template.md` in the
 The packet must include:
 - verification date
 - profile goal and target task families
+- model registry entries touched
 - selected routed pool
 - default model
 - primary classifier and classifier fallback candidate

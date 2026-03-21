@@ -6,10 +6,12 @@ export const metadata: Metadata = {
   title: "CustomRouter",
   description: "Self-hostable, OpenAI-compatible LLM router with BYOK, explainability, and Cloudflare deployment support.",
   icons: {
-    icon: [{ url: "/crlogo.svg", type: "image/svg+xml" }],
-    shortcut: ["/crlogo.svg"],
-    apple: [{ url: "/crlogo.svg", type: "image/svg+xml" }],
-    other: [{ rel: "mask-icon", url: "/crlogo.svg", color: "#22D3EE" }],
+    icon: [
+      { url: "/brand/custom-router-mark-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/brand/custom-router-mark-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: ["/brand/custom-router-mark-192.png"],
+    apple: [{ url: "/brand/custom-router-mark-180.png", sizes: "180x180", type: "image/png" }],
   },
   manifest: "/manifest.webmanifest",
 };

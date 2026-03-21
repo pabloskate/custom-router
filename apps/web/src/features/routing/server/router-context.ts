@@ -21,7 +21,7 @@ export async function resolveUserRoutingContext(args: {
   userConfig?: UserRouterConfig;
 }): Promise<ResolvedRoutingContext> {
   const repository = getRouterRepository();
-  const [systemConfig, fullCatalog] = await Promise.all([
+  const [systemConfig, systemCatalog] = await Promise.all([
     repository.getConfig(),
     repository.getCatalog(),
   ]);
@@ -40,7 +40,7 @@ export async function resolveUserRoutingContext(args: {
       resolveGatewayCapabilityForBaseUrl(gateway.baseUrl),
     ] as const),
   );
-  const gatewayCatalogItems: CatalogItem[] = (args.userConfig?.gatewayRows ?? []).flatMap((gateway) => {
+  const gatewayInventoryItems: CatalogItem[] = (args.userConfig?.gatewayRows ?? []).flatMap((gateway) => {
     const capability = gatewayCapabilityById.get(gateway.id);
     return gateway.models.map((model) => ({
       ...model,
@@ -54,7 +54,7 @@ export async function resolveUserRoutingContext(args: {
   const routedRequest = isRoutedRequestModel(requestedModel, args.userConfig?.profiles);
   const activeProfile = routedRequest ? matchedProfile : undefined;
 
-  const profileCatalog = (activeProfile?.models ?? [])
+  const profileInventory = (activeProfile?.models ?? [])
     .map(profileModelToCatalogItem)
     .filter((item): item is CatalogItem => Boolean(item))
     .map((item) => {
@@ -64,14 +64,14 @@ export async function resolveUserRoutingContext(args: {
         upstreamModelId: capability?.supportsFamilyIdentity ? item.upstreamModelId : undefined,
       };
     });
-  const catalog =
+  const resolvedCatalog =
     routedRequest
-      ? profileCatalog
-      : gatewayCatalogItems.length > 0
-        ? gatewayCatalogItems
+      ? profileInventory
+      : gatewayInventoryItems.length > 0
+        ? gatewayInventoryItems
         : args.userConfig?.customCatalog && args.userConfig.customCatalog.length > 0
           ? args.userConfig.customCatalog
-          : fullCatalog;
+          : systemCatalog;
 
   if (activeProfile) {
     const selectedProfileModels = new Map(
@@ -80,7 +80,7 @@ export async function resolveUserRoutingContext(args: {
         .map((model) => [`${model.gatewayId}::${model.modelId}`, model] as const),
     );
     const gatewayModels = new Map(
-      gatewayCatalogItems
+      gatewayInventoryItems
         .filter((model) => model.gatewayId)
         .map((model) => [`${model.gatewayId}::${model.id}`, model] as const),
     );
@@ -106,7 +106,7 @@ export async function resolveUserRoutingContext(args: {
   return {
     repository,
     runtimeConfig,
-    catalog,
+    catalog: resolvedCatalog,
     requestedModel,
     matchedProfile,
     routedRequest,

@@ -9,6 +9,7 @@
 // - "invite" → signup shows an invite code field
 // ─────────────────────────────────────────────────────────────────────────────
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { AUTH } from "@/src/lib/constants";
 
@@ -31,14 +32,6 @@ interface ForgotPasswordResponse {
 }
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
-function IconLock({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg className={className} style={style} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  );
-}
-
 function IconUser({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg className={className} style={style} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -351,16 +344,19 @@ export function AuthGate({ onAuthenticated }: Props) {
         >
           <div
             style={{
-              width: 80,
-              height: 80,
-              borderRadius: "var(--radius-xl)",
-              background: "var(--accent-dim)",
-              display: "grid",
-              placeItems: "center",
+              width: 96,
+              height: 96,
               marginBottom: "var(--space-5)",
             }}
           >
-            <IconLock style={{ color: "var(--accent)" } as any} />
+            <Image
+              src="/brand/custom-router-mark.webp"
+              alt="CustomRouter"
+              width={96}
+              height={96}
+              priority
+              style={{ width: "100%", height: "auto" }}
+            />
           </div>
           <h1
             style={{

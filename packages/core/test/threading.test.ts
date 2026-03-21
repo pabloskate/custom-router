@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildThreadFingerprint,
+  getRequestImageCapabilities,
   hasForceRouteRequest,
   isContinuationRequest,
   isNewConversation
@@ -143,5 +144,39 @@ describe("threading", () => {
         ]
       })
     ).toBe(true);
+  });
+
+  it("detects image input in Responses API payloads", () => {
+    expect(
+      getRequestImageCapabilities({
+        model: "planning-backend",
+        input: [
+          {
+            type: "message",
+            role: "user",
+            content: [
+              { type: "input_text", text: "Edit this" },
+              { type: "input_image", detail: "auto", image_url: "https://example.com/cat.png" },
+            ],
+          },
+        ],
+      } as any)
+    ).toEqual({
+      hasImageInput: true,
+      requiresImageOutput: false,
+    });
+  });
+
+  it("detects output image modalities on chat completion requests", () => {
+    expect(
+      getRequestImageCapabilities({
+        model: "planning-backend",
+        messages: [{ role: "user", content: "Generate a poster" }],
+        modalities: ["image", "text"],
+      } as any)
+    ).toEqual({
+      hasImageInput: false,
+      requiresImageOutput: true,
+    });
   });
 });

@@ -1,6 +1,7 @@
 # Profile Research Playbook
 
 Use this workflow every time you add or refresh a preset in `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/routing-presets.ts`.
+Update `/Users/pablomartinez/Downloads/auto router/apps/web/src/features/routing/server/model-registry.ts` first when the underlying model facts changed.
 
 ## 1. Define The Profile Thesis
 
@@ -112,9 +113,10 @@ Exactly 77.8% on benchmark X and $0.72 per million forever.
 
 When mutating repo code:
 
-1. update `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/routing-presets.ts`
-2. update focused tests at the preset/editor seam
-3. update docs only if quick-setup behavior changed
+1. update `/Users/pablomartinez/Downloads/auto router/apps/web/src/features/routing/server/model-registry.ts` when recommendation facts or gateway mappings changed
+2. update `/Users/pablomartinez/Downloads/auto router/apps/web/src/lib/routing-presets.ts`
+3. update focused tests at the preset/editor seam
+4. update docs only if quick-setup behavior changed
 
 Do not add a new runtime shape or new preset plumbing unless the user explicitly changed scope.
 

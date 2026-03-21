@@ -155,4 +155,29 @@ describe("buildAttemptPayload", () => {
     expect(payload.model).toBe("openai/gpt-5.2:high");
     expect(payload.reasoning).toBeUndefined();
   });
+
+  it("preserves image generation controls in the upstream payload", () => {
+    const payload = buildAttemptPayload({
+      body: {
+        model: "creative-images",
+        messages: [{ role: "user", content: "Create a magazine cover." }],
+        modalities: ["image", "text"],
+        image_config: { aspect_ratio: "16:9" },
+      },
+      selectedModelId: "openai/gpt-5-image",
+      catalog: [
+        {
+          id: "openai/gpt-5-image",
+          name: "GPT-5 Image",
+          modality: "text,image->text,image",
+        },
+      ],
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiPath: "/chat/completions",
+    });
+
+    expect(payload.model).toBe("openai/gpt-5-image");
+    expect(payload.modalities).toEqual(["image", "text"]);
+    expect(payload.image_config).toEqual({ aspect_ratio: "16:9" });
+  });
 });

@@ -188,6 +188,72 @@ describe("RouterEngine (LLM Router)", () => {
         expect(decision.selectedModel).toBe("anthropic/claude-3-opus");
     });
 
+    it("limits classifier candidates to vision-capable models for responses image inputs", async () => {
+        const mockLlmRouter = vi.fn().mockResolvedValue({
+            selectedModel: "openai/gpt-4o-vision",
+            confidence: 0.93,
+            signals: ["vision_required"],
+        });
+
+        const engine = new RouterEngine({ llmRouter: mockLlmRouter });
+        await engine.decide({
+            requestId: "req-responses-input-image",
+            request: {
+                model: "planning-backend",
+                input: [
+                    {
+                        type: "message",
+                        role: "user",
+                        content: [
+                            { type: "input_text", text: "Describe this image." },
+                            { type: "input_image", detail: "auto", image_url: "https://example.com/photo.png" },
+                        ],
+                    },
+                ],
+            },
+            config: defaultConfig,
+            catalog: [
+                { id: "openai/gpt-4o", name: "GPT-4o", modality: "text->text" },
+                { id: "openai/gpt-4o-vision", name: "GPT-4o Vision", modality: "text,image->text" },
+            ],
+            catalogVersion: "v1",
+            pinStore: new MockPinStore(),
+            profiles: namedProfiles,
+        });
+
+        const args = mockLlmRouter.mock.calls[0]?.[0] as any;
+        expect(args.catalog).toEqual([
+            { id: "openai/gpt-4o-vision", name: "GPT-4o Vision", modality: "text,image->text" },
+        ]);
+    });
+
+    it("forces image-output requests onto image-capable models when the default fallback is text-only", async () => {
+        const engine = new RouterEngine();
+
+        const decision = await engine.decide({
+            requestId: "req-image-output-fallback",
+            request: {
+                model: "planning-backend",
+                messages: [{ role: "user", content: "Generate a movie poster." }],
+                modalities: ["image", "text"],
+            } as RouterRequestLike,
+            config: defaultConfig,
+            catalog: [
+                { id: "openai/gpt-4o", name: "GPT-4o", modality: "text->text" },
+                { id: "openai/gpt-5-image", name: "GPT-5 Image", modality: "text,image->text,image" },
+            ],
+            catalogVersion: "v1",
+            pinStore: new MockPinStore(),
+            profiles: namedProfiles,
+        });
+
+        expect(decision.selectedModel).toBe("openai/gpt-5-image");
+        expect(decision.switchReason).toBe("image_capability_override");
+        expect(decision.explanation.notes).toContain(
+            "Request requires image output but selected model cannot generate images. Forcing image-capable model: openai/gpt-5-image"
+        );
+    });
+
     it("should fallback to default model if llmRouter returns invalid model", async () => {
         const mockLlmRouter = vi.fn().mockResolvedValue({
             selectedModel: "fake/model-that-does-not-exist",

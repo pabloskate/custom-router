@@ -7,11 +7,15 @@ import {
   handleCreateProfileBuilderRun,
   handleGetProfileBuilderRun,
   maybeLiveVerifyOpenRouter,
+  scoreBuilderCandidate,
+  selectClassifierCandidate,
   selectProfileBuilderExecutor,
 } from "./profile-builder-service";
 import { getProfileBuilderRun, insertProfileBuilderRun } from "./profile-builder-store";
 import { gatewayRowToPublic, loadGatewaysWithMigration } from "@/src/lib/storage";
 import { validateModelId } from "@/src/lib/upstream/openrouter-models";
+import type { ProfileBuilderKnowledgeModel } from "./profile-builder-knowledge";
+import type { ProfileBuilderRequest } from "@/src/features/routing/profile-builder-contracts";
 
 vi.mock("@/src/lib/storage", async () => {
   const actual = await vi.importActual<typeof import("@/src/lib/storage")>("@/src/lib/storage");
@@ -86,6 +90,57 @@ function createCandidate(overrides: Partial<BuilderCandidate> & Pick<BuilderCand
     score: 10,
     liveVerified: false,
     ...overrides,
+  };
+}
+
+function createKnowledge(
+  overrides: Partial<ProfileBuilderKnowledgeModel> & Pick<ProfileBuilderKnowledgeModel, "id" | "name">,
+): ProfileBuilderKnowledgeModel {
+  return {
+    id: overrides.id,
+    name: overrides.name,
+    supportedGateways: overrides.supportedGateways ?? ["openrouter"],
+    gatewayMappings: overrides.gatewayMappings ?? [{
+      gatewayPresetId: "openrouter",
+      modelId: overrides.id,
+      displayName: overrides.name,
+      operational: {
+        structuredOutput: true,
+        toolUse: true,
+        vision: false,
+        verifiedAt: "2026-03-21",
+        sources: [],
+      },
+    }],
+    modality: overrides.modality ?? "text->text",
+    contextBand: overrides.contextBand ?? "long",
+    costTier: overrides.costTier ?? "efficient",
+    vision: overrides.vision ?? false,
+    structuredOutput: overrides.structuredOutput ?? true,
+    toolUse: overrides.toolUse ?? true,
+    quality: overrides.quality ?? 2,
+    speed: overrides.speed ?? 2,
+    cost: overrides.cost ?? 2,
+    reliability: overrides.reliability ?? 2,
+    taskFamilies: overrides.taskFamilies ?? ["general"],
+    strengths: overrides.strengths ?? ["strong"],
+    caveats: overrides.caveats ?? [],
+    whenToUse: overrides.whenToUse ?? "strong",
+    metrics: overrides.metrics ?? [],
+    lenses: overrides.lenses ?? [],
+    capabilities: overrides.capabilities ?? {
+      nativeSearch: false,
+      groundedSearch: false,
+      documentReasoning: false,
+      imageGeneration: false,
+      imageEditing: false,
+      fileInput: false,
+      audioInput: false,
+      videoInput: false,
+      recommendedAsClassifier: false,
+    },
+    lastVerified: overrides.lastVerified ?? "2026-03-21",
+    sources: overrides.sources ?? [],
   };
 }
 
@@ -165,7 +220,7 @@ describe("profile-builder-service", () => {
       apiKeyEnc: "enc:key",
       models: [
         { id: "openai/gpt-5.4-mini", name: "GPT-5.4 mini", modality: "text,image->text" },
-        { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", modality: "text,image->text" },
+        { id: "google/gemini-3-flash-preview", name: "Gemini 3 Flash Preview", modality: "text,image->text" },
       ],
     } as any);
     insertRunMock.mockImplementation(async (args) => ({
@@ -442,6 +497,18 @@ describe("profile-builder-service", () => {
           id: "anthropic/claude-haiku-4.5",
           name: "Claude Haiku 4.5",
           supportedGateways: ["openrouter"],
+          gatewayMappings: [{
+            gatewayPresetId: "openrouter",
+            modelId: "anthropic/claude-haiku-4.5",
+            displayName: "Claude Haiku 4.5",
+            operational: {
+              structuredOutput: true,
+              toolUse: true,
+              vision: true,
+              verifiedAt: "2026-03-19",
+              sources: [],
+            },
+          }],
           contextBand: "long",
           costTier: "efficient",
           vision: true,
@@ -453,17 +520,43 @@ describe("profile-builder-service", () => {
           reliability: 3,
           taskFamilies: ["general"],
           strengths: ["fast"],
+          caveats: [],
           whenToUse: "fast",
+          metrics: [],
+          lenses: [],
+          capabilities: {
+            nativeSearch: false,
+            groundedSearch: false,
+            documentReasoning: false,
+            imageGeneration: false,
+            imageEditing: false,
+            fileInput: false,
+            audioInput: false,
+            videoInput: false,
+            recommendedAsClassifier: false,
+          },
           lastVerified: "2026-03-19",
           sources: [],
         },
       }),
       createCandidate({
-        model: { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+        model: { id: "google/gemini-3-flash-preview", name: "Gemini 3 Flash Preview" },
         knowledge: {
-          id: "google/gemini-2.5-flash",
-          name: "Gemini 2.5 Flash",
+          id: "google/gemini-3-flash-preview",
+          name: "Gemini 3 Flash Preview",
           supportedGateways: ["openrouter"],
+          gatewayMappings: [{
+            gatewayPresetId: "openrouter",
+            modelId: "google/gemini-3-flash-preview",
+            displayName: "Gemini 3 Flash Preview",
+            operational: {
+              structuredOutput: true,
+              toolUse: true,
+              vision: true,
+              verifiedAt: "2026-03-19",
+              sources: [],
+            },
+          }],
           contextBand: "ultra",
           costTier: "efficient",
           vision: true,
@@ -475,7 +568,21 @@ describe("profile-builder-service", () => {
           reliability: 2,
           taskFamilies: ["general"],
           strengths: ["fast"],
+          caveats: [],
           whenToUse: "fast",
+          metrics: [],
+          lenses: [],
+          capabilities: {
+            nativeSearch: false,
+            groundedSearch: false,
+            documentReasoning: false,
+            imageGeneration: false,
+            imageEditing: false,
+            fileInput: false,
+            audioInput: false,
+            videoInput: false,
+            recommendedAsClassifier: false,
+          },
           lastVerified: "2026-03-19",
           sources: [],
         },
@@ -483,6 +590,302 @@ describe("profile-builder-service", () => {
     ]);
 
     expect(executor?.model.id).toBe("anthropic/claude-haiku-4.5");
+  });
+
+  it("prefers registry-ranked classifier candidates over the legacy hardcoded order", () => {
+    const classifier = selectClassifierCandidate(
+      [],
+      [
+        createCandidate({
+          model: { id: "google/gemini-3.1-flash-lite-preview", name: "Gemini 3.1 Flash Lite Preview" },
+          knowledge: {
+            id: "google/gemini-3.1-flash-lite-preview",
+            name: "Gemini 3.1 Flash Lite Preview",
+            supportedGateways: ["openrouter"],
+            gatewayMappings: [{
+              gatewayPresetId: "openrouter",
+              modelId: "google/gemini-3.1-flash-lite-preview",
+              displayName: "Gemini 3.1 Flash Lite Preview",
+              operational: {
+                structuredOutput: true,
+                toolUse: true,
+                vision: true,
+                verifiedAt: "2026-03-21",
+                sources: [],
+              },
+            }],
+            contextBand: "ultra",
+            costTier: "budget",
+            vision: true,
+            structuredOutput: true,
+            toolUse: true,
+            quality: 2,
+            speed: 3,
+            cost: 3,
+            reliability: 2,
+            taskFamilies: ["general"],
+            strengths: ["cheap"],
+            caveats: [],
+            whenToUse: "cheap",
+            metrics: [],
+            lenses: [],
+            capabilities: {
+              nativeSearch: false,
+              groundedSearch: false,
+              documentReasoning: false,
+              imageGeneration: false,
+              imageEditing: false,
+              fileInput: false,
+              audioInput: false,
+              videoInput: false,
+              recommendedAsClassifier: true,
+            },
+            lastVerified: "2026-03-21",
+            sources: [],
+          },
+        }),
+        createCandidate({
+          model: { id: "nvidia/nemotron-3-super-120b-a12b", name: "NVIDIA Nemotron 3 Super" },
+          knowledge: {
+            id: "nvidia/nemotron-3-super-120b-a12b",
+            name: "NVIDIA Nemotron 3 Super",
+            supportedGateways: ["openrouter"],
+            gatewayMappings: [{
+              gatewayPresetId: "openrouter",
+              modelId: "nvidia/nemotron-3-super-120b-a12b",
+              displayName: "NVIDIA Nemotron 3 Super",
+              operational: {
+                structuredOutput: true,
+                toolUse: true,
+                vision: false,
+                verifiedAt: "2026-03-21",
+                sources: [],
+              },
+            }],
+            contextBand: "long",
+            costTier: "budget",
+            vision: false,
+            structuredOutput: true,
+            toolUse: true,
+            quality: 2,
+            speed: 3,
+            cost: 3,
+            reliability: 2,
+            taskFamilies: ["general"],
+            strengths: ["fast"],
+            caveats: [],
+            whenToUse: "fast",
+            metrics: [],
+            lenses: [],
+            capabilities: {
+              nativeSearch: false,
+              groundedSearch: false,
+              documentReasoning: false,
+              imageGeneration: false,
+              imageEditing: false,
+              fileInput: false,
+              audioInput: false,
+              videoInput: false,
+              recommendedAsClassifier: true,
+            },
+            lastVerified: "2026-03-21",
+            sources: [],
+          },
+        }),
+      ],
+    );
+
+    expect(classifier?.model.id).toBe("nvidia/nemotron-3-super-120b-a12b");
+  });
+
+  it("scores real gateway pricing above coarse cost buckets for budget-sensitive profiles", () => {
+    const request: ProfileBuilderRequest = {
+      profileId: "budget-ops",
+      displayName: "Budget Ops",
+      optimizeFor: "cost",
+      taskFamilies: ["general", "support"],
+      needsVision: false,
+      needsLongContext: false,
+      latencySensitivity: "medium",
+      budgetPosture: "budget_first",
+    };
+
+    const cheapScore = scoreBuilderCandidate({
+      gatewayPresetId: "openrouter",
+      request,
+      knowledge: createKnowledge({
+        id: "cheap/model",
+        name: "Cheap Model",
+        costTier: "mid",
+        cost: 2,
+        speed: 2,
+        gatewayMappings: [{
+          gatewayPresetId: "openrouter",
+          modelId: "cheap/model",
+          displayName: "Cheap Model",
+          operational: {
+            contextWindow: 200000,
+            inputPricePerMillion: 0.1,
+            outputPricePerMillion: 0.5,
+            structuredOutput: true,
+            toolUse: true,
+            vision: false,
+            verifiedAt: "2026-03-21",
+            sources: [],
+          },
+        }],
+      }),
+    });
+
+    const expensiveScore = scoreBuilderCandidate({
+      gatewayPresetId: "openrouter",
+      request,
+      knowledge: createKnowledge({
+        id: "expensive/model",
+        name: "Expensive Model",
+        costTier: "mid",
+        cost: 2,
+        speed: 2,
+        gatewayMappings: [{
+          gatewayPresetId: "openrouter",
+          modelId: "expensive/model",
+          displayName: "Expensive Model",
+          operational: {
+            contextWindow: 200000,
+            inputPricePerMillion: 5,
+            outputPricePerMillion: 15,
+            structuredOutput: true,
+            toolUse: true,
+            vision: false,
+            verifiedAt: "2026-03-21",
+            sources: [],
+          },
+        }],
+      }),
+    });
+
+    expect(cheapScore).toBeGreaterThan(expensiveScore);
+  });
+
+  it("scores context and lens evidence directly for frontend long-context profiles", () => {
+    const request: ProfileBuilderRequest = {
+      profileId: "frontend-long",
+      displayName: "Frontend Long",
+      optimizeFor: "quality",
+      taskFamilies: ["general", "long_context"],
+      needsVision: false,
+      needsLongContext: true,
+      latencySensitivity: "medium",
+      budgetPosture: "balanced",
+      additionalContext: "Need strong frontend UI implementation for a React component library.",
+    };
+
+    const strongScore = scoreBuilderCandidate({
+      gatewayPresetId: "openrouter",
+      request,
+      knowledge: createKnowledge({
+        id: "strong/model",
+        name: "Strong Model",
+        contextBand: "long",
+        quality: 2,
+        reliability: 2,
+        gatewayMappings: [{
+          gatewayPresetId: "openrouter",
+          modelId: "strong/model",
+          displayName: "Strong Model",
+          operational: {
+            contextWindow: 1_048_576,
+            inputPricePerMillion: 1,
+            outputPricePerMillion: 5,
+            structuredOutput: true,
+            toolUse: true,
+            vision: false,
+            verifiedAt: "2026-03-21",
+            sources: [],
+          },
+        }],
+        lenses: [
+          { lens: "frontend_ui", rank: 1, rationale: "Best frontend option." },
+          { lens: "long_context", rank: 2, rationale: "Strong long-context option." },
+        ],
+      }),
+    });
+
+    const weakScore = scoreBuilderCandidate({
+      gatewayPresetId: "openrouter",
+      request,
+      knowledge: createKnowledge({
+        id: "weak/model",
+        name: "Weak Model",
+        contextBand: "long",
+        quality: 2,
+        reliability: 2,
+        gatewayMappings: [{
+          gatewayPresetId: "openrouter",
+          modelId: "weak/model",
+          displayName: "Weak Model",
+          operational: {
+            contextWindow: 200000,
+            inputPricePerMillion: 1,
+            outputPricePerMillion: 5,
+            structuredOutput: true,
+            toolUse: true,
+            vision: false,
+            verifiedAt: "2026-03-21",
+            sources: [],
+          },
+        }],
+      }),
+    });
+
+    expect(strongScore).toBeGreaterThan(weakScore);
+  });
+
+  it("does not shortlist image-generation models for text routing profiles", async () => {
+    loadGatewaysMock.mockResolvedValue([
+      {
+        id: "gw_openrouter",
+        user_id: "user_1",
+        name: "OpenRouter",
+        base_url: "https://openrouter.ai/api/v1",
+        api_key_enc: "enc:key",
+        models_json: "[]",
+        created_at: "2026-03-21T00:00:00.000Z",
+        updated_at: "2026-03-21T00:00:00.000Z",
+      },
+    ] as any);
+    gatewayRowToPublicMock.mockReturnValue({
+      id: "gw_openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeyEnc: "enc:key",
+      models: [
+        { id: "google/gemini-3.1-flash-image-preview", name: "Gemini 3.1 Flash Image Preview", modality: "text,image->text,image" },
+      ],
+    } as any);
+
+    const response = await handleCreateProfileBuilderRun(
+      new Request("http://localhost/api/v1/user/profile-builder/runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          profileId: "image-only-profile",
+          displayName: "Image Only Profile",
+          optimizeFor: "balanced",
+          taskFamilies: ["general"],
+          needsVision: true,
+          needsLongContext: false,
+          latencySensitivity: "medium",
+          budgetPosture: "balanced",
+        }),
+      }),
+      createAuth(),
+      createBindings() as any,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("No suitable executor model"),
+    });
   });
 
   it("live-verifies OpenRouter candidates without mutating the original input", async () => {
@@ -502,6 +905,18 @@ describe("profile-builder-service", () => {
         id: "openai/gpt-5.4-mini",
         name: "GPT-5.4 mini",
         supportedGateways: ["openrouter"],
+        gatewayMappings: [{
+          gatewayPresetId: "openrouter",
+          modelId: "openai/gpt-5.4-mini",
+          displayName: "GPT-5.4 mini",
+          operational: {
+            structuredOutput: true,
+            toolUse: true,
+            vision: true,
+            verifiedAt: "2026-03-19",
+            sources: [],
+          },
+        }],
         contextBand: "long",
         costTier: "mid",
         vision: true,
@@ -513,7 +928,21 @@ describe("profile-builder-service", () => {
         reliability: 3,
         taskFamilies: ["general"],
         strengths: ["fast"],
+        caveats: [],
         whenToUse: "fast",
+        metrics: [],
+        lenses: [],
+        capabilities: {
+          nativeSearch: false,
+          groundedSearch: false,
+          documentReasoning: false,
+          imageGeneration: false,
+          imageEditing: false,
+          fileInput: true,
+          audioInput: false,
+          videoInput: false,
+          recommendedAsClassifier: false,
+        },
         lastVerified: "2026-03-19",
         sources: [],
       },

@@ -31,7 +31,7 @@ import {
 
 import type { D1Database, KVNamespace } from "../infra/cloudflare-types";
 import { ROUTER_CACHE } from "../constants";
-import { DEFAULT_CATALOG, DEFAULT_ROUTER_CONFIG } from "./defaults";
+import { DEFAULT_ROUTER_CONFIG } from "./defaults";
 import { getRuntimeBindings } from "../infra/runtime-bindings";
 
 const ACTIVE_META_KEY = "router:active:meta";
@@ -70,7 +70,7 @@ export interface RouterRepository {
 
 const memoryState = {
   config: { ...DEFAULT_ROUTER_CONFIG } as RouterConfig,
-  catalog: [...DEFAULT_CATALOG] as CatalogItem[],
+  catalog: [] as CatalogItem[],
   explanations: new Map<string, RoutingExplanation>(),
   runs: [] as IngestionRunSummary[],
   pinStore: new InMemoryPinStore()
@@ -314,7 +314,10 @@ class CloudflareRepository implements RouterRepository {
       typeof catalogRaw === "string" ? catalogRaw : undefined
     );
 
-    const value = catalog ?? [...DEFAULT_CATALOG];
+    // Execution model inventories must come from stored system data or synced
+    // gateway models. If the stored catalog blob is missing or invalid, fail
+    // closed with an empty list instead of reviving a hard-coded fallback.
+    const value = catalog ?? [];
     this.catalogCache = { value, cachedAtMs: nowMs };
     return value;
   }

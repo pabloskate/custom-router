@@ -1,21 +1,84 @@
-import type { ChatMessage, RouterTool, ThreadFingerprintInput } from "./types";
+import type { ChatMessage, RouterRequestLike, RouterTool, ThreadFingerprintInput } from "./types";
 
 const FORCE_ROUTE_KEYWORD = "$$route";
 
-export function hasImagePayload(messages: ChatMessage[] = []): boolean {
-  for (const message of messages) {
-    if (Array.isArray(message.content)) {
-      for (const part of message.content) {
-        if (part && typeof part === "object") {
-          const type = (part as { type?: unknown }).type;
-          if (type === "image_url" || type === "image") {
-            return true;
-          }
-        }
+export interface RequestImageCapabilities {
+  hasImageInput: boolean;
+  requiresImageOutput: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function hasImageContentPart(part: unknown): boolean {
+  if (!isRecord(part)) {
+    return false;
+  }
+
+  const type = part.type;
+  return type === "image_url" || type === "image" || type === "input_image";
+}
+
+function hasImageContent(content: unknown): boolean {
+  if (Array.isArray(content)) {
+    return content.some(hasImageContentPart);
+  }
+
+  return hasImageContentPart(content);
+}
+
+function hasImageInputPayload(input: unknown): boolean {
+  if (Array.isArray(input)) {
+    return input.some((item) => {
+      if (!isRecord(item)) {
+        return false;
       }
+
+      if (item.type === "input_image") {
+        return true;
+      }
+
+      return hasImageContent(item.content);
+    });
+  }
+
+  if (!isRecord(input)) {
+    return false;
+  }
+
+  if (input.type === "input_image") {
+    return true;
+  }
+
+  return hasImageContent(input.content);
+}
+
+export function hasImagePayload(messages: ChatMessage[] = [], input?: unknown, prompt?: unknown): boolean {
+  for (const message of messages) {
+    if (hasImageContent(message.content)) {
+      return true;
     }
   }
-  return false;
+
+  return hasImageInputPayload(input) || hasImageInputPayload(prompt);
+}
+
+function requestWantsImageOutput(modalities: unknown): boolean {
+  if (!Array.isArray(modalities)) {
+    return false;
+  }
+
+  return modalities.some((modality) => typeof modality === "string" && modality.toLowerCase() === "image");
+}
+
+export function getRequestImageCapabilities(
+  request: RouterRequestLike & Record<string, unknown>,
+): RequestImageCapabilities {
+  return {
+    hasImageInput: hasImagePayload(request.messages ?? [], request.input, request.prompt),
+    requiresImageOutput: requestWantsImageOutput(request.modalities),
+  };
 }
 
 function contentToText(content: unknown): string {

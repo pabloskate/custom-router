@@ -81,7 +81,7 @@ Client
 | `docs/config-agent-deprecation.md` | Background on the retired Config Agent feature and why its runtime hooks were removed. |
 | `storage/repository.ts` | `CloudflareRepository` (D1+KV) and `MemoryRepository` (local dev). `getRouterRepository()` auto-selects. |
 | `storage/gateway-store.ts` | D1 helpers for user-configured upstream gateways and model catalogs. |
-| `storage/defaults.ts` | Default catalog and router config used in local dev / bootstrapping. |
+| `storage/defaults.ts` | Default router config and classifier instructions. Execution model inventories are not hard-coded here. |
 | `upstream/upstream.ts` | OpenAI-compatible upstream transport + URL normalization helpers. |
 | `upstream/openrouter.ts` | Thin wrapper that proxies a request to OpenRouter and normalises the result. |
 | `upstream/openrouter-models.ts` | Model catalog search and validation against OpenRouter's public models API. |

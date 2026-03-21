@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -87,6 +88,16 @@ export function OssHomepage() {
   return (
     <div className="quickstart-page">
       <section className="quickstart-hero">
+        <div className="quickstart-brand">
+          <Image
+            src="/brand/custom-router-wordmark.webp"
+            alt="CustomRouter"
+            width={480}
+            height={122}
+            className="quickstart-brand-wordmark"
+            priority
+          />
+        </div>
         <span className="badge badge--info">Self-hostable OpenAI-compatible router</span>
         <h1>Run CustomRouter on your own infrastructure.</h1>
         <p>

@@ -4,15 +4,55 @@ import { getUserGateway } from "@/src/lib/storage";
 
 interface OpenAIModel {
   id: string;
+  name?: string;
   object?: string;
   created?: number;
   owned_by?: string;
+  architecture?: {
+    modality?: string;
+    input_modalities?: unknown[];
+    output_modalities?: unknown[];
+  };
 }
 
 interface OpenAIModelsResponse {
   object?: string;
   data?: OpenAIModel[];
   models?: OpenAIModel[];
+}
+
+function normalizeModalityTokens(values: unknown[] | undefined): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
+}
+
+function deriveModelModality(model: OpenAIModel): string | undefined {
+  const explicitModality = model.architecture?.modality?.trim();
+  if (explicitModality) {
+    return explicitModality.replace(/\+/g, ",").toLowerCase();
+  }
+
+  const inputModalities = normalizeModalityTokens(model.architecture?.input_modalities);
+  const outputModalities = normalizeModalityTokens(model.architecture?.output_modalities);
+
+  if (inputModalities.length === 0 && outputModalities.length === 0) {
+    return undefined;
+  }
+
+  const inputSegment = inputModalities.join(",");
+  const outputSegment = outputModalities.join(",");
+
+  if (!inputSegment) {
+    return outputSegment || undefined;
+  }
+
+  return outputSegment ? `${inputSegment}->${outputSegment}` : inputSegment;
 }
 
 export async function GET(
@@ -81,7 +121,11 @@ export async function GET(
 
     const models = rawModels
       .filter((m) => m.id)
-      .map((m) => ({ id: m.id, name: m.id }))  // name defaults to id; user can rename in UI
+      .map((m) => ({
+        id: m.id,
+        name: m.id,
+        modality: deriveModelModality(m),
+      }))
       .sort((a, b) => a.id.localeCompare(b.id));
 
     return json({ models });

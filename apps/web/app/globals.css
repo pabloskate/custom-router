@@ -126,6 +126,16 @@ body {
   max-width: 56rem;
 }
 
+.quickstart-brand {
+  display: inline-flex;
+  width: min(100%, 30rem);
+}
+
+.quickstart-brand-wordmark {
+  width: 100%;
+  height: auto;
+}
+
 .quickstart-hero h1 {
   font-size: clamp(2.25rem, 5vw, 4rem);
   line-height: 1.05;
@@ -300,24 +310,22 @@ body {
   flex-shrink: 0;
 }
 
+.topbar-brand > a {
+  display: inline-flex;
+  min-width: 0;
+  text-decoration: none;
+}
+
 .topbar-logo-lockup {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  min-width: 0;
 }
 
-.topbar-logo-mark {
-  width: 2.4rem;
-  height: 1.7rem;
-  object-fit: contain;
-}
-
-.topbar-logo {
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--accent);
-  white-space: nowrap;
+.topbar-wordmark {
+  width: clamp(11rem, 18vw, 14rem);
+  height: auto;
+  display: block;
 }
 
 .topbar-tagline {
@@ -338,7 +346,7 @@ body {
   flex-shrink: 0;
 }
 
-.topbar a {
+.topbar nav a {
   text-decoration: none;
   color: var(--text-secondary);
   font-size: 0.875rem;
@@ -349,12 +357,12 @@ body {
   white-space: nowrap;
 }
 
-.topbar a:hover {
+.topbar nav a:hover {
   color: var(--text-primary);
   background: var(--bg-interactive);
 }
 
-.topbar a[aria-current="page"] {
+.topbar nav a[aria-current="page"] {
   color: var(--text-primary);
   background: var(--bg-interactive);
   box-shadow: var(--shadow-sm);
@@ -372,13 +380,8 @@ body {
     display: none;
   }
 
-  .topbar-logo {
-    font-size: 1.2rem;
-  }
-
-  .topbar-logo-mark {
-    width: 2rem;
-    height: 1.4rem;
+  .topbar-wordmark {
+    width: 9.5rem;
   }
 
   .topbar nav {

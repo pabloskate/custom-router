@@ -1,7 +1,7 @@
 import {
   buildThreadFingerprint,
+  getRequestImageCapabilities,
   hasForceRouteRequest,
-  hasImagePayload,
   isAgentLoop,
   isContinuationRequest,
 } from "./threading";
@@ -32,13 +32,59 @@ import type { LlmRouterFunction } from "./llm-router";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
-function getAllowedCatalog(catalog: CatalogItem[], threadHasImage: boolean): CatalogItem[] {
-  if (!threadHasImage) {
+function parseModalityTokens(segment: string | undefined): string[] {
+  if (!segment) {
+    return [];
+  }
+
+  return segment
+    .split(/[,+]/)
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length > 0);
+}
+
+function getModelModalitySupport(model: CatalogItem): { input: string[]; output: string[] } {
+  const raw = model.modality?.trim().toLowerCase();
+  if (!raw) {
+    return { input: [], output: [] };
+  }
+
+  const [inputSegment, outputSegment] = raw.split("->", 2);
+  const input = parseModalityTokens(inputSegment);
+  const output = parseModalityTokens(outputSegment ?? inputSegment);
+
+  return { input, output };
+}
+
+function modelSupportsImageInput(model: CatalogItem): boolean {
+  return getModelModalitySupport(model).input.includes("image");
+}
+
+function modelSupportsImageOutput(model: CatalogItem): boolean {
+  return getModelModalitySupport(model).output.includes("image");
+}
+
+function getAllowedCatalog(
+  catalog: CatalogItem[],
+  imageCapabilities: { hasImageInput: boolean; requiresImageOutput: boolean },
+): CatalogItem[] {
+  if (!imageCapabilities.hasImageInput && !imageCapabilities.requiresImageOutput) {
     return catalog;
   }
 
-  const visionModels = catalog.filter((model) => model.modality?.includes("image"));
-  return visionModels.length > 0 ? visionModels : catalog;
+  const compatibleModels = catalog.filter((model) => {
+    if (imageCapabilities.hasImageInput && !modelSupportsImageInput(model)) {
+      return false;
+    }
+
+    if (imageCapabilities.requiresImageOutput && !modelSupportsImageOutput(model)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return compatibleModels.length > 0 ? compatibleModels : catalog;
 }
 
 export interface RouterEngineOptions {
@@ -118,8 +164,8 @@ export class RouterEngine {
       triggerKeywords: effectiveConfig.routeTriggerKeywords,
     });
     const isLoop = isAgentLoop(messages);
-    const threadHasImage = hasImagePayload(messages);
-    const allowedCatalog = getAllowedCatalog(args.catalog, threadHasImage);
+    const imageCapabilities = getRequestImageCapabilities(args.request as RouterRequestLike & Record<string, unknown>);
+    const allowedCatalog = getAllowedCatalog(args.catalog, imageCapabilities);
 
     const notes = [`Routed via profile: ${matchedProfile.id}`];
     const pinState = await resolvePinPolicy({
@@ -132,7 +178,8 @@ export class RouterEngine {
       defaultSmartPinTurns,
       allowedCatalog,
       fullCatalog: args.catalog,
-      threadHasImage,
+      hasImageInput: imageCapabilities.hasImageInput,
+      requiresImageOutput: imageCapabilities.requiresImageOutput,
     });
     notes.push(...pinState.notes);
 
@@ -174,7 +221,8 @@ export class RouterEngine {
     const visionAdjusted = applyVisionCapabilityOverride({
       selection,
       allowedCatalog,
-      threadHasImage,
+      hasImageInput: imageCapabilities.hasImageInput,
+      requiresImageOutput: imageCapabilities.requiresImageOutput,
     });
     selection = visionAdjusted.selection;
     notes.push(...visionAdjusted.notes);
