@@ -14,6 +14,53 @@ async function loadRepositoryWithBindings(bindings: Record<string, unknown>) {
   return import("./repository");
 }
 
+function createKvStub() {
+  return {
+    get: vi.fn(async () => null),
+    put: vi.fn(async () => undefined),
+    delete: vi.fn(async () => undefined),
+  };
+}
+
+function createD1Stub(args: {
+  routingExplanationColumns: string[];
+  onRun?: (query: string, values: unknown[]) => void;
+}) {
+  const preparedQueries: string[] = [];
+
+  const db = {
+    prepare(query: string) {
+      preparedQueries.push(query);
+      let boundValues: unknown[] = [];
+
+      return {
+        bind(...values: unknown[]) {
+          boundValues = values;
+          return this;
+        },
+        async first() {
+          return null;
+        },
+        async all() {
+          if (query === "PRAGMA table_info(routing_explanations)") {
+            return {
+              results: args.routingExplanationColumns.map((name) => ({ name })),
+            };
+          }
+
+          throw new Error(`Unexpected all() query in test: ${query}`);
+        },
+        async run() {
+          args.onRun?.(query, boundValues);
+          return { meta: { changes: 1 } };
+        },
+      };
+    },
+  };
+
+  return { db, preparedQueries };
+}
+
 describe("repository execution catalog defaults", () => {
   it("does not seed a hard-coded execution catalog in memory mode", async () => {
     const { getRouterRepository } = await loadRepositoryWithBindings({});
@@ -190,5 +237,80 @@ describe("repository execution catalog defaults", () => {
         decisionReason: "initial_route",
       },
     ]);
+  });
+
+  it("falls back to legacy explanation writes when D1 is missing history columns", async () => {
+    const runCalls: Array<{ query: string; values: unknown[] }> = [];
+    const { db } = createD1Stub({
+      routingExplanationColumns: ["request_id", "explanation_json", "created_at"],
+      onRun: (query, values) => {
+        runCalls.push({ query, values });
+      },
+    });
+    const { getRouterRepository } = await loadRepositoryWithBindings({
+      ROUTER_DB: db,
+      ROUTER_KV: createKvStub(),
+    });
+
+    const repository = getRouterRepository();
+
+    await repository.putExplanation({
+      userId: "user_1",
+      explanation: {
+        requestId: "req_legacy",
+        createdAt: "2026-03-24T20:00:00.000Z",
+        requestedModel: "planning-backend",
+        catalogVersion: "1.0",
+        classificationConfidence: 0.7,
+        classificationSignals: [],
+        threadKey: "thread_legacy",
+        isContinuation: false,
+        pinUsed: false,
+        selectedModel: "model/legacy",
+        decisionReason: "initial_route",
+        fallbackChain: [],
+        notes: [],
+      },
+    });
+
+    expect(runCalls).toHaveLength(1);
+    expect(runCalls[0]?.query).toContain("request_id");
+    expect(runCalls[0]?.query).toContain("explanation_json");
+    expect(runCalls[0]?.query).toContain("created_at");
+    expect(runCalls[0]?.query).not.toContain("user_id");
+    expect(runCalls[0]?.values).toEqual([
+      "req_legacy",
+      JSON.stringify({
+        requestId: "req_legacy",
+        createdAt: "2026-03-24T20:00:00.000Z",
+        requestedModel: "planning-backend",
+        catalogVersion: "1.0",
+        classificationConfidence: 0.7,
+        classificationSignals: [],
+        threadKey: "thread_legacy",
+        isContinuation: false,
+        pinUsed: false,
+        selectedModel: "model/legacy",
+        decisionReason: "initial_route",
+        fallbackChain: [],
+        notes: [],
+      }),
+      "2026-03-24T20:00:00.000Z",
+    ]);
+  });
+
+  it("returns empty recent history when D1 is missing history columns", async () => {
+    const { db, preparedQueries } = createD1Stub({
+      routingExplanationColumns: ["request_id", "explanation_json", "created_at"],
+    });
+    const { getRouterRepository } = await loadRepositoryWithBindings({
+      ROUTER_DB: db,
+      ROUTER_KV: createKvStub(),
+    });
+
+    const repository = getRouterRepository();
+
+    await expect(repository.listRecentModelUsage("user_1", 20)).resolves.toEqual([]);
+    expect(preparedQueries).toEqual(["PRAGMA table_info(routing_explanations)"]);
   });
 });

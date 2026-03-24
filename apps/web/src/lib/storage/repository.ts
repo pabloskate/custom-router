@@ -85,6 +85,7 @@ const memoryState = {
   pinStore: new InMemoryPinStore()
 };
 const threadPinMetadataColumnCache = new WeakMap<D1Database, Promise<boolean>>();
+const routingExplanationHistoryColumnCache = new WeakMap<D1Database, Promise<boolean>>();
 
 function parseJson<T>(value: string | null | undefined): T | null {
   if (!value) {
@@ -306,6 +307,28 @@ class CloudflareRepository implements RouterRepository {
     this.pinStore = new D1PinStore(db);
   }
 
+  private hasRoutingExplanationHistoryColumns(): Promise<boolean> {
+    const cached = routingExplanationHistoryColumnCache.get(this.db);
+    if (cached) {
+      return cached;
+    }
+
+    const lookup = this.db
+      .prepare("PRAGMA table_info(routing_explanations)")
+      .all<{ name?: string | null }>()
+      .then(({ results }) => {
+        const names = new Set(results.map((column) => column.name).filter((value): value is string => typeof value === "string"));
+        return names.has("user_id")
+          && names.has("requested_model")
+          && names.has("selected_model")
+          && names.has("decision_reason");
+      })
+      .catch(() => false);
+
+    routingExplanationHistoryColumnCache.set(this.db, lookup);
+    return lookup;
+  }
+
   async getConfig(): Promise<RouterConfig> {
     const nowMs = Date.now();
     if (this.configCache && nowMs - this.configCache.cachedAtMs < ROUTER_CACHE.CONFIG_TTL_MS) {
@@ -383,31 +406,50 @@ class CloudflareRepository implements RouterRepository {
   }
 
   async putExplanation(record: PersistedExplanationRecord): Promise<void> {
+    const includeHistoryColumns = await this.hasRoutingExplanationHistoryColumns();
     await this.db
       .prepare(
-        `INSERT OR REPLACE INTO routing_explanations (
-           request_id,
-           user_id,
-           requested_model,
-           selected_model,
-           decision_reason,
-           explanation_json,
-           created_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+        includeHistoryColumns
+          ? `INSERT OR REPLACE INTO routing_explanations (
+               request_id,
+               user_id,
+               requested_model,
+               selected_model,
+               decision_reason,
+               explanation_json,
+               created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+          : `INSERT OR REPLACE INTO routing_explanations (
+               request_id,
+               explanation_json,
+               created_at
+             ) VALUES (?1, ?2, ?3)`
       )
       .bind(
         record.explanation.requestId,
-        record.userId,
-        record.explanation.requestedModel,
-        record.explanation.selectedModel,
-        record.explanation.decisionReason,
-        JSON.stringify(record.explanation),
-        record.explanation.createdAt,
+        ...(includeHistoryColumns
+          ? [
+              record.userId,
+              record.explanation.requestedModel,
+              record.explanation.selectedModel,
+              record.explanation.decisionReason,
+              JSON.stringify(record.explanation),
+              record.explanation.createdAt,
+            ]
+          : [
+              JSON.stringify(record.explanation),
+              record.explanation.createdAt,
+            ]),
       )
       .run();
   }
 
   async listRecentModelUsage(userId: string, limit = 20): Promise<RecentModelUsageEntry[]> {
+    const includeHistoryColumns = await this.hasRoutingExplanationHistoryColumns();
+    if (!includeHistoryColumns) {
+      return [];
+    }
+
     const cappedLimit = Math.max(1, Math.min(limit, 50));
     const { results } = await this.db
       .prepare(
