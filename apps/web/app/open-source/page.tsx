@@ -4,7 +4,7 @@ import { OSS } from "../../src/lib/constants";
 
 const PUBLIC_REPO_ITEMS = [
   "Router engine, catalog ingest, schema, and Cloudflare deployment path",
-  "Admin UI, BYOK credential flows, API keys, and routing explanations",
+  "Admin UI, BYOK credential flows, API keys, and optional routing explanations",
   "Stable OpenAI-compatible endpoints for chat completions, responses, and models",
 ] as const;
 

@@ -4,6 +4,7 @@ import type { AuthResult } from "@/src/lib/auth";
 import {
   authenticateSession,
   getUserUpstreamCredentials,
+  hasUsersRouteLoggingEnabledColumn,
   isSameOriginRequest,
   upsertUserUpstreamCredentials,
   withCsrf,
@@ -28,6 +29,7 @@ vi.mock("@/src/lib/auth", async () => {
     authenticateSession: vi.fn(),
     encryptByokSecret: vi.fn(async ({ plaintext }: { plaintext: string }) => `enc:${plaintext}`),
     getUserUpstreamCredentials: vi.fn(),
+    hasUsersRouteLoggingEnabledColumn: vi.fn(),
     hasUsersSmartPinTurnsColumn: vi.fn(),
     isSameOriginRequest: vi.fn(),
     resolveByokEncryptionSecret: vi.fn(({ byokSecret }: { byokSecret?: string | null }) => byokSecret ?? null),
@@ -59,6 +61,7 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
     profiles: [{ id: "planning-backend", name: "Planning Backend", models: [] }],
     routeTriggerKeywords: null,
     routingFrequency: null,
+    routeLoggingEnabled: false,
     routingConfigRequiresReset: false,
     upstreamBaseUrl: null,
     upstreamApiKeyEnc: null,
@@ -84,6 +87,7 @@ describe("/api/v1/user/me route", () => {
   const authMock = vi.mocked(authenticateSession);
   const sameOriginMock = vi.mocked(isSameOriginRequest);
   const upstreamGetMock = vi.mocked(getUserUpstreamCredentials);
+  const hasRouteLoggingEnabledColumnMock = vi.mocked(hasUsersRouteLoggingEnabledColumn);
   const upstreamUpsertMock = vi.mocked(upsertUserUpstreamCredentials);
   const withSessionAuthMock = vi.mocked(withSessionAuth);
   const withCsrfMock = vi.mocked(withCsrf);
@@ -114,6 +118,7 @@ describe("/api/v1/user/me route", () => {
       classifier_api_key_enc: null,
       updated_at: "2026-03-11T00:00:00.000Z",
     });
+    hasRouteLoggingEnabledColumnMock.mockResolvedValue(true);
     upstreamUpsertMock.mockResolvedValue(undefined);
     loadGatewaysMock.mockResolvedValue([
       {
@@ -154,6 +159,7 @@ describe("/api/v1/user/me route", () => {
 
     const body = await response.json() as any;
     expect(body.user.profiles).toBeNull();
+    expect(body.user.routeLoggingEnabled).toBe(false);
     expect(body.user.routingConfigRequiresReset).toBe(true);
     expect(body.user.routingConfigResetMessage).toContain("Legacy routing settings");
     expect(body.user.defaultModel).toBeUndefined();
@@ -190,6 +196,7 @@ describe("/api/v1/user/me route", () => {
           ],
           route_trigger_keywords: ["reroute"],
           routing_frequency: "smart",
+          route_logging_enabled: true,
           smart_pin_turns: 5,
         }),
       }),
@@ -201,8 +208,11 @@ describe("/api/v1/user/me route", () => {
     expect(updateSql).toContain("classifier_model = NULL");
     expect(updateSql).toContain("routing_instructions = NULL");
     expect(updateSql).toContain("blocklist = NULL");
+    expect(db.prepare).toHaveBeenCalledWith("UPDATE users SET route_logging_enabled = ?1, updated_at = ?2 WHERE id = ?3");
     const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
-    expect(JSON.parse(String(bindArgs[1]))).toEqual([
+    expect(bindArgs[0]).toBe(1);
+    const profileUpdateBindArgs = db.__bindMock.mock.calls.at(-2) ?? [];
+    expect(JSON.parse(String(profileUpdateBindArgs[1]))).toEqual([
       {
         id: "planning-backend",
         name: "Planning Backend",
@@ -310,7 +320,7 @@ describe("/api/v1/user/me route", () => {
     );
 
     expect(response.status).toBe(200);
-    const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
+    const bindArgs = db.__bindMock.mock.calls.at(-2) ?? [];
     expect(JSON.parse(String(bindArgs[1]))).toEqual([
       {
         id: "auto",

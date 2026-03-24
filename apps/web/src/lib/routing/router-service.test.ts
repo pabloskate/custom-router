@@ -177,6 +177,7 @@ describe("routeAndProxy", () => {
         messages: [{ role: "user", content: "route this" }],
       },
       userConfig: {
+        routeLoggingEnabled: true,
         profiles: [
           {
             id: "auto",
@@ -218,6 +219,69 @@ describe("routeAndProxy", () => {
         }),
       }),
     );
+  });
+
+  it("skips explanation persistence when route logging is disabled", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+    classifierMock.mockResolvedValue({
+      selectedModel: "model/alpha",
+      confidence: 0.91,
+      signals: ["frontier_classification"],
+    });
+    upstreamMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      response: new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "ok" } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      ),
+    });
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      userId: "user_1",
+      body: {
+        model: "auto",
+        messages: [{ role: "user", content: "route this" }],
+      },
+      userConfig: {
+        routeLoggingEnabled: false,
+        profiles: [
+          {
+            id: "auto",
+            name: "Auto",
+            models: [
+              { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
+            ],
+            defaultModel: key("gw_default", "model/alpha"),
+            classifierModel: key("gw_default", "model/alpha"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [{ id: "model/alpha", name: "Alpha" }],
+          },
+        ],
+      },
+    });
+
+    expect(result.response.status).toBe(200);
+    expect(repository.putExplanation).not.toHaveBeenCalled();
   });
 
   it("prefers an exact profile match over a gateway model with the same id", async () => {

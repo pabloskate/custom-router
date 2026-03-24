@@ -11,6 +11,7 @@ export type ServerUserInfo = {
   profiles: RouterProfile[] | null;
   routeTriggerKeywords: string[] | null;
   routingFrequency: string | null;
+  routeLoggingEnabled: boolean;
   routingConfigRequiresReset: boolean;
   routingConfigResetMessage?: string | null;
 };

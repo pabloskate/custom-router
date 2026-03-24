@@ -72,6 +72,7 @@ export async function routeAndProxy(args: {
 }): Promise<RouteAndProxyResult> {
   let classifierInvoked = false;
   const requestId = makeRequestId("router");
+  const routeLoggingEnabled = args.userConfig?.routeLoggingEnabled === true;
   const bindings = getRuntimeBindings();
   const byokSecret = resolveByokEncryptionSecret({
     byokSecret: bindings.BYOK_ENCRYPTION_SECRET ?? null,
@@ -143,6 +144,7 @@ export async function routeAndProxy(args: {
       profileId: matchedProfile?.id,
     });
     persistExplanation({
+      enabled: routeLoggingEnabled,
       repository,
       userId: args.userId,
       explanation,
@@ -169,6 +171,7 @@ export async function routeAndProxy(args: {
   });
   if (classifierResolution.failure) {
     persistExplanation({
+      enabled: routeLoggingEnabled,
       repository,
       userId: args.userId,
       explanation: classifierResolution.failure.explanation,
@@ -213,6 +216,7 @@ export async function routeAndProxy(args: {
 
   if (decision.routingError || !decision.selectedModel) {
     persistExplanation({
+      enabled: routeLoggingEnabled,
       repository,
       userId: args.userId,
       explanation: {
@@ -235,6 +239,7 @@ export async function routeAndProxy(args: {
   // Dry-run mode: return routing decision without proxying to the upstream model.
   if (args.dryRun) {
     persistExplanation({
+      enabled: routeLoggingEnabled,
       repository,
       userId: args.userId,
       explanation: {
@@ -345,6 +350,7 @@ export async function routeAndProxy(args: {
       pinBudgetSource: decision.pinBudgetSource,
     });
     persistExplanation({
+      enabled: routeLoggingEnabled,
       repository,
       userId: args.userId,
       explanation,
@@ -373,6 +379,7 @@ export async function routeAndProxy(args: {
 
   // All attempts failed — store explanation and return 502
   persistExplanation({
+    enabled: routeLoggingEnabled,
     repository,
     userId: args.userId,
     explanation: {

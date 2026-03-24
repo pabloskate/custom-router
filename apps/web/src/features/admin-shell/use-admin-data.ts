@@ -195,6 +195,7 @@ export function useAdminData() {
       profiles: updatedUser.profiles,
       route_trigger_keywords: updatedUser.routeTriggerKeywords,
       routing_frequency: updatedUser.routingFrequency,
+      route_logging_enabled: updatedUser.routeLoggingEnabled,
     };
 
     const response = await fetch("/api/v1/user/me", {

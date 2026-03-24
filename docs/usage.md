@@ -224,7 +224,7 @@ Diagnostic headers may also be attached on routed success responses:
 
 `x-router-confidence` is a heuristic `0-1` classifier score, not a guarantee. It is omitted for passthrough requests, reused pins, default fallback routing, and live failover-selected fallback responses.
 
-For richer diagnostic metadata, use `/api/v1/router/inspect` or stored explanations.
+For richer diagnostic metadata, use `/api/v1/router/inspect` or stored explanations when route logging is enabled for the account.
 
 #### `GET /api/v1/models`
 
@@ -257,7 +257,7 @@ Headers:
 ### Routed request failure and explanation lookup
 
 - On some routing failures, responses include `request_id` in JSON.
-- You can fetch the stored explanation when you have the request id:
+- When route logging is enabled for the account, you can fetch the stored explanation when you have the request id:
 
 `GET /api/v1/router/explanations/{requestId}`
 

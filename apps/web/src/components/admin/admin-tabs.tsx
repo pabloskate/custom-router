@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import React, { type Dispatch, type SetStateAction } from "react";
 
 import { ApiKeyPanel } from "./ApiKeyPanel";
 import { InviteCodePanel } from "./InviteCodePanel";
@@ -8,7 +8,7 @@ import { type AdminExtensionContext, type AdminTabDefinition, type ApiKeyInfo, t
 import { GatewayPanel } from "@/src/features/gateways/components/GatewayPanel";
 import type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 import { PlaygroundPanel } from "@/src/features/playground/PlaygroundPanel";
-import { LogsPanel } from "@/src/features/routing-logs/LogsPanel";
+import { LogsPanelWithState } from "@/src/features/routing-logs/LogsPanel";
 import { QuickstartPanel } from "@/src/features/routing-quickstart/QuickstartPanel";
 import { type RegistrationMode } from "@/src/lib/constants";
 
@@ -298,9 +298,14 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
       subtitle: "Review recent routed requests and the models they selected",
       order: 250,
       icon: IconLogs,
-      render: () => (
+      render: (ctx: AdminExtensionContext) => (
         <div className="animate-fade-in">
-          <LogsPanel />
+          <LogsPanelWithState
+            enabled={ctx.user.routeLoggingEnabled}
+            onToggle={async (enabled) => {
+              return args.saveUserData({ routeLoggingEnabled: enabled });
+            }}
+          />
         </div>
       ),
     },

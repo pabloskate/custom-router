@@ -15,6 +15,10 @@ function parseLimit(request: Request): number {
 
 export async function GET(request: Request): Promise<Response> {
   return withSessionAuth(request, async (auth) => {
+    if (!auth.routeLoggingEnabled) {
+      return jsonNoStore({ entries: [] }, 200);
+    }
+
     const repository = getRouterRepository();
     const entries = await repository.listRecentModelUsage(auth.userId, parseLimit(request));
 

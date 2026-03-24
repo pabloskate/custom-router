@@ -41,10 +41,15 @@ export async function pinSelectedModel(args: {
 }
 
 export function persistExplanation(args: {
+  enabled?: boolean;
   repository: RouterRepository;
   userId: string;
   explanation: RoutingExplanation;
 }): void {
+  if (!args.enabled) {
+    return;
+  }
+
   runInBackground(args.repository.putExplanation({
     userId: args.userId,
     explanation: args.explanation,

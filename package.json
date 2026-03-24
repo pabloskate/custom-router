@@ -19,7 +19,7 @@
     "verify:admin": "node scripts/verify-admin-flow.mjs",
     "verify:admin:remote": "node scripts/verify-admin-flow.mjs",
     "local:stable": "pkill -f \"next dev\" || true; pkill -f \"next start\" || true; rm -rf apps/web/.next; npm run db:seed; npm run build -w @custom-router/web; REGISTRATION_MODE=open PORT=${PORT:-3010} npm run start -w @custom-router/web",
-    "db:seed": "npx wrangler d1 execute custom-router-test --local --file=infra/d1/schema.sql --config apps/web/wrangler.toml",
+    "db:seed": "rm -rf apps/web/.wrangler/state/v3/d1 && npx wrangler d1 execute custom-router-test --local --file=infra/d1/schema.sql --config apps/web/wrangler.toml",
     "test": "npm run --workspaces --if-present test",
     "typecheck": "npm run --workspaces typecheck",
     "eval:router:dry": "node scripts/router-eval.mjs --mode router --dry-run",

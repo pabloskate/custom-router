@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS users (
   profiles TEXT,           -- JSON: RouterProfile[] — named routing configurations
   route_trigger_keywords TEXT,  -- JSON: string[] — custom keywords that trigger re-routing
   routing_frequency TEXT,       -- "every_message" | "smart" | "new_thread_only"
+  route_logging_enabled INTEGER NOT NULL DEFAULT 0, -- 0 = do not persist routing explanations/history
   smart_pin_turns INTEGER,      -- Only used in smart mode: reroute after this many pinned turns
   config_agent_enabled INTEGER NOT NULL DEFAULT 0, -- legacy/deprecated: retained for schema compatibility
   config_agent_orchestrator_model TEXT, -- legacy/deprecated: retained for schema compatibility

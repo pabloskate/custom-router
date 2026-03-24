@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN route_logging_enabled INTEGER NOT NULL DEFAULT 0;

@@ -1,6 +1,7 @@
 import {
   encryptByokSecret,
   getUserUpstreamCredentials,
+  hasUsersRouteLoggingEnabledColumn,
   resolveByokEncryptionSecret,
   upsertUserUpstreamCredentials,
   withCsrf,
@@ -83,6 +84,7 @@ export async function GET(request: Request): Promise<Response> {
         profiles: auth.profiles,
         routeTriggerKeywords: auth.routeTriggerKeywords,
         routingFrequency: auth.routingFrequency,
+        routeLoggingEnabled: auth.routeLoggingEnabled,
         routingConfigRequiresReset: auth.routingConfigRequiresReset,
         routingConfigResetMessage: auth.routingConfigRequiresReset ? LEGACY_ROUTING_RESET_MESSAGE : null,
       },
@@ -115,6 +117,9 @@ export async function PUT(request: Request): Promise<Response> {
       const routingFrequency = typeof body.routing_frequency === "string" && validFrequencies.includes(body.routing_frequency)
         ? body.routing_frequency
         : null;
+      const routeLoggingEnabled = hasOwn(body, "route_logging_enabled")
+        ? body.route_logging_enabled === true
+        : auth.routeLoggingEnabled;
       const clearClassifierApiKey = body.clear_classifier_api_key === true;
 
       const profilesParsed = Array.isArray(body.profiles)
@@ -249,6 +254,13 @@ export async function PUT(request: Request): Promise<Response> {
           auth.userId,
         )
         .run();
+
+      if (await hasUsersRouteLoggingEnabledColumn(bindings.ROUTER_DB)) {
+        await bindings.ROUTER_DB
+          .prepare("UPDATE users SET route_logging_enabled = ?1, updated_at = ?2 WHERE id = ?3")
+          .bind(routeLoggingEnabled ? 1 : 0, now, auth.userId)
+          .run();
+      }
 
       await upsertUserUpstreamCredentials({
         db: bindings.ROUTER_DB,

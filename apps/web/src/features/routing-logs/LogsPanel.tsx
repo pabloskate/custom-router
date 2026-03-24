@@ -23,11 +23,84 @@ function recentDecisionReasonLabel(reason: string): string {
 }
 
 export function LogsPanel() {
+  return <LogsPanelWithState enabled />;
+}
+
+function ToggleSwitch({
+  enabled,
+  disabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  disabled?: boolean;
+  onToggle?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label="Toggle routing logs"
+      className="btn btn--ghost btn--sm"
+      onClick={onToggle}
+      disabled={disabled}
+      style={{
+        padding: "0.25rem",
+        borderRadius: "9999px",
+        minWidth: 52,
+        justifyContent: enabled ? "flex-end" : "flex-start",
+        background: enabled ? "var(--accent-dim)" : "var(--bg-interactive)",
+        borderColor: enabled ? "rgba(103,232,249,0.35)" : "var(--border-default)",
+      }}
+    >
+      <span
+        style={{
+          display: "block",
+          width: 20,
+          height: 20,
+          borderRadius: "9999px",
+          background: enabled ? "var(--accent)" : "var(--text-muted)",
+          boxShadow: enabled ? "0 0 12px var(--accent-glow)" : "none",
+          transition: "all 150ms ease",
+        }}
+      />
+    </button>
+  );
+}
+
+export function LogsPanelWithState({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle?: (enabled: boolean) => Promise<boolean>;
+}) {
   const [entries, setEntries] = useState<RecentModelUsageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingToggle, setSavingToggle] = useState(false);
+
+  async function handleToggle() {
+    if (!onToggle || savingToggle) {
+      return;
+    }
+
+    setSavingToggle(true);
+    try {
+      await onToggle(!enabled);
+    } finally {
+      setSavingToggle(false);
+    }
+  }
 
   const loadRecentHistory = useCallback(async () => {
+    if (!enabled) {
+      setEntries([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -45,19 +118,61 @@ export function LogsPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     void loadRecentHistory();
   }, [loadRecentHistory]);
 
   return (
-    <RecentModelHistoryCard
-      entries={entries}
-      loading={loading}
-      error={error}
-      onRefresh={() => void loadRecentHistory()}
-    />
+    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h3 style={{ marginBottom: "var(--space-1)" }}>Routing Logs</h3>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+              Store recent routing decisions and explanation lookups for this account.
+            </p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+            <span className={`badge ${enabled ? "badge--success" : "badge--default"}`}>
+              {savingToggle ? "Saving..." : enabled ? "Enabled" : "Disabled"}
+            </span>
+            <ToggleSwitch enabled={enabled} disabled={savingToggle} onToggle={() => void handleToggle()} />
+          </div>
+        </div>
+        <div className="card-body" style={{ paddingTop: 0 }}>
+          <p style={{ margin: 0, color: "var(--text-muted)" }}>
+            Disabled by default to avoid extra writes. Turn it on here when you want recent routed model history or `GET /api/v1/router/explanations/{'{requestId}'}` lookups.
+          </p>
+        </div>
+      </div>
+
+      {enabled ? (
+        <RecentModelHistoryCard
+          entries={entries}
+          loading={loading}
+          error={error}
+          onRefresh={() => void loadRecentHistory()}
+        />
+      ) : (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h3 style={{ marginBottom: "var(--space-1)" }}>Recent Routed Models</h3>
+              <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+                Routing logs are currently disabled for this account.
+              </p>
+            </div>
+          </div>
+          <div className="card-body" style={{ paddingTop: 0 }}>
+            <p style={{ margin: 0, color: "var(--text-muted)" }}>
+              Turn on the toggle above to start storing recent routing history.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -40,7 +40,7 @@ const QUICKSTART_CARDS = [
 
 const PUBLIC_REPO_ITEMS = [
   "Router engine, catalog ingest, and Cloudflare deployment path",
-  "Self-hostable admin UI, BYOK flows, API keys, and routing explanations",
+  "Self-hostable admin UI, BYOK flows, API keys, and optional routing explanations",
   "OpenAI-compatible endpoints for chat completions, responses, and models",
 ] as const;
 

@@ -51,7 +51,7 @@ describe("/api/v1/user/routing-history route", () => {
       listRecentModelUsage,
     } as any);
     withSessionAuthMock.mockImplementation(async (request, handler) => {
-      return handler({ userId: "user_1" } as any, {} as any);
+      return handler({ userId: "user_1", routeLoggingEnabled: true } as any, {} as any);
     });
 
     const response = await GET(new Request("http://localhost/api/v1/user/routing-history?limit=999"));
@@ -62,5 +62,22 @@ describe("/api/v1/user/routing-history route", () => {
     const payload = await response.json() as { entries: Array<{ requestId: string }> };
     expect(payload.entries).toHaveLength(1);
     expect(payload.entries[0]?.requestId).toBe("req_1");
+  });
+
+  it("returns an empty list when routing logs are disabled", async () => {
+    const listRecentModelUsage = vi.fn(async () => []);
+    getRouterRepositoryMock.mockReturnValue({
+      listRecentModelUsage,
+    } as any);
+    withSessionAuthMock.mockImplementation(async (_request, handler) => {
+      return handler({ userId: "user_1", routeLoggingEnabled: false } as any, {} as any);
+    });
+
+    const response = await GET(new Request("http://localhost/api/v1/user/routing-history"));
+
+    expect(response.status).toBe(200);
+    expect(listRecentModelUsage).not.toHaveBeenCalled();
+    const payload = await response.json() as { entries: unknown[] };
+    expect(payload.entries).toEqual([]);
   });
 });

@@ -32,7 +32,7 @@ Recommended repo split:
   - `POST /api/v1/responses`
   - `GET /api/v1/models`
 - User auth, BYOK credential storage, API keys, gateways, and admin configuration
-- Routing explanations, thread pinning, classifier-based selection, and fallback behavior
+- Optional routing explanations, thread pinning, classifier-based selection, and fallback behavior
 - Cloudflare deployment path for D1, KV, Workers, and the ingest worker
 
 ## Web App Structure
@@ -60,6 +60,7 @@ Recommended repo split:
 - If the primary selected model fails upstream, the router tries the fallback chain and records the request as degraded.
 - Requests fail fast when stored gateway or classifier BYOK credentials cannot be decrypted, when no gateway is configured, or when the server is missing its BYOK encryption secret.
 - The first successfully decrypted gateway becomes the default upstream for routing and classifier traffic unless the user overrides the classifier base URL or key.
+- Routing explanation storage is disabled by default per user and can be enabled in the admin UI when recent history or explanation lookups are needed.
 
 ## Quick Start
 
@@ -81,6 +82,7 @@ npm run dev -w @custom-router/web
 
 - [Quickstart](docs/quickstart.md)
 - [Usage Guide](docs/usage.md)
+- [Complexity audit](docs/complexity-audit.md)
 - [Local dev troubleshooting](docs/local-dev-troubleshooting.md)
 - [Cloudflare deployment](docs/deployment-cloudflare.md)
 - [Open-core boundary](docs/open-core.md)

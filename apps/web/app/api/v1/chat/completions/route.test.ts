@@ -50,6 +50,7 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
     profiles: null,
     routeTriggerKeywords: null,
     routingFrequency: null,
+    routeLoggingEnabled: false,
     routingConfigRequiresReset: false,
     upstreamBaseUrl: null,
     upstreamApiKeyEnc: null,

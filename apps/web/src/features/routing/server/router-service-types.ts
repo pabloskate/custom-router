@@ -48,6 +48,7 @@ export interface UserRouterConfig {
   classifierApiKeyEnc?: string | null;
   routeTriggerKeywords?: string[] | null;
   routingFrequency?: string | null;
+  routeLoggingEnabled?: boolean;
   routingConfigRequiresReset?: boolean;
 }
 

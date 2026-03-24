@@ -63,6 +63,7 @@ export interface AuthResult {
     profiles: any[] | null;  // RouterProfile[] — named routing configurations
     routeTriggerKeywords: string[] | null;
     routingFrequency: string | null;
+    routeLoggingEnabled: boolean;
     routingConfigRequiresReset: boolean;
     upstreamBaseUrl: string | null;
     upstreamApiKeyEnc: string | null;
@@ -82,6 +83,7 @@ interface AuthRow {
     profiles: string | null;
     route_trigger_keywords: string | null;
     routing_frequency: string | null;
+    route_logging_enabled: number | null;
     smart_pin_turns: number | null;
     upstream_base_url: string | null;
     upstream_api_key_enc: string | null;
@@ -94,6 +96,7 @@ interface TableInfoRow {
 }
 
 const usersSmartPinTurnsColumnCache = new WeakMap<D1Database, Promise<boolean>>();
+const usersRouteLoggingEnabledColumnCache = new WeakMap<D1Database, Promise<boolean>>();
 
 function parseJsonArray(value: string | null): any[] | null {
     if (!value) {
@@ -142,6 +145,7 @@ function rowToAuthResult(row: AuthRow): AuthResult {
         profiles,
         routeTriggerKeywords: parseStringArray(row.route_trigger_keywords),
         routingFrequency: row.routing_frequency,
+        routeLoggingEnabled: row.route_logging_enabled === 1,
         routingConfigRequiresReset,
         upstreamBaseUrl: row.upstream_base_url,
         upstreamApiKeyEnc: row.upstream_api_key_enc,
@@ -166,12 +170,31 @@ export function hasUsersSmartPinTurnsColumn(db: D1Database): Promise<boolean> {
     return lookup;
 }
 
-function buildAuthSelectQuery(includeSmartPinTurns: boolean): string {
+export function hasUsersRouteLoggingEnabledColumn(db: D1Database): Promise<boolean> {
+    const cached = usersRouteLoggingEnabledColumnCache.get(db);
+    if (cached) {
+        return cached;
+    }
+
+    const lookup = db
+        .prepare("PRAGMA table_info(users)")
+        .all<TableInfoRow>()
+        .then(({ results }) => results.some((column) => column.name === "route_logging_enabled"))
+        .catch(() => false);
+
+    usersRouteLoggingEnabledColumnCache.set(db, lookup);
+    return lookup;
+}
+
+function buildAuthSelectQuery(includeSmartPinTurns: boolean, includeRouteLoggingEnabled: boolean): string {
     const smartPinTurnsSelect = includeSmartPinTurns ? "u.smart_pin_turns" : "NULL AS smart_pin_turns";
+    const routeLoggingEnabledSelect = includeRouteLoggingEnabled
+        ? "u.route_logging_enabled"
+        : "0 AS route_logging_enabled";
 
     return `
         SELECT ak.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
-               u.route_trigger_keywords, u.routing_frequency, ${smartPinTurnsSelect},
+               u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect},
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM api_keys ak
         JOIN users u ON u.id = ak.user_id
@@ -181,12 +204,15 @@ function buildAuthSelectQuery(includeSmartPinTurns: boolean): string {
     `;
 }
 
-function buildSessionSelectQuery(includeSmartPinTurns: boolean): string {
+function buildSessionSelectQuery(includeSmartPinTurns: boolean, includeRouteLoggingEnabled: boolean): string {
     const smartPinTurnsSelect = includeSmartPinTurns ? "u.smart_pin_turns" : "NULL AS smart_pin_turns";
+    const routeLoggingEnabledSelect = includeRouteLoggingEnabled
+        ? "u.route_logging_enabled"
+        : "0 AS route_logging_enabled";
 
     return `
         SELECT s.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
-               u.route_trigger_keywords, u.routing_frequency, ${smartPinTurnsSelect},
+               u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect},
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM user_sessions s
         JOIN users u ON u.id = s.user_id
@@ -298,10 +324,13 @@ export async function authenticateRequest(
     const keyHash = await hashKey(rawKey);
 
     await ensureUserUpstreamCredentialsTable(db);
-    const includeSmartPinTurns = await hasUsersSmartPinTurnsColumn(db);
+    const [includeSmartPinTurns, includeRouteLoggingEnabled] = await Promise.all([
+        hasUsersSmartPinTurnsColumn(db),
+        hasUsersRouteLoggingEnabledColumn(db),
+    ]);
 
     const row = await db
-        .prepare(buildAuthSelectQuery(includeSmartPinTurns))
+        .prepare(buildAuthSelectQuery(includeSmartPinTurns, includeRouteLoggingEnabled))
         .bind(keyHash)
         .first<AuthRow>();
 
@@ -404,11 +433,17 @@ export async function authenticateSession(request: Request, db: D1Database): Pro
     }
     const sessionTokenHash = await hashKey(sessionToken);
     await ensureUserUpstreamCredentialsTable(db);
-    const includeSmartPinTurns = await hasUsersSmartPinTurnsColumn(db);
+    const [includeSmartPinTurns, includeRouteLoggingEnabled] = await Promise.all([
+        hasUsersSmartPinTurnsColumn(db),
+        hasUsersRouteLoggingEnabledColumn(db),
+    ]);
 
     const now = new Date().toISOString();
 
-    const row = await db.prepare(buildSessionSelectQuery(includeSmartPinTurns)).bind(sessionTokenHash, now).first<AuthRow>();
+    const row = await db
+        .prepare(buildSessionSelectQuery(includeSmartPinTurns, includeRouteLoggingEnabled))
+        .bind(sessionTokenHash, now)
+        .first<AuthRow>();
 
     if (!row) {
         return null;
