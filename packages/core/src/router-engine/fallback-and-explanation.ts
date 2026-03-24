@@ -25,6 +25,7 @@ export function createPassthroughDecision(args: {
     explanation: {
       requestId: args.requestId,
       createdAt: args.now.toISOString(),
+      requestedModel: args.requestedModel,
       catalogVersion: args.catalogVersion,
       classificationConfidence: 1,
       classificationSignals: ["passthrough:explicit_model"],
@@ -166,6 +167,7 @@ export function buildRouteDecision(args: {
     explanation: {
       requestId: args.requestId,
       createdAt: args.now.toISOString(),
+      requestedModel: args.requestedModel,
       catalogVersion: args.catalogVersion,
       classificationConfidence: args.telemetry.confidence,
       classificationSignals: args.telemetry.signals,

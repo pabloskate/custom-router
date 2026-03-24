@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { MessageBubble, RouteCard } from "./PlaygroundPanel";
+import { MessageBubble, RecentModelHistoryCard, RouteCard } from "./PlaygroundPanel";
 
 describe("PlaygroundPanel", () => {
   it("renders inspect-provided confidence in the route card", () => {
@@ -42,5 +42,28 @@ describe("PlaygroundPanel", () => {
 
     expect(markup).toContain("model/alpha");
     expect(markup).toContain("confidence 0.91");
+  });
+
+  it("renders recent routed model history entries", () => {
+    const markup = renderToStaticMarkup(
+      createElement(RecentModelHistoryCard, {
+        loading: false,
+        error: null,
+        entries: [
+          {
+            requestId: "req_1",
+            createdAt: "2026-03-22T10:00:00.000Z",
+            requestedModel: "planning-backend",
+            selectedModel: "model/alpha",
+            decisionReason: "initial_route",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("Recent Routed Models");
+    expect(markup).toContain("planning-backend");
+    expect(markup).toContain("model/alpha");
+    expect(markup).toContain("Classifier");
   });
 });

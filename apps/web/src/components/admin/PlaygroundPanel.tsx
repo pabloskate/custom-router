@@ -14,7 +14,8 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { RouterProfile } from "@custom-router/core";
-import type { RouteInspectResult } from "@/src/features/routing/contracts";
+import { ROUTER_HISTORY } from "@/src/lib/constants";
+import type { RecentModelUsageEntry, RouteInspectResult } from "@/src/features/routing/contracts";
 import {
   formatRoutingConfidence,
   readRoutedResponseMetadata,
@@ -39,6 +40,10 @@ type StreamChunk = {
     finish_reason?: string;
   }>;
   model?: string;
+};
+
+type RecentHistoryResponse = {
+  entries?: RecentModelUsageEntry[];
 };
 
 async function readResponsePayload(response: Response): Promise<{ json: any | null; text: string | null }> {
@@ -137,6 +142,18 @@ function DECISION_REASON_LABEL(reason: string): string {
     fallback_after_failure: "Fallback (failure)",
     passthrough: "Passthrough",
     forced: "Forced",
+  };
+  return labels[reason] ?? reason;
+}
+
+function RECENT_DECISION_REASON_LABEL(reason: string): string {
+  const labels: Record<string, string> = {
+    initial_route: "Classifier",
+    thread_pin: "Pinned thread",
+    fallback_default: "Default fallback",
+    fallback_after_failure: "Fallback",
+    passthrough: "Passthrough",
+    pin_invalid: "Pin invalid",
   };
   return labels[reason] ?? reason;
 }
@@ -445,6 +462,67 @@ function ModeToggle({ routerTestMode, onChange }: { routerTestMode: boolean; onC
   );
 }
 
+export function RecentModelHistoryCard({
+  entries,
+  loading,
+  error,
+}: {
+  entries: RecentModelUsageEntry[];
+  loading: boolean;
+  error?: string | null;
+}) {
+  return (
+    <div className="card" style={{ marginBottom: "var(--space-4)" }}>
+      <div className="card-header">
+        <div>
+          <h3 style={{ marginBottom: "var(--space-1)" }}>Recent Routed Models</h3>
+          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+            Latest {ROUTER_HISTORY.DEFAULT_LIMIT} requests for this account. Send <code>{ROUTER_HISTORY.INSPECT_TRIGGER}</code> in Full Chat mode to get the same summary inline.
+          </p>
+        </div>
+      </div>
+      <div className="card-body" style={{ paddingTop: 0 }}>
+        {loading ? (
+          <p style={{ margin: 0, color: "var(--text-muted)" }}>Loading recent history...</p>
+        ) : error ? (
+          <p style={{ margin: 0, color: "var(--danger)" }}>{error}</p>
+        ) : entries.length === 0 ? (
+          <p style={{ margin: 0, color: "var(--text-muted)" }}>No recent routed model history yet.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            {entries.map((entry) => (
+              <div
+                key={entry.requestId}
+                style={{
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "var(--space-3) var(--space-4)",
+                  background: "var(--bg-elevated)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-3)", alignItems: "center", marginBottom: "var(--space-2)", flexWrap: "wrap" }}>
+                  <span className="badge badge--info" style={{ fontSize: "0.6875rem" }}>
+                    {RECENT_DECISION_REASON_LABEL(entry.decisionReason)}
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                    {entry.createdAt}
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "var(--space-1) var(--space-3)" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Requested</span>
+                  <span style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono, monospace)", wordBreak: "break-all" }}>{entry.requestedModel}</span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Selected</span>
+                  <span style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono, monospace)", wordBreak: "break-all" }}>{entry.selectedModel}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | null }) {
   const profileOptions = (profiles ?? []).map((profile) => ({
@@ -458,6 +536,9 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
   const [error, setError] = useState<string | null>(null);
   const [currentStream, setCurrentStream] = useState("");
   const [routerTestMode, setRouterTestMode] = useState(true);
+  const [recentHistory, setRecentHistory] = useState<RecentModelUsageEntry[]>([]);
+  const [recentHistoryLoading, setRecentHistoryLoading] = useState(true);
+  const [recentHistoryError, setRecentHistoryError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const streaming = true;
@@ -477,6 +558,30 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
       setModel(profileOptions[0]?.id ?? "");
     }
   }, [model, profileOptions]);
+
+  const loadRecentHistory = useCallback(async () => {
+    setRecentHistoryLoading(true);
+    setRecentHistoryError(null);
+
+    try {
+      const response = await fetch(`/api/v1/user/routing-history?limit=${ROUTER_HISTORY.DEFAULT_LIMIT}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({ error: "Failed to load recent routing history." })) as RecentHistoryResponse & { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to load recent routing history.");
+      }
+
+      setRecentHistory(Array.isArray(payload.entries) ? payload.entries : []);
+    } catch (err) {
+      setRecentHistoryError(err instanceof Error ? err.message : "Failed to load recent routing history.");
+    } finally {
+      setRecentHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRecentHistory();
+  }, [loadRecentHistory]);
 
   const handleSubmit = useCallback(async () => {
     if (!input.trim() || loading || !model) return;
@@ -531,6 +636,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           requestTime: Date.now() - startTime,
         };
         setMessages((prev) => [...prev, resultMessage]);
+        void loadRecentHistory();
       } else {
         // ── Full Chat Mode: stream the actual model response ──
         const response = await fetch("/api/v1/chat/completions", {
@@ -591,6 +697,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           };
           setMessages((prev) => [...prev, assistantMessage]);
           setCurrentStream("");
+          void loadRecentHistory();
         } else {
           const payload = await readResponsePayload(response);
           if (!payload.json) {
@@ -611,6 +718,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
             requestTime: Date.now() - startTime,
           };
           setMessages((prev) => [...prev, assistantMessage]);
+          void loadRecentHistory();
         }
       }
     } catch (err) {
@@ -618,7 +726,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
     } finally {
       setLoading(false);
     }
-  }, [input, loading, model, messages, streaming, routerTestMode]);
+  }, [input, loadRecentHistory, loading, model, messages, streaming, routerTestMode]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -685,6 +793,12 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
           </div>
         </div>
       </div>
+
+      <RecentModelHistoryCard
+        entries={recentHistory}
+        loading={recentHistoryLoading}
+        error={recentHistoryError}
+      />
 
       {/* Chat Area */}
       <div
@@ -762,7 +876,7 @@ export function PlaygroundPanel({ profiles }: { profiles?: RouterProfile[] | nul
             placeholder={
               routerTestMode
                 ? "Ask something to see how it would be routed... (Enter to inspect)"
-                : "Type a message... (Enter to send, Shift+Enter for new line)"
+                : `Type a message or ${ROUTER_HISTORY.INSPECT_TRIGGER}... (Enter to send, Shift+Enter for new line)`
             }
             disabled={loading}
             rows={2}

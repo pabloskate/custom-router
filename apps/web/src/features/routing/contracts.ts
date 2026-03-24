@@ -4,6 +4,7 @@ export type {
   RoutedApiPath,
   UserRouterConfig,
 } from "./server/router-service-types";
+export type { RecentModelUsageEntry } from "./history-contracts";
 export type {
   ProfileBuilderBudgetPosture,
   ProfileBuilderExecutor,

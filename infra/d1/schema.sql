@@ -100,11 +100,16 @@ CREATE INDEX IF NOT EXISTS idx_source_snapshots_created_at ON source_snapshots(c
 
 CREATE TABLE IF NOT EXISTS routing_explanations (
   request_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  requested_model TEXT NOT NULL,
+  selected_model TEXT NOT NULL,
+  decision_reason TEXT NOT NULL,
   explanation_json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_routing_explanations_created_at ON routing_explanations(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_routing_explanations_user_created_at ON routing_explanations(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS profile_builder_runs (
   id TEXT PRIMARY KEY,

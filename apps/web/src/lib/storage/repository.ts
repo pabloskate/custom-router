@@ -28,6 +28,7 @@ import {
   type RoutingExplanation,
   type ThreadPin
 } from "@custom-router/core";
+import type { RecentModelUsageEntry } from "@/src/features/routing/contracts";
 
 import type { D1Database, KVNamespace } from "../infra/cloudflare-types";
 import { ROUTER_CACHE } from "../constants";
@@ -56,13 +57,20 @@ export interface IngestionRunSummary {
   artifactVersion?: string;
 }
 
+interface PersistedExplanationRecord {
+  userId: string;
+  explanation: RoutingExplanation;
+}
+
 export interface RouterRepository {
   getConfig(): Promise<RouterConfig>;
   setConfig(config: RouterConfig): Promise<void>;
   getCatalog(): Promise<CatalogItem[]>;
   setCatalog(version: string, catalog: CatalogItem[]): Promise<void>;
   getExplanation(requestId: string): Promise<RoutingExplanation | null>;
-  putExplanation(explanation: RoutingExplanation): Promise<void>;
+  putExplanation(record: PersistedExplanationRecord): Promise<void>;
+  listRecentModelUsage(userId: string, limit?: number): Promise<RecentModelUsageEntry[]>;
+  pruneOldExplanations(olderThanIso: string): Promise<void>;
   listRuns(limit?: number): Promise<IngestionRunSummary[]>;
   putRun(run: IngestionRunSummary): Promise<void>;
   getPinStore(): PinStore;
@@ -72,6 +80,7 @@ const memoryState = {
   config: { ...DEFAULT_ROUTER_CONFIG } as RouterConfig,
   catalog: [] as CatalogItem[],
   explanations: new Map<string, RoutingExplanation>(),
+  recentModelUsage: [] as Array<RecentModelUsageEntry & { userId: string }>,
   runs: [] as IngestionRunSummary[],
   pinStore: new InMemoryPinStore()
 };
@@ -110,8 +119,41 @@ class MemoryRepository implements RouterRepository {
     return memoryState.explanations.get(requestId) ?? null;
   }
 
-  async putExplanation(explanation: RoutingExplanation): Promise<void> {
-    memoryState.explanations.set(explanation.requestId, explanation);
+  async putExplanation(record: PersistedExplanationRecord): Promise<void> {
+    memoryState.explanations.set(record.explanation.requestId, record.explanation);
+    memoryState.recentModelUsage = [
+      {
+        userId: record.userId,
+        requestId: record.explanation.requestId,
+        createdAt: record.explanation.createdAt,
+        requestedModel: record.explanation.requestedModel,
+        selectedModel: record.explanation.selectedModel,
+        decisionReason: record.explanation.decisionReason,
+      },
+      ...memoryState.recentModelUsage.filter((entry) => entry.requestId !== record.explanation.requestId),
+    ];
+  }
+
+  async listRecentModelUsage(userId: string, limit = 20): Promise<RecentModelUsageEntry[]> {
+    return memoryState.recentModelUsage
+      .filter((entry) => entry.userId === userId)
+      .slice(0, limit)
+      .map(({ userId: _userId, ...entry }) => entry);
+  }
+
+  async pruneOldExplanations(olderThanIso: string): Promise<void> {
+    const cutoffMs = Date.parse(olderThanIso);
+    if (!Number.isFinite(cutoffMs)) {
+      return;
+    }
+
+    for (const [requestId, explanation] of memoryState.explanations.entries()) {
+      if (Date.parse(explanation.createdAt) < cutoffMs) {
+        memoryState.explanations.delete(requestId);
+      }
+    }
+
+    memoryState.recentModelUsage = memoryState.recentModelUsage.filter((entry) => Date.parse(entry.createdAt) >= cutoffMs);
   }
 
   async listRuns(limit = 20): Promise<IngestionRunSummary[]> {
@@ -340,12 +382,63 @@ class CloudflareRepository implements RouterRepository {
     return parseJson<RoutingExplanation>(row?.explanation_json) ?? null;
   }
 
-  async putExplanation(explanation: RoutingExplanation): Promise<void> {
+  async putExplanation(record: PersistedExplanationRecord): Promise<void> {
     await this.db
       .prepare(
-        "INSERT OR REPLACE INTO routing_explanations (request_id, explanation_json, created_at) VALUES (?1, ?2, ?3)"
+        `INSERT OR REPLACE INTO routing_explanations (
+           request_id,
+           user_id,
+           requested_model,
+           selected_model,
+           decision_reason,
+           explanation_json,
+           created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
       )
-      .bind(explanation.requestId, JSON.stringify(explanation), explanation.createdAt)
+      .bind(
+        record.explanation.requestId,
+        record.userId,
+        record.explanation.requestedModel,
+        record.explanation.selectedModel,
+        record.explanation.decisionReason,
+        JSON.stringify(record.explanation),
+        record.explanation.createdAt,
+      )
+      .run();
+  }
+
+  async listRecentModelUsage(userId: string, limit = 20): Promise<RecentModelUsageEntry[]> {
+    const cappedLimit = Math.max(1, Math.min(limit, 50));
+    const { results } = await this.db
+      .prepare(
+        `SELECT request_id, created_at, requested_model, selected_model, decision_reason
+         FROM routing_explanations
+         WHERE user_id = ?1
+         ORDER BY created_at DESC
+         LIMIT ?2`
+      )
+      .bind(userId, cappedLimit)
+      .all<{
+        request_id: string;
+        created_at: string;
+        requested_model: string;
+        selected_model: string;
+        decision_reason: string;
+      }>();
+
+    return results.map((row) => ({
+      requestId: row.request_id,
+      createdAt: row.created_at,
+      requestedModel: row.requested_model,
+      selectedModel: row.selected_model,
+      decisionReason: row.decision_reason,
+    }));
+  }
+
+  async pruneOldExplanations(olderThanIso: string): Promise<void> {
+    await this.db
+      .prepare("DELETE FROM routing_explanations WHERE created_at < ?1")
+      .bind(olderThanIso)
       .run();
   }
 

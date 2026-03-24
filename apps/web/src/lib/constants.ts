@@ -136,6 +136,13 @@ export const ROUTER_CACHE = {
   CATALOG_TTL_MS: 10 * 1000,
 } as const;
 
+export const ROUTER_HISTORY = {
+  DEFAULT_LIMIT: 20,
+  MAX_LIMIT: 50,
+  RETENTION_MS: 48 * 60 * 60 * 1000,
+  INSPECT_TRIGGER: "$$inspect",
+} as const;
+
 // ── Upstream (OpenAI-compatible) Transport ──────────────────────────────────
 
 export const UPSTREAM = {

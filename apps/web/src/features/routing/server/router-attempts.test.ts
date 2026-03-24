@@ -26,6 +26,7 @@ function createDecision(): RouteDecision {
     explanation: {
       requestId: "req_1",
       createdAt: new Date().toISOString(),
+      requestedModel: "planning-backend",
       catalogVersion: "test",
       classificationConfidence: 1,
       classificationSignals: [],

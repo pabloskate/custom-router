@@ -7,7 +7,15 @@ import { hydrateUser, type ServerUserInfo, type UserInfo } from "@/src/features/
 import type { GatewayInfo } from "@/src/features/gateways/contracts";
 import type { ApiKeyInfo, RoutingDraftState } from "@/src/components/admin/types";
 
+interface RegistrationStatus {
+  mode: RegistrationMode;
+  signupAllowed: boolean;
+  firstUser: boolean;
+  requiresInviteCode: boolean;
+}
+
 export function useAdminData() {
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
@@ -17,17 +25,85 @@ export function useAdminData() {
   const [reroutingDraftState, setReroutingDraftState] = useState<RoutingDraftState>("pristine");
   const [profilesDraftState, setProfilesDraftState] = useState<RoutingDraftState>("pristine");
   const [registrationMode, setRegistrationMode] = useState<RegistrationMode>("closed");
+  const [registrationStatus, setRegistrationStatus] = useState<RegistrationStatus | null>(null);
 
-  async function loadData() {
-    setStatus("Loading...");
-    setError(undefined);
-
+  async function fetchAdminData() {
     const [userRes, keysRes, gatewaysRes, registrationRes] = await Promise.all([
       fetch("/api/v1/user/me", { cache: "no-store" }),
       fetch("/api/v1/user/keys", { cache: "no-store" }),
       fetch("/api/v1/user/gateways", { cache: "no-store" }),
       fetch("/api/v1/auth/registration-status", { cache: "no-store" }),
     ]);
+
+    const registrationData = registrationRes.ok
+      ? await registrationRes.json() as RegistrationStatus
+      : {
+          mode: "closed",
+          signupAllowed: false,
+          firstUser: false,
+          requiresInviteCode: false,
+        } satisfies RegistrationStatus;
+
+    return {
+      userRes,
+      keysRes,
+      gatewaysRes,
+      registrationData,
+    };
+  }
+
+  async function resolveAuth() {
+    setIsCheckingAuth(true);
+    setStatus("Loading...");
+    setError(undefined);
+
+    const { userRes, keysRes, gatewaysRes, registrationData } = await fetchAdminData();
+    setRegistrationMode(registrationData.mode);
+    setRegistrationStatus(registrationData);
+
+    if (!userRes.ok) {
+      setIsAuthenticated(false);
+      setUser(null);
+      setKeys([]);
+      setGateways([]);
+      setStatus("Please log in");
+      setIsCheckingAuth(false);
+      return;
+    }
+
+    if (!keysRes.ok) {
+      setError("Failed to load API keys");
+      setStatus("Error");
+      setIsCheckingAuth(false);
+      return;
+    }
+
+    const userData = await userRes.json() as { user: ServerUserInfo };
+    const keysData = await keysRes.json() as { keys: ApiKeyInfo[] };
+
+    if (gatewaysRes.ok) {
+      const gatewaysData = await gatewaysRes.json() as { gateways?: GatewayInfo[] };
+      setGateways(gatewaysData.gateways ?? []);
+    } else {
+      setGateways([]);
+    }
+
+    setUser(hydrateUser(userData.user));
+    setKeys(keysData.keys);
+    setIsAuthenticated(true);
+    setReroutingDraftState("pristine");
+    setProfilesDraftState("pristine");
+    setStatus("Ready");
+    setIsCheckingAuth(false);
+  }
+
+  async function loadData() {
+    setStatus("Loading...");
+    setError(undefined);
+
+    const { userRes, keysRes, gatewaysRes, registrationData } = await fetchAdminData();
+    setRegistrationMode(registrationData.mode);
+    setRegistrationStatus(registrationData);
 
     if (!userRes.ok) {
       setIsAuthenticated(false);
@@ -54,13 +130,6 @@ export function useAdminData() {
       setGateways([]);
     }
 
-    if (registrationRes.ok) {
-      const registrationData = await registrationRes.json() as { mode: RegistrationMode };
-      setRegistrationMode(registrationData.mode);
-    } else {
-      setRegistrationMode("closed");
-    }
-
     setUser(hydrateUser(userData.user));
     setKeys(keysData.keys);
     setIsAuthenticated(true);
@@ -70,8 +139,26 @@ export function useAdminData() {
   }
 
   useEffect(() => {
-    void loadData();
+    void resolveAuth();
   }, []);
+
+  async function refreshRegistrationStatus() {
+    const response = await fetch("/api/v1/auth/registration-status", { cache: "no-store" });
+    if (!response.ok) {
+      setRegistrationMode("closed");
+      setRegistrationStatus({
+        mode: "closed",
+        signupAllowed: false,
+        firstUser: false,
+        requiresInviteCode: false,
+      });
+      return;
+    }
+
+    const data = await response.json() as RegistrationStatus;
+    setRegistrationMode(data.mode);
+    setRegistrationStatus(data);
+  }
 
   async function handleLogout() {
     await fetch("/api/v1/auth/logout", { method: "POST" });
@@ -82,6 +169,7 @@ export function useAdminData() {
     setReroutingDraftState("pristine");
     setProfilesDraftState("pristine");
     setStatus("Logged out");
+    await refreshRegistrationStatus();
   }
 
   function markReroutingDirty() {
@@ -142,6 +230,7 @@ export function useAdminData() {
   }
 
   return {
+    isCheckingAuth,
     isAuthenticated,
     user,
     setUser,
@@ -156,6 +245,8 @@ export function useAdminData() {
     markReroutingDirty,
     markProfilesDirty,
     registrationMode,
+    registrationStatus,
+    resolveAuth,
     loadData,
     handleLogout,
     saveUserData,

@@ -194,6 +194,7 @@ export interface PinStore {
 export interface RoutingExplanation {
   requestId: string;
   createdAt: string;
+  requestedModel: string;
   catalogVersion: string;
   classificationConfidence: number;
   classificationSignals: string[];

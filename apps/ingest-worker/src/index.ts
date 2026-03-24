@@ -35,6 +35,8 @@ interface Env {
   ADMIN_SECRET?: string;
 }
 
+const ROUTING_EXPLANATION_RETENTION_MS = 48 * 60 * 60 * 1000;
+
 function runId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
 }
@@ -92,9 +94,18 @@ async function putRun(
     .run();
 }
 
+async function cleanupOldRoutingExplanations(env: Env): Promise<void> {
+  const cutoffIso = new Date(Date.now() - ROUTING_EXPLANATION_RETENTION_MS).toISOString();
+  await env.ROUTER_DB
+    .prepare("DELETE FROM routing_explanations WHERE created_at < ?1")
+    .bind(cutoffIso)
+    .run();
+}
+
 async function executeIngestion(env: Env): Promise<{ ok: true; runId: string; artifactVersion: string } | { ok: false; runId: string; error: string }> {
   const id = runId("ingest");
   const startedAt = new Date().toISOString();
+  await cleanupOldRoutingExplanations(env);
   const error = "Catalog ingestion disabled. App is BYOK-only.";
   await putRun(env, {
     id,

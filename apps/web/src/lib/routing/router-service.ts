@@ -66,6 +66,7 @@ function getClassifierConfidence(args: {
 export async function routeAndProxy(args: {
   body: RoutedRequestBody;
   apiPath: RoutedApiPath;
+  userId: string;
   userConfig?: UserRouterConfig;
   dryRun?: boolean;
 }): Promise<RouteAndProxyResult> {
@@ -141,7 +142,11 @@ export async function routeAndProxy(args: {
       message,
       profileId: matchedProfile?.id,
     });
-    persistExplanation(repository, explanation);
+    persistExplanation({
+      repository,
+      userId: args.userId,
+      explanation,
+    });
     return {
       requestId,
       response: json({ error: message, request_id: requestId }, 400, {
@@ -163,7 +168,11 @@ export async function routeAndProxy(args: {
     byokSecret,
   });
   if (classifierResolution.failure) {
-    persistExplanation(repository, classifierResolution.failure.explanation);
+    persistExplanation({
+      repository,
+      userId: args.userId,
+      explanation: classifierResolution.failure.explanation,
+    });
     return {
       requestId,
       response: classifierResolution.failure.response,
@@ -201,12 +210,16 @@ export async function routeAndProxy(args: {
   const decideLatencyMs = Date.now() - decideStartMs;
 
   if (decision.routingError || !decision.selectedModel) {
-    persistExplanation(repository, {
-      ...decision.explanation,
-      classifierInvoked,
-      classifierModel: effectiveClassifierModel ?? undefined,
-      classifierBaseUrl,
-      classifierGatewayId,
+    persistExplanation({
+      repository,
+      userId: args.userId,
+      explanation: {
+        ...decision.explanation,
+        classifierInvoked,
+        classifierModel: effectiveClassifierModel ?? undefined,
+        classifierBaseUrl,
+        classifierGatewayId,
+      },
     });
 
     return {
@@ -219,12 +232,16 @@ export async function routeAndProxy(args: {
 
   // Dry-run mode: return routing decision without proxying to the upstream model.
   if (args.dryRun) {
-    persistExplanation(repository, {
-      ...decision.explanation,
-      classifierInvoked,
-      classifierModel: effectiveClassifierModel ?? undefined,
-      classifierBaseUrl,
-      classifierGatewayId,
+    persistExplanation({
+      repository,
+      userId: args.userId,
+      explanation: {
+        ...decision.explanation,
+        classifierInvoked,
+        classifierModel: effectiveClassifierModel ?? undefined,
+        classifierBaseUrl,
+        classifierGatewayId,
+      },
     });
     const inspectResult: RouteInspectResult = {
       requestId,
@@ -325,7 +342,11 @@ export async function routeAndProxy(args: {
       pinRerouteAfterTurns: decision.pinRerouteAfterTurns,
       pinBudgetSource: decision.pinBudgetSource,
     });
-    persistExplanation(repository, explanation);
+    persistExplanation({
+      repository,
+      userId: args.userId,
+      explanation,
+    });
 
     const response = decision.mode === "routed"
       ? attachRouterHeaders(result.response, {
@@ -349,15 +370,19 @@ export async function routeAndProxy(args: {
   }
 
   // All attempts failed — store explanation and return 502
-  persistExplanation(repository, {
-    ...decision.explanation,
-    selectedModel: decision.selectedModel,
-    decisionReason: "fallback_default" as const,
-    classifierInvoked,
-    classifierModel: effectiveClassifierModel ?? undefined,
-    classifierBaseUrl,
-    classifierGatewayId,
-    notes: [...decision.explanation.notes, ...errors],
+  persistExplanation({
+    repository,
+    userId: args.userId,
+    explanation: {
+      ...decision.explanation,
+      selectedModel: decision.selectedModel,
+      decisionReason: "fallback_default" as const,
+      classifierInvoked,
+      classifierModel: effectiveClassifierModel ?? undefined,
+      classifierBaseUrl,
+      classifierGatewayId,
+      notes: [...decision.explanation.notes, ...errors],
+    },
   });
 
   const failureResponse = json(

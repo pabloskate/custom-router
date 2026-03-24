@@ -57,6 +57,8 @@ function createRepository() {
     getConfig: vi.fn(async () => config),
     getCatalog: vi.fn(async () => []),
     getPinStore: vi.fn(() => pinStore),
+    listRecentModelUsage: vi.fn(async () => []),
+    pruneOldExplanations: vi.fn(async () => undefined),
     putExplanation: vi.fn(async () => undefined),
   };
 }
@@ -100,6 +102,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "auto",
         messages: [{ role: "user", content: "route this" }],
@@ -168,6 +171,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "auto",
         messages: [{ role: "user", content: "route this" }],
@@ -204,6 +208,16 @@ describe("routeAndProxy", () => {
         }),
       })
     );
+    expect(repository.putExplanation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user_1",
+        explanation: expect.objectContaining({
+          requestId: "router_test_request",
+          requestedModel: "auto",
+          selectedModel: "model/alpha",
+        }),
+      }),
+    );
   });
 
   it("prefers an exact profile match over a gateway model with the same id", async () => {
@@ -236,6 +250,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "shared-id",
         messages: [{ role: "user", content: "route this" }],
@@ -307,6 +322,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
@@ -375,6 +391,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
@@ -432,6 +449,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
@@ -489,6 +507,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
@@ -582,6 +601,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/responses",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         input: "route this",
@@ -654,6 +674,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       dryRun: true,
       body: {
         model: "planning-backend",
@@ -718,6 +739,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       dryRun: true,
       body: {
         model: "auto",
@@ -779,6 +801,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       dryRun: true,
       body: {
         model: "planning-backend",
@@ -856,6 +879,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         messages: [
@@ -929,6 +953,7 @@ describe("routeAndProxy", () => {
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         messages: [{ role: "user", content: "route this" }],
@@ -997,6 +1022,7 @@ describe("routeAndProxy", () => {
 
     await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         reasoning: { effort: "xhigh" },
@@ -1074,6 +1100,7 @@ describe("routeAndProxy", () => {
 
     await routeAndProxy({
       apiPath: "/chat/completions",
+      userId: "user_1",
       body: {
         model: "planning-backend",
         reasoning: { effort: "xhigh" },

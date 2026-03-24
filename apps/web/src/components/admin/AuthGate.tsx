@@ -11,14 +11,16 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import type { RegistrationMode } from "@/src/lib/constants";
 import { AUTH } from "@/src/lib/constants";
 
 interface Props {
   onAuthenticated: () => void;
+  initialRegistrationStatus?: RegistrationStatus | null;
 }
 
 interface RegistrationStatus {
-  mode: "open" | "closed" | "invite";
+  mode: RegistrationMode;
   signupAllowed: boolean;
   firstUser: boolean;
   requiresInviteCode: boolean;
@@ -82,7 +84,7 @@ function IconTicket({ className, style }: { className?: string; style?: React.CS
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export function AuthGate({ onAuthenticated }: Props) {
+export function AuthGate({ onAuthenticated, initialRegistrationStatus = null }: Props) {
   const [mode, setMode] = useState<"login" | "signup" | "forgot" | "reset">("login");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [inviteCode, setInviteCode] = useState("");
@@ -92,7 +94,7 @@ export function AuthGate({ onAuthenticated }: Props) {
   const [message, setMessage] = useState("");
   const [resetPreviewUrl, setResetPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [regStatus, setRegStatus] = useState<RegistrationStatus | null>(null);
+  const [regStatus, setRegStatus] = useState<RegistrationStatus | null>(initialRegistrationStatus);
 
   function clearResetTokenFromUrl() {
     if (typeof window === "undefined") {
@@ -124,6 +126,10 @@ export function AuthGate({ onAuthenticated }: Props) {
   }
 
   useEffect(() => {
+    if (regStatus) {
+      return;
+    }
+
     fetch("/api/v1/auth/registration-status")
       .then((r) => r.json() as Promise<RegistrationStatus>)
       .then(setRegStatus)
@@ -131,7 +137,7 @@ export function AuthGate({ onAuthenticated }: Props) {
         // Fallback: assume open so the UI is still usable
         setRegStatus({ mode: "open", signupAllowed: true, firstUser: false, requiresInviteCode: false });
       });
-  }, []);
+  }, [regStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -155,7 +161,7 @@ export function AuthGate({ onAuthenticated }: Props) {
     }
   }, [regStatus?.firstUser, mode]);
 
-  const signupAvailable = regStatus?.signupAllowed ?? true;
+  const signupAvailable = regStatus?.signupAllowed ?? false;
   const isLogin = mode === "login";
   const isSignup = mode === "signup";
   const isForgot = mode === "forgot";

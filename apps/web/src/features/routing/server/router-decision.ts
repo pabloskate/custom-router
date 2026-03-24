@@ -60,6 +60,7 @@ export function buildRoutingExplanation(args: {
   return {
     requestId: args.requestId,
     createdAt: new Date().toISOString(),
+    requestedModel: args.requestedModel,
     catalogVersion: args.catalogVersion,
     classificationConfidence: 0,
     classificationSignals: [],

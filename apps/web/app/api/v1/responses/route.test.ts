@@ -120,6 +120,7 @@ describe("/api/v1/responses route", () => {
     expect(routeAndProxyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         apiPath: "/responses",
+        userId: "user_1",
       })
     );
   });

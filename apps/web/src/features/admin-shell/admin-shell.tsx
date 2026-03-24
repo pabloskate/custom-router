@@ -155,8 +155,35 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
   );
 }
 
+function AdminLoadingShell() {
+  return (
+    <div
+      className="animate-fade-in"
+      style={{
+        minHeight: "calc(100vh - 200px)",
+        display: "grid",
+        placeItems: "center",
+        padding: "var(--space-6)",
+      }}
+    >
+      <div className="card" style={{ width: "100%", maxWidth: 420 }}>
+        <div className="card-body" style={{ display: "grid", gap: "var(--space-3)", justifyItems: "center" }}>
+          <div className="badge badge--info animate-pulse">
+            <span className="status-dot status-dot--info" />
+            Loading...
+          </div>
+          <p style={{ margin: 0, color: "var(--text-muted)", textAlign: "center" }}>
+            Checking your admin session.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AdminShell() {
   const {
+    isCheckingAuth,
     isAuthenticated,
     user,
     setUser,
@@ -176,6 +203,8 @@ export function AdminShell() {
     saveUserData,
     saveReroutingData,
     saveProfilesData,
+    registrationStatus,
+    resolveAuth,
   } = useAdminData();
   const [activeTab, setActiveTab] = useState("gateways");
 
@@ -209,8 +238,17 @@ export function AdminShell() {
     }
   }, [activeTab, initialTabId, tabs]);
 
+  if (isCheckingAuth) {
+    return <AdminLoadingShell />;
+  }
+
   if (!isAuthenticated || !user) {
-    return <AuthGate onAuthenticated={() => void loadData()} />;
+    return (
+      <AuthGate
+        initialRegistrationStatus={registrationStatus}
+        onAuthenticated={() => void resolveAuth()}
+      />
+    );
   }
 
   return (

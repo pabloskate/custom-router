@@ -40,6 +40,13 @@ export async function pinSelectedModel(args: {
   await args.repository.getPinStore().set(pin);
 }
 
-export function persistExplanation(repository: RouterRepository, explanation: RoutingExplanation): void {
-  runInBackground(repository.putExplanation(explanation));
+export function persistExplanation(args: {
+  repository: RouterRepository;
+  userId: string;
+  explanation: RoutingExplanation;
+}): void {
+  runInBackground(args.repository.putExplanation({
+    userId: args.userId,
+    explanation: args.explanation,
+  }));
 }
