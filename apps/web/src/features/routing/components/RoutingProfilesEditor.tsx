@@ -15,6 +15,10 @@ import {
   hasResolvedProfileModel,
   normalizeProfileIdInput,
 } from "@/src/lib/routing/profile-config";
+import {
+  REASONING_PRESET_FIELD_HINT,
+  REASONING_PRESET_SELECT_OPTIONS,
+} from "@/src/lib/reasoning-options";
 import type { GatewayInfo } from "@/src/features/gateways/contracts";
 import {
   availableGatewayModels,
@@ -1181,14 +1185,11 @@ export function RoutingProfilesEditor(props: RoutingProfilesEditorProps) {
                         },
                       }))}
                     >
-                      <option value="provider_default">Provider default</option>
-                      <option value="none">None</option>
-                      <option value="minimal">Minimal</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="xhigh">Extra high</option>
+                      {REASONING_PRESET_SELECT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
+                    <span className="form-hint">{REASONING_PRESET_FIELD_HINT}</span>
                   </label>
                   <label className="form-group">
                     <span className="form-label">Modality</span>
@@ -1323,14 +1324,11 @@ export function RoutingProfilesEditor(props: RoutingProfilesEditorProps) {
                     },
                   }))}
                 >
-                  <option value="provider_default">Provider default</option>
-                  <option value="none">None</option>
-                  <option value="minimal">Minimal</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="xhigh">Extra high</option>
+                  {REASONING_PRESET_SELECT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
+                <span className="form-hint">{REASONING_PRESET_FIELD_HINT}</span>
               </label>
             </div>
             <label className="form-group">

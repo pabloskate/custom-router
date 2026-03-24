@@ -348,5 +348,7 @@ describe("RoutingProfilesEditor", () => {
     expect(markup).not.toContain("Select a gateway model");
     expect(markup).toContain("GPT-5.4 mini");
     expect(markup).toContain("openai/gpt-5.4-mini");
+    expect(markup).toContain("Provider default (omit reasoning param)");
+    expect(markup).toContain("Explicit off (reasoning.effort = none)");
   });
 });

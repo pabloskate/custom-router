@@ -547,6 +547,7 @@ describe("routeAndProxy", () => {
         apiKey: "classifier-key",
         baseUrl: "https://classifier.example/v1",
         model: "model/classifier",
+        supportsReasoningEffort: false,
       })
     );
     expect(upstreamMock).toHaveBeenCalledWith(

@@ -2,7 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { MessageBubble, RecentModelHistoryCard, RouteCard } from "./PlaygroundPanel";
+import { RecentModelHistoryCard } from "@/src/features/routing-logs/LogsPanel";
+import { MessageBubble, RouteCard } from "./PlaygroundPanel";
 
 describe("PlaygroundPanel", () => {
   it("renders inspect-provided confidence in the route card", () => {

@@ -5,6 +5,7 @@ import { json } from "@/src/lib/infra";
 import { parseProfileModelKey } from "@/src/lib/routing/profile-config";
 
 import { buildRoutingExplanation, resolveEffectiveClassifierModel } from "./router-decision";
+import { resolveGatewayCapabilityForBaseUrl } from "./gateway-capabilities";
 import type { UserRouterConfig } from "./router-service-types";
 
 interface ClassifierFailure {
@@ -17,6 +18,7 @@ export interface ResolvedClassifierContext {
   classifierBaseUrl?: string;
   classifierApiKey?: string;
   classifierGatewayId?: string;
+  classifierSupportsReasoningEffort?: boolean;
 }
 
 export async function resolveClassifierContext(args: {
@@ -110,11 +112,13 @@ export async function resolveClassifierContext(args: {
   }
 
   if (hasClassifierBase && hasClassifierKey) {
+    const classifierCapability = resolveGatewayCapabilityForBaseUrl(args.userConfig?.classifierBaseUrl ?? null);
     return {
       context: {
         effectiveClassifierModel,
         classifierBaseUrl: args.userConfig?.classifierBaseUrl ?? undefined,
         classifierApiKey: classifierApiKeyOverride ?? undefined,
+        classifierSupportsReasoningEffort: classifierCapability.supportsReasoningEffort,
       },
     };
   }
@@ -191,12 +195,15 @@ export async function resolveClassifierContext(args: {
     };
   }
 
+  const classifierCapability = resolveGatewayCapabilityForBaseUrl(classifierGateway.baseUrl);
+
   return {
     context: {
       effectiveClassifierModel,
       classifierBaseUrl: classifierGateway.baseUrl,
       classifierApiKey: classifierGateway.apiKey,
       classifierGatewayId: gatewayId,
+      classifierSupportsReasoningEffort: classifierCapability.supportsReasoningEffort,
     },
   };
 }

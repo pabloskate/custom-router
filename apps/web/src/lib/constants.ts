@@ -113,11 +113,8 @@ export type RegistrationMode = (typeof REGISTRATION.MODES)[number];
 // engine decides it cannot make the decision with heuristics alone.
 
 export const CLASSIFIER = {
-  // Force deterministic output so routing decisions are reproducible.
+  // Force deterministic output so routing decisions stay reproducible.
   TEMPERATURE: 0,
-
-  // GLM-5's long context allows for richer prompts with more catalog context.
-  MAX_TOKENS: 600,
 } as const;
 
 export const SMART_PIN = {

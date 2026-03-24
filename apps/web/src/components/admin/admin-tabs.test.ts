@@ -47,6 +47,7 @@ describe("admin tab registry", () => {
       "keys",
       "quickstart",
       "playground",
+      "logs",
       "account",
     ]);
   });
@@ -60,6 +61,7 @@ describe("admin tab registry", () => {
       "keys",
       "quickstart",
       "playground",
+      "logs",
       "invites",
       "account",
     ]);
@@ -74,7 +76,7 @@ describe("admin tab registry", () => {
     const groups = groupAdminTabsBySection(tabs);
 
     expect(groups.configure.map((tab) => tab.id)).toEqual(["gateways", "routing"]);
-    expect(groups.use.map((tab) => tab.id)).toEqual(["keys", "quickstart", "playground"]);
+    expect(groups.use.map((tab) => tab.id)).toEqual(["keys", "quickstart", "playground", "logs"]);
     expect(groups.account.map((tab) => tab.id)).toEqual(["invites", "account"]);
     expect(getInitialAdminTabId(tabs, "gateways")).toBe("gateways");
   });

@@ -61,6 +61,43 @@ describe("resolveClassifierContext", () => {
       classifierBaseUrl: "https://classifier.example/v1",
       classifierApiKey: "secret",
       classifierGatewayId: "gw_classifier",
+      classifierSupportsReasoningEffort: false,
+    });
+  });
+
+  it("marks recognized classifier gateways as supporting reasoning controls", async () => {
+    const result = await resolveClassifierContext({
+      requestId: "req_3",
+      requestedModel: "planning-backend",
+      routedRequest: true,
+      runtimeConfig,
+      matchedProfile: {
+        id: "planning-backend",
+        name: "Planning Backend",
+        classifierModel: "gw_classifier::model/classifier",
+        models: [{ gatewayId: "gw_default", modelId: "model/default", name: "Default" }],
+      },
+      catalog: [{ id: "model/default", name: "Default", gatewayId: "gw_default" }],
+      gatewayMap: new Map([["gw_classifier", { baseUrl: "https://openrouter.ai/api/v1", apiKey: "secret" }]]),
+      userConfig: {
+        gatewayRows: [
+          {
+            id: "gw_classifier",
+            baseUrl: "https://openrouter.ai/api/v1",
+            apiKeyEnc: "enc:key",
+            models: [{ id: "model/classifier", name: "Classifier" }],
+          },
+        ],
+      },
+      byokSecret: "unused",
+    });
+
+    expect(result.context).toEqual({
+      effectiveClassifierModel: "model/classifier",
+      classifierBaseUrl: "https://openrouter.ai/api/v1",
+      classifierApiKey: "secret",
+      classifierGatewayId: "gw_classifier",
+      classifierSupportsReasoningEffort: true,
     });
   });
 });

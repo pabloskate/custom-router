@@ -13,6 +13,7 @@ export function createRouterEngine(args: {
   classifierApiKey: string;
   classifierBaseUrl: string;
   classifierModel: string;
+  classifierSupportsReasoningEffort?: boolean;
   onClassifierInvoked?: () => void;
 }): RouterEngine {
   return new RouterEngine({
@@ -26,6 +27,7 @@ export function createRouterEngine(args: {
         catalog: routerArgs.catalog,
         routingInstructions: routerArgs.routingInstructions,
         currentModel: routerArgs.currentModel,
+        supportsReasoningEffort: args.classifierSupportsReasoningEffort,
       });
     },
   });

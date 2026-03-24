@@ -30,4 +30,15 @@ describe("ROUTING_PRESETS", () => {
       }
     }
   });
+
+  it("defaults built-in routed models to non-reasoning presets", () => {
+    for (const preset of ROUTING_PRESETS) {
+      for (const model of preset.models) {
+        expect(
+          model.reasoningPreset ?? model.thinking,
+          `${preset.id} routed model ${model.id}`,
+        ).toBe("none");
+      }
+    }
+  });
 });

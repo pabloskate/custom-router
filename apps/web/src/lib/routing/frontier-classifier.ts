@@ -18,7 +18,7 @@
 
 import type { LlmRoutingResult } from "@custom-router/core";
 import { CLASSIFIER, SMART_PIN } from "../constants";
-import { joinUpstreamUrl } from "../upstream/upstream";
+import { isOpenRouterHost, joinUpstreamUrl } from "../upstream/upstream";
 
 type CatalogEntry = {
   id: string;
@@ -55,11 +55,11 @@ function buildPrompt(args: {
     ? `\nCRITICAL STATUS QUO BIAS:\nThe user is currently using the model '${args.currentModel}'. You MUST select this exact same model AGAIN, unless the user's latest message represents a massive shift in complexity or task type that this model physically cannot handle. We want to preserve their cache!\n`
     : "";
 
-  return `You are an advanced routing classifier for an LLM router, powered by GLM-5's deep reasoning.
+  return `You are a routing classifier for an LLM router.
 
-Your job is to analyze the user's request with deep reasoning and select the optimal model from the catalog.
+Your job is to analyze the user's request and select the optimal model from the catalog.
 
-## Your Reasoning Process
+## Your Decision Process
 1. First, analyze the user's request to understand: the task type, complexity, required capabilities
 2. Consider: coding tasks, reasoning depth, vision needs, long context requirements, output length
 3. Match against available models' strengths and whenToUse hints
@@ -75,6 +75,8 @@ ${modelList}
 
 ## Decision Guidelines
 - Output valid JSON only
+- Return the smallest valid JSON object that satisfies the schema
+- Do not output prose, markdown, or reasoning traces
 - If user specifically requests a model that exists in catalog, use it
 - For code tasks: prefer models with "coding" in their whenToUse
 - For deep reasoning: prefer variants with higher reasoning presets and stronger thinking hints
@@ -120,15 +122,22 @@ export async function routeWithFrontierModel(args: {
   routingInstructions?: string;
   model: string;
   currentModel?: string;
+  supportsReasoningEffort?: boolean;
   fetchImpl?: typeof fetch;
 }): Promise<LlmRoutingResult | null> {
   const fetchImpl = args.fetchImpl ?? fetch;
+  const reasoning = args.supportsReasoningEffort
+    ? {
+        effort: "none" as const,
+        ...(isOpenRouterHost(args.baseUrl) ? { exclude: true } : {}),
+      }
+    : undefined;
 
   const baseRequest = {
     model: args.model,
     messages: [{ role: "user", content: buildPrompt(args) }],
     temperature: CLASSIFIER.TEMPERATURE,
-    max_tokens: CLASSIFIER.MAX_TOKENS,
+    ...(reasoning ? { reasoning } : {}),
   };
 
   const schemaResponse = await fetchImpl(joinUpstreamUrl(args.baseUrl, "/chat/completions"), {

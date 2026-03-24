@@ -184,6 +184,7 @@ export async function routeAndProxy(args: {
     classifierBaseUrl,
     classifierApiKey,
     classifierGatewayId,
+    classifierSupportsReasoningEffort,
   } = classifierResolution.context;
 
   const engine = routedRequest && classifierBaseUrl && classifierApiKey && effectiveClassifierModel
@@ -191,6 +192,7 @@ export async function routeAndProxy(args: {
         classifierApiKey,
         classifierBaseUrl,
         classifierModel: effectiveClassifierModel,
+        classifierSupportsReasoningEffort,
         onClassifierInvoked: () => {
           classifierInvoked = true;
         },

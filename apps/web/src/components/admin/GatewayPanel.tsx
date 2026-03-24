@@ -16,6 +16,10 @@ import {
   getGatewayFormHint,
   getRecommendedGatewayPresets,
 } from "@/src/features/gateways/recommendations";
+import {
+  REASONING_PRESET_FIELD_HINT,
+  REASONING_PRESET_SELECT_OPTIONS,
+} from "@/src/lib/reasoning-options";
 
 export type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 
@@ -360,14 +364,11 @@ function ManualGatewayModelForm({
               reasoningPreset: event.target.value as GatewayModel["reasoningPreset"],
             }))}
           >
-            <option value="provider_default">Provider default</option>
-            <option value="none">None</option>
-            <option value="minimal">Minimal</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="xhigh">Extra high</option>
+            {REASONING_PRESET_SELECT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
+          <span className="form-hint">{REASONING_PRESET_FIELD_HINT}</span>
         </label>
       </div>
 

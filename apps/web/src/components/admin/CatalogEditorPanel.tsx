@@ -12,6 +12,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
+import {
+  getReasoningPresetBadgeLabel,
+  REASONING_PRESET_FIELD_HINT,
+  REASONING_PRESET_SELECT_OPTIONS,
+} from "@/src/lib/reasoning-options";
 
 export type CatalogItem = {
   id: string;
@@ -35,16 +40,6 @@ const MODALITY_OPTIONS = [
   { value: "text,audio->text", label: "Text, Audio → Text" },
   { value: "text->image", label: "Text → Image" },
   { value: "text->audio", label: "Text → Audio" },
-];
-
-const THINKING_OPTIONS = [
-  { value: "provider_default", label: "Provider Default" },
-  { value: "none", label: "None" },
-  { value: "minimal", label: "Minimal" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "X-High" },
 ];
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -109,8 +104,7 @@ function ModalityBadge({ modality }: { modality?: string }) {
 }
 
 function ThinkingBadge({ level }: { level?: string }) {
-  const thinking = THINKING_OPTIONS.find((o) => o.value === level);
-  const label = thinking?.label || "Provider Default";
+  const label = getReasoningPresetBadgeLabel(level);
 
   // Color based on level
   let variant = "badge--info";
@@ -311,19 +305,19 @@ function ModelCard({
             </div>
 
             <div className="form-group">
-              <label className="form-label">Thinking Level</label>
+              <label className="form-label">Reasoning preset</label>
               <select
                 className="select"
                 value={item.thinking || "provider_default"}
                 onChange={(e) => onUpdate(index, { thinking: e.target.value })}
               >
-                {THINKING_OPTIONS.map((o) => (
+                {REASONING_PRESET_SELECT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
                 ))}
               </select>
-              <span className="form-hint">How much reasoning this model typically does</span>
+              <span className="form-hint">{REASONING_PRESET_FIELD_HINT}</span>
             </div>
           </div>
 

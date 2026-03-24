@@ -8,6 +8,7 @@ import { type AdminExtensionContext, type AdminTabDefinition, type ApiKeyInfo, t
 import { GatewayPanel } from "@/src/features/gateways/components/GatewayPanel";
 import type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 import { PlaygroundPanel } from "@/src/features/playground/PlaygroundPanel";
+import { LogsPanel } from "@/src/features/routing-logs/LogsPanel";
 import { QuickstartPanel } from "@/src/features/routing-quickstart/QuickstartPanel";
 import { type RegistrationMode } from "@/src/lib/constants";
 
@@ -70,6 +71,19 @@ function IconPlayground({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function IconLogs({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 6h13" />
+      <path d="M8 12h13" />
+      <path d="M8 18h13" />
+      <path d="M3 6h.01" />
+      <path d="M3 12h.01" />
+      <path d="M3 18h.01" />
     </svg>
   );
 }
@@ -267,12 +281,26 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
       label: "Playground",
       section: "use",
       title: "Playground",
-      subtitle: "Send test requests and inspect routing decisions",
+      subtitle: "Send test requests and inspect routing decisions inline",
       order: 200,
       icon: IconPlayground,
       render: (ctx: AdminExtensionContext) => (
         <div className="animate-fade-in">
           <PlaygroundPanel profiles={ctx.user.profiles} />
+        </div>
+      ),
+    },
+    {
+      id: "logs",
+      label: "Logs",
+      section: "use",
+      title: "Logs",
+      subtitle: "Review recent routed requests and the models they selected",
+      order: 250,
+      icon: IconLogs,
+      render: () => (
+        <div className="animate-fade-in">
+          <LogsPanel />
         </div>
       ),
     },
