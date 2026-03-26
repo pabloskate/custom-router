@@ -219,6 +219,43 @@ describe("createProfileFromPreset", () => {
     );
   });
 
+  it("binds the affordable deep research preset to synced OpenRouter models", () => {
+    const researchAffordable = ROUTING_PRESETS.find((preset) => preset.id === "research-affordable");
+    expect(researchAffordable).toBeTruthy();
+
+    const profile = createProfileFromPreset(researchAffordable!, [
+      {
+        id: "gw_openrouter",
+        name: "OpenRouter",
+        baseUrl: "https://openrouter.ai/api/v1",
+        createdAt: "2026-03-16T00:00:00.000Z",
+        updatedAt: "2026-03-16T00:00:00.000Z",
+        models: [
+          { id: "z-ai/glm-5", name: "Z.ai: GLM 5" },
+          { id: "x-ai/grok-4.20-beta", name: "xAI: Grok 4.20 Beta" },
+          { id: "google/gemini-3-flash-preview", name: "Google: Gemini 3 Flash Preview" },
+          { id: "google/gemini-3.1-flash-lite-preview", name: "Google: Gemini 3.1 Flash Lite Preview" },
+        ],
+      },
+    ]);
+
+    expect(profile.defaultModel).toBe("gw_openrouter::z-ai/glm-5");
+    expect(profile.classifierModel).toBe("gw_openrouter::google/gemini-3.1-flash-lite-preview");
+    expect(profile.models).toHaveLength(3);
+    expect(profile.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          gatewayId: "gw_openrouter",
+          modelId: "x-ai/grok-4.20-beta",
+        }),
+        expect.objectContaining({
+          gatewayId: "gw_openrouter",
+          modelId: "google/gemini-3-flash-preview",
+        }),
+      ]),
+    );
+  });
+
   it("binds the frontend UI builder preset to synced OpenRouter models", () => {
     const frontendUiBuilder = ROUTING_PRESETS.find((preset) => preset.id === "frontend-ui-builder");
     expect(frontendUiBuilder).toBeTruthy();
@@ -369,6 +406,43 @@ describe("createProfileFromPreset", () => {
         expect.objectContaining({
           gatewayId: "gw_vercel",
           modelId: "zai/glm-5",
+        }),
+      ]),
+    );
+  });
+
+  it("binds the vercel affordable deep research preset to synced Vercel AI Gateway models", () => {
+    const vercelResearchAffordable = ROUTING_PRESETS.find((preset) => preset.id === "vercel-research-affordable");
+    expect(vercelResearchAffordable).toBeTruthy();
+
+    const profile = createProfileFromPreset(vercelResearchAffordable!, [
+      {
+        id: "gw_vercel",
+        name: "Vercel AI Gateway",
+        baseUrl: "https://ai-gateway.vercel.sh/v1",
+        createdAt: "2026-03-16T00:00:00.000Z",
+        updatedAt: "2026-03-16T00:00:00.000Z",
+        models: [
+          { id: "zai/glm-5", name: "GLM 5" },
+          { id: "xai/grok-4.20-reasoning-beta", name: "Grok 4.20 Beta Reasoning" },
+          { id: "google/gemini-3-flash", name: "Gemini 3 Flash" },
+          { id: "google/gemini-3.1-flash-lite-preview", name: "Gemini 3.1 Flash Lite Preview" },
+        ],
+      },
+    ]);
+
+    expect(profile.defaultModel).toBe("gw_vercel::zai/glm-5");
+    expect(profile.classifierModel).toBe("gw_vercel::google/gemini-3.1-flash-lite-preview");
+    expect(profile.models).toHaveLength(3);
+    expect(profile.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          gatewayId: "gw_vercel",
+          modelId: "xai/grok-4.20-reasoning-beta",
+        }),
+        expect.objectContaining({
+          gatewayId: "gw_vercel",
+          modelId: "google/gemini-3-flash",
         }),
       ]),
     );

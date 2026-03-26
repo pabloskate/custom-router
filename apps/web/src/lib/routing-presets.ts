@@ -1156,4 +1156,138 @@ EVERYTHING ELSE
 Default to Claude Sonnet 4.6 when the task is premium coding work but the route is ambiguous.
 `.trim(),
   },
+  {
+    id: "research-affordable",
+    name: "Affordable Deep Research",
+    description: "Cost-aware research pool: GLM 5 handles synthesis by default, Grok 4.20 handles live web research, and Gemini 3 Flash covers long-context attachments and multimodal inputs",
+    gatewayPresetId: "openrouter",
+    classifierModel: "google/gemini-3.1-flash-lite-preview",
+    defaultModel: "z-ai/glm-5",
+    models: [
+      {
+        id: "z-ai/glm-5",
+        name: "GLM 5",
+        modality: "text->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Default for synthesis, report writing, comparing gathered evidence, and deliberate text-first research reasoning when cost matters.",
+      },
+      {
+        id: "x-ai/grok-4.20-beta",
+        name: "Grok 4.20 Beta",
+        modality: "text,image->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Live web research, current-info lookups, source gathering, and search-heavy investigation where freshness matters.",
+      },
+      {
+        id: "google/gemini-3-flash-preview",
+        name: "Gemini 3 Flash Preview",
+        modality: "text,image,file,audio,video->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Large attachments, long-context research packs, screenshots, PDFs, and multimodal evidence review when GLM 5 is too narrow.",
+      },
+    ],
+    routingInstructions: `
+Route every request to the best affordable research model. Optimize for research quality per dollar, not premium-max capability at any price.
+
+MODEL REFERENCE
+  z-ai/glm-5                   — affordable synthesis and report-writing default
+  x-ai/grok-4.20-beta          — live web and current-info research lane
+  google/gemini-3-flash-preview — long-context attachments and multimodal evidence lane
+
+ROUTING RULES (apply in order)
+
+IMAGE INPUT / SCREENSHOT / PDF / FILE INPUT / AUDIO / VIDEO / LARGE ATTACHMENTS
+  → google/gemini-3-flash-preview
+
+WEB SEARCH / CURRENT INFO / "LATEST" / NEWS / LIVE LOOKUP / SOURCE GATHERING
+  → x-ai/grok-4.20-beta
+
+LONG CONTEXT / LARGE PASTE / MULTIPLE SOURCES IN THE PROMPT / CONTEXT >60K TOKENS
+  → google/gemini-3-flash-preview
+
+SYNTHESIS / REPORT WRITING / COMPARING EVIDENCE / SUMMARIZING GATHERED FINDINGS / TRADEOFF ANALYSIS
+  → z-ai/glm-5
+
+WHEN THE USER SHIFTS FROM LOOKUP TO WRITE-UP OR DECISION-MAKING
+  → z-ai/glm-5
+
+EVERYTHING ELSE
+  → z-ai/glm-5
+
+Default to GLM 5 when the task is ambiguous but not clearly live-web or multimodal.
+`.trim(),
+  },
+  {
+    id: "vercel-research-affordable",
+    name: "Vercel Affordable Deep Research",
+    description: "Cost-aware Vercel research pool: GLM 5 handles synthesis by default, Grok 4.20 handles live web research, and Gemini 3 Flash covers long-context attachments and multimodal inputs",
+    gatewayPresetId: "vercel",
+    classifierModel: "google/gemini-3.1-flash-lite-preview",
+    defaultModel: "zai/glm-5",
+    models: [
+      {
+        id: "zai/glm-5",
+        name: "GLM 5",
+        modality: "text->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Default for synthesis, report writing, comparing gathered evidence, and deliberate text-first research reasoning when cost matters.",
+      },
+      {
+        id: "xai/grok-4.20-reasoning-beta",
+        name: "Grok 4.20 Beta Reasoning",
+        modality: "text,image->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Live web research, current-info lookups, source gathering, and search-heavy investigation where freshness matters.",
+      },
+      {
+        id: "google/gemini-3-flash",
+        name: "Gemini 3 Flash",
+        modality: "text,image->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Large attachments, long-context research packs, screenshots, and multimodal evidence review when GLM 5 is too narrow.",
+      },
+    ],
+    routingInstructions: `
+Route every request to the best affordable Vercel AI Gateway research model. Optimize for research quality per dollar, not premium-max capability at any price.
+
+MODEL REFERENCE
+  zai/glm-5                     — affordable synthesis and report-writing default
+  xai/grok-4.20-reasoning-beta  — live web and current-info research lane
+  google/gemini-3-flash         — long-context attachments and multimodal evidence lane
+
+ROUTING RULES (apply in order)
+
+IMAGE INPUT / SCREENSHOT / PDF / FILE INPUT / AUDIO / VIDEO / LARGE ATTACHMENTS
+  → google/gemini-3-flash
+
+WEB SEARCH / CURRENT INFO / "LATEST" / NEWS / LIVE LOOKUP / SOURCE GATHERING
+  → xai/grok-4.20-reasoning-beta
+
+LONG CONTEXT / LARGE PASTE / MULTIPLE SOURCES IN THE PROMPT / CONTEXT >60K TOKENS
+  → google/gemini-3-flash
+
+SYNTHESIS / REPORT WRITING / COMPARING EVIDENCE / SUMMARIZING GATHERED FINDINGS / TRADEOFF ANALYSIS
+  → zai/glm-5
+
+WHEN THE USER SHIFTS FROM LOOKUP TO WRITE-UP OR DECISION-MAKING
+  → zai/glm-5
+
+EVERYTHING ELSE
+  → zai/glm-5
+
+Default to GLM 5 when the task is ambiguous but not clearly live-web or multimodal.
+`.trim(),
+  },
 ];
