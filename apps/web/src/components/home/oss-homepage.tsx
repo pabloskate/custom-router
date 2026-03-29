@@ -30,7 +30,7 @@ const QUICKSTART_CARDS = [
   {
     title: "3. Route traffic",
     summary: "Open the dashboard, add a gateway, create an API key, and point any OpenAI SDK at /api/v1.",
-    code: "POST /api/v1/chat/completions\nmodel: \"auto\"",
+    code: "POST /api/v1/chat/completions\nmodel: \"planning-backend\"",
     links: [
       { label: "Open dashboard", href: "/admin", external: false },
       { label: "Open-source info", href: "/open-source", external: false },
@@ -53,6 +53,7 @@ const PRIVATE_BOUNDARY_ITEMS = [
 const API_ENDPOINTS = [
   "POST /api/v1/chat/completions",
   "POST /api/v1/responses",
+  "POST /api/v1/completions",
   "GET /api/v1/models",
 ] as const;
 

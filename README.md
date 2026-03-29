@@ -1,6 +1,6 @@
 # CustomRouter
 
-CustomRouter is a self-hostable, OpenAI-compatible LLM routing proxy. Point any OpenAI SDK at your `/api/v1` base URL, send `model: "auto"`, and let the router choose the best upstream model using your rules, thread stickiness, and explainable fallbacks.
+CustomRouter is a self-hostable, OpenAI-compatible LLM routing proxy. Point any OpenAI SDK at your `/api/v1` base URL, send a saved routing profile ID such as `planning-backend`, and let the router choose the best upstream model using your rules, thread stickiness, and explainable fallbacks.
 
 ## Open-Core Boundary
 
@@ -30,6 +30,7 @@ Recommended repo split:
 - OpenAI-compatible endpoints:
   - `POST /api/v1/chat/completions`
   - `POST /api/v1/responses`
+  - `POST /api/v1/completions`
   - `GET /api/v1/models`
 - User auth, BYOK credential storage, API keys, gateways, and admin configuration
 - Optional routing explanations, thread pinning, classifier-based selection, and fallback behavior
@@ -48,8 +49,8 @@ Recommended repo split:
 
 ## Runtime Behavior
 
-- Routing activates for `model: "auto"` and named routing profiles. Explicit model IDs pass through unchanged.
-- **Precedence:** Global fallback and router models apply to all profiles. Each profile can optionally override them via "Override global models" — when enabled, the profile’s fallback/router model values take precedence; when disabled, the profile inherits global defaults. The `auto` profile is always required and non-deletable.
+- Routing activates only when `model` matches a saved routing profile ID. Explicit gateway model IDs pass through unchanged.
+- Each profile owns its routed model pool, fallback selection, router model binding, and routing instructions. Legacy user-level fallback/router fields are no longer part of the active routing path.
 - The first successful routed turn pins the selected model to the thread fingerprint for 1 hour. Continuations reuse that pin until a constraint breaks it or the cooldown window expires.
 - Putting `$$route` in the latest user turn bypasses the active thread pin for that turn and forces a fresh routing decision.
 - Tool-enabled threads can break a thread pin after the router detects its phase-complete sentinel. Non-tool threads ignore that sentinel and keep the existing pin.
@@ -66,16 +67,17 @@ Recommended repo split:
 
 ```bash
 npm install
-npm run typecheck
-npm run dev -w @custom-router/web
+npm run db:seed
+npm run local:stable
+BASE_URL=http://localhost:3010 npm run verify:admin
 ```
 
 1. Copy `.env.example` to `.env.local`.
 2. Set `BYOK_ENCRYPTION_SECRET`.
 3. If you want password reset emails, also set `RESEND_API_KEY`, `PASSWORD_RESET_FROM_EMAIL`, and `PASSWORD_RESET_BASE_URL`.
 4. Add a gateway in the admin console.
-5. Open `http://localhost:3000/admin`.
-6. Create an account, add a gateway, generate an API key, and call `/api/v1` with `model: "auto"`.
+5. Open `http://localhost:3010/admin`.
+6. Create an account, add a gateway, create a named routing profile, generate an API key, and call `/api/v1` with that profile ID.
 7. For endpoint-level usage, request payloads, Cloudflare env setup, and admin routes, see [Usage Guide](docs/usage.md).
 
 ## Self-Host Docs

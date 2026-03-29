@@ -34,7 +34,7 @@ Recommended local variables:
 - `PASSWORD_RESET_BASE_URL=http://localhost:3010` if you want to test password reset on the stable local flow
 - `RESEND_API_KEY` and `PASSWORD_RESET_FROM_EMAIL` if you want real password reset email delivery instead of preview links
 
-Open `http://localhost:3000/admin`, then:
+Open your local admin UI (`http://localhost:3010/admin` for `local:stable`, or `http://localhost:3000/admin` for `next dev`), then:
 
 1. Create an account.
 2. Add a gateway or BYOK upstream.
@@ -106,6 +106,7 @@ Supported public endpoints:
 
 - `POST /api/v1/chat/completions`
 - `POST /api/v1/responses`
+- `POST /api/v1/completions`
 - `GET /api/v1/models`
 
 Admin and user management routes remain self-hostable and are part of the public product.

@@ -109,7 +109,7 @@ For production setup and cron details, see [Deployment](./deployment-cloudflare.
   1. `smart` (default): reuse pin for quick continuation turns, but re-route after `smartPinTurns`.
   2. `every_message`: always re-route every turn, never write pins.
   3. `new_thread_only`: pin only controls new thread continuations.
-- You can configure `smart_pin_turns` in `/api/v1/user/me`.
+- `smartPinTurns` currently comes from system router config defaults rather than the public `/api/v1/user/me` payload.
 
 ### Force reroute
 
@@ -129,9 +129,9 @@ They require minimum sample sizes before triggering and cool down for 30 minutes
 
 Routing catalog resolution order for each request:
 
-1. User gateway catalogs (all registered gateways, `catalogFilter` + blocklist applied)
-2. user `custom_catalog`
-3. system catalog in D1/KV
+1. Routed requests use the active profile's resolved model pool only.
+2. Passthrough requests use synced gateway inventory when gateways are configured.
+3. If no gateway inventory is available for passthrough, the router falls back to `custom_catalog`, then the system catalog in D1/KV.
 
 ## 5) Build your account and get API access
 
@@ -325,18 +325,16 @@ Update user routing config, profiles, and optional BYOK classifier credentials.
 Notable keys include:
 
 - `preferred_models`
-- `blocklist`
-- `default_model`
-- `classifier_model`
-- `routing_instructions`
 - `custom_catalog`
 - `profiles`
 - `route_trigger_keywords`
 - `routing_frequency`
-- `smart_pin_turns`
+- `route_logging_enabled`
 - `classifier_base_url`
 - `classifier_api_key`
 - `clear_classifier_api_key`
+
+Legacy user-level routing fields such as `blocklist`, `default_model`, `classifier_model`, and `routing_instructions` are no longer accepted. Rebuild routing through `profiles` instead.
 
 #### `GET /api/v1/user/keys`
 

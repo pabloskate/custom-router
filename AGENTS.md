@@ -12,7 +12,7 @@ CustomRouter is a **highly customizable LLM routing proxy** deployed on Cloudfla
 2. Thread stickiness (pinning a model for multi-turn conversations)
 3. Runtime guardrails that circuit-break underperforming models
 
-The router is **transparent** — it speaks OpenAI's API, so any SDK pointing at it works without modification. Set `model` to a saved profile ID such as `planning-backend`. If a user creates a profile with `id: "auto"`, clients can also use `model: "auto"`.
+The router is **transparent** — it speaks OpenAI's API, so any SDK pointing at it works without modification. Set `model` to a saved profile ID such as `planning-backend`.
 
 ---
 
