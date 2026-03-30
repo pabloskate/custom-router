@@ -49,6 +49,7 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
   return {
     userId: "user_1",
     userName: "Test User",
+    updatedAt: "2026-03-19T00:00:00.000Z",
     preferredModels: [],
     defaultModel: null,
     classifierModel: null,

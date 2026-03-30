@@ -52,6 +52,7 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
   return {
     userId: "user_1",
     userName: "Test User",
+    updatedAt: "2026-03-11T00:00:00.000Z",
     preferredModels: [],
     defaultModel: null,
     classifierModel: null,
@@ -71,8 +72,8 @@ function createAuth(overrides: Partial<AuthResult> = {}): AuthResult {
   };
 }
 
-function createDbMock() {
-  const runMock = vi.fn(async () => ({ meta: { changes: 1 } }));
+function createDbMock(changes = 1) {
+  const runMock = vi.fn(async () => ({ meta: { changes } }));
   const bindMock = vi.fn((..._args: unknown[]) => ({ run: runMock }));
   const prepareMock = vi.fn((_sql: string) => ({ bind: bindMock }));
   return {
@@ -159,6 +160,7 @@ describe("/api/v1/user/me route", () => {
 
     const body = await response.json() as any;
     expect(body.user.profiles).toBeNull();
+    expect(body.user.updatedAt).toBe("2026-03-11T00:00:00.000Z");
     expect(body.user.routeLoggingEnabled).toBe(false);
     expect(body.user.routingConfigRequiresReset).toBe(true);
     expect(body.user.routingConfigResetMessage).toContain("Legacy routing settings");
@@ -178,6 +180,7 @@ describe("/api/v1/user/me route", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
           preferred_models: [],
           profiles: [
             {
@@ -197,7 +200,6 @@ describe("/api/v1/user/me route", () => {
           route_trigger_keywords: ["reroute"],
           routing_frequency: "smart",
           route_logging_enabled: true,
-          smart_pin_turns: 5,
         }),
       }),
     );
@@ -208,11 +210,15 @@ describe("/api/v1/user/me route", () => {
     expect(updateSql).toContain("classifier_model = NULL");
     expect(updateSql).toContain("routing_instructions = NULL");
     expect(updateSql).toContain("blocklist = NULL");
-    expect(db.prepare).toHaveBeenCalledWith("UPDATE users SET route_logging_enabled = ?1, updated_at = ?2 WHERE id = ?3");
-    const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
-    expect(bindArgs[0]).toBe(1);
-    const profileUpdateBindArgs = db.__bindMock.mock.calls.at(-2) ?? [];
-    expect(JSON.parse(String(profileUpdateBindArgs[1]))).toEqual([
+    expect(updateSql).toContain("route_logging_enabled =");
+    expect(updateSql).toContain("WHERE id =");
+    expect(updateSql).toContain("updated_at =");
+    const profileUpdateBindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
+    expect(profileUpdateBindArgs[4]).toBe(1);
+    const serializedProfiles = profileUpdateBindArgs.find((value) =>
+      typeof value === "string" && value.includes("\"planning-backend\""),
+    );
+    expect(JSON.parse(String(serializedProfiles))).toEqual([
       {
         id: "planning-backend",
         name: "Planning Backend",
@@ -227,6 +233,7 @@ describe("/api/v1/user/me route", () => {
         classifierModel: "gw_openrouter::anthropic/claude-sonnet-4.6",
       },
     ]);
+    expect(profileUpdateBindArgs.at(-1)).toBe("2026-03-11T00:00:00.000Z");
   });
 
   it("PUT accepts a router model that is not part of the routed profile pool", async () => {
@@ -240,6 +247,7 @@ describe("/api/v1/user/me route", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
           profiles: [
             {
               id: "planning-backend",
@@ -272,6 +280,7 @@ describe("/api/v1/user/me route", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
           profiles: [{ id: "planning-backend", name: "Planning Backend", models: [] }],
           default_model: "legacy/default",
         }),
@@ -293,6 +302,7 @@ describe("/api/v1/user/me route", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
           profiles: [{ id: "Auto With Spaces", name: "Planning Backend", models: [] }],
         }),
       }),
@@ -314,19 +324,93 @@ describe("/api/v1/user/me route", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
           profiles: [{ id: "auto", name: "Auto", models: [] }],
         }),
       }),
     );
 
     expect(response.status).toBe(200);
-    const bindArgs = db.__bindMock.mock.calls.at(-2) ?? [];
-    expect(JSON.parse(String(bindArgs[1]))).toEqual([
+    const bindArgs = db.__bindMock.mock.calls.at(-1) ?? [];
+    const serializedProfiles = bindArgs.find((value) =>
+      typeof value === "string" && value.includes("\"auto\""),
+    );
+    expect(JSON.parse(String(serializedProfiles))).toEqual([
       {
         id: "auto",
         name: "Auto",
         models: [],
       },
     ]);
+  });
+
+  it("PUT updates only the touched field when saving logs settings", async () => {
+    const db = createDbMock();
+    runtimeMock.mockReturnValue({ ROUTER_DB: db as any, BYOK_ENCRYPTION_SECRET: "1234567890abcdef" });
+    sameOriginMock.mockReturnValue(true);
+    authMock.mockResolvedValue(createAuth({ userId: "user_1" }));
+
+    const response = await PUT(
+      new Request("http://localhost/api/v1/user/me", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
+          route_logging_enabled: true,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const updateSql = db.prepare.mock.calls.find((entry: [string]) => entry[0].includes("UPDATE users"))?.[0] ?? "";
+    expect(updateSql).toContain("route_logging_enabled =");
+    expect(updateSql).not.toContain("profiles =");
+    expect(updateSql).not.toContain("route_trigger_keywords =");
+    expect(updateSql).not.toContain("routing_frequency =");
+    expect(loadGatewaysMock).not.toHaveBeenCalled();
+  });
+
+  it("PUT rejects stale settings revisions", async () => {
+    const db = createDbMock(0);
+    runtimeMock.mockReturnValue({ ROUTER_DB: db as any, BYOK_ENCRYPTION_SECRET: "1234567890abcdef" });
+    sameOriginMock.mockReturnValue(true);
+    authMock.mockResolvedValue(createAuth({ userId: "user_1" }));
+
+    const response = await PUT(
+      new Request("http://localhost/api/v1/user/me", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
+          route_logging_enabled: true,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    const body = await response.json() as { error: string };
+    expect(body.error).toContain("another tab or session");
+  });
+
+  it("PUT rejects a mismatched client revision before writing", async () => {
+    const db = createDbMock();
+    runtimeMock.mockReturnValue({ ROUTER_DB: db as any, BYOK_ENCRYPTION_SECRET: "1234567890abcdef" });
+    sameOriginMock.mockReturnValue(true);
+    authMock.mockResolvedValue(createAuth({ userId: "user_1", updatedAt: "2026-03-12T00:00:00.000Z" }));
+
+    const response = await PUT(
+      new Request("http://localhost/api/v1/user/me", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expected_updated_at: "2026-03-11T00:00:00.000Z",
+          route_logging_enabled: true,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    const updateSql = db.prepare.mock.calls.find((entry: [string]) => entry[0].includes("UPDATE users"));
+    expect(updateSql).toBeUndefined();
   });
 });

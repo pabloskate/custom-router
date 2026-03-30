@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 
 import type { RegistrationMode } from "@/src/lib/constants";
-import { hydrateUser, type ServerUserInfo, type UserInfo } from "@/src/features/account-settings/contracts";
+import {
+  buildUserInfoUpdateRequest,
+  hydrateUser,
+  type ServerUserInfo,
+  type UserInfo,
+} from "@/src/features/account-settings/contracts";
 import type { GatewayInfo } from "@/src/features/gateways/contracts";
 import type { ApiKeyInfo, RoutingDraftState } from "@/src/components/admin/types";
 
@@ -188,15 +193,10 @@ export function useAdminData() {
     setStatus("Saving...");
     setError(undefined);
 
-    const updatedUser = { ...user, ...updates };
-    const payload: Record<string, unknown> = {
-      preferred_models: updatedUser.preferredModels,
-      custom_catalog: updatedUser.customCatalog,
-      profiles: updatedUser.profiles,
-      route_trigger_keywords: updatedUser.routeTriggerKeywords,
-      routing_frequency: updatedUser.routingFrequency,
-      route_logging_enabled: updatedUser.routeLoggingEnabled,
-    };
+    const payload = buildUserInfoUpdateRequest({
+      expectedUpdatedAt: user.updatedAt,
+      updates,
+    });
 
     const response = await fetch("/api/v1/user/me", {
       method: "PUT",
@@ -211,6 +211,9 @@ export function useAdminData() {
     }
 
     const responsePayload = await response.json().catch(() => ({ error: "Failed to save changes" })) as { error?: string };
+    if (response.status === 409) {
+      await loadData();
+    }
     setError(responsePayload.error ?? "Failed to save changes");
     setStatus("Error");
     return false;

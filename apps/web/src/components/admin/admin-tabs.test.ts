@@ -11,6 +11,7 @@ const TEST_USER: UserInfo = {
   id: "user_123",
   name: "Test User",
   email: "test@example.com",
+  updatedAt: "2026-03-16T00:00:00.000Z",
   preferredModels: [],
   customCatalog: null,
   profiles: null,

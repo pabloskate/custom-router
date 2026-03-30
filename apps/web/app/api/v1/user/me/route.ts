@@ -21,6 +21,8 @@ import { z } from "zod";
 
 const LEGACY_ROUTING_RESET_MESSAGE =
   "Legacy routing settings were detected. Rebuild your routing profiles from scratch to continue.";
+const STALE_SETTINGS_MESSAGE =
+  "These settings changed in another tab or session. Reload the latest settings and try again.";
 
 function hasOwn(body: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(body, key);
@@ -79,6 +81,7 @@ export async function GET(request: Request): Promise<Response> {
       user: {
         id: auth.userId,
         name: auth.userName,
+        updatedAt: auth.updatedAt,
         preferredModels: auth.preferredModels,
         customCatalog: auth.customCatalog,
         profiles: auth.profiles,
@@ -109,68 +112,106 @@ export async function PUT(request: Request): Promise<Response> {
         );
       }
 
-      const preferredModels = Array.isArray(body.preferred_models) ? body.preferred_models : [];
-      const routeTriggerKeywords = Array.isArray(body.route_trigger_keywords)
-        ? (body.route_trigger_keywords as unknown[]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-        : null;
-      const validFrequencies = ["every_message", "smart", "new_thread_only"];
-      const routingFrequency = typeof body.routing_frequency === "string" && validFrequencies.includes(body.routing_frequency)
-        ? body.routing_frequency
-        : null;
-      const routeLoggingEnabled = hasOwn(body, "route_logging_enabled")
-        ? body.route_logging_enabled === true
-        : auth.routeLoggingEnabled;
-      const clearClassifierApiKey = body.clear_classifier_api_key === true;
+      const expectedUpdatedAt = typeof body.expected_updated_at === "string" ? body.expected_updated_at.trim() : "";
+      if (expectedUpdatedAt.length === 0) {
+        return json({ error: "Missing expected_updated_at." }, 400);
+      }
 
-      const profilesParsed = Array.isArray(body.profiles)
+      if (expectedUpdatedAt !== auth.updatedAt) {
+        return json({ error: STALE_SETTINGS_MESSAGE }, 409);
+      }
+
+      let preferredModels: unknown[] | undefined;
+      if (hasOwn(body, "preferred_models")) {
+        if (!Array.isArray(body.preferred_models)) {
+          return json({ error: "Invalid preferred_models payload." }, 400);
+        }
+        preferredModels = body.preferred_models;
+      }
+
+      let routeTriggerKeywords: string[] | null | undefined;
+      if (hasOwn(body, "route_trigger_keywords")) {
+        if (body.route_trigger_keywords !== null && !Array.isArray(body.route_trigger_keywords)) {
+          return json({ error: "Invalid route_trigger_keywords payload." }, 400);
+        }
+        routeTriggerKeywords = Array.isArray(body.route_trigger_keywords)
+          ? (body.route_trigger_keywords as unknown[]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : null;
+      }
+      const validFrequencies = ["every_message", "smart", "new_thread_only"];
+      let routingFrequency: string | null | undefined;
+      if (hasOwn(body, "routing_frequency")) {
+        if (body.routing_frequency !== null && typeof body.routing_frequency !== "string") {
+          return json({ error: "Invalid routing_frequency payload." }, 400);
+        }
+        if (typeof body.routing_frequency === "string" && !validFrequencies.includes(body.routing_frequency)) {
+          return json({ error: "Invalid routing_frequency payload." }, 400);
+        }
+        routingFrequency = typeof body.routing_frequency === "string" ? body.routing_frequency : null;
+      }
+      let routeLoggingEnabled: boolean | undefined;
+      if (hasOwn(body, "route_logging_enabled")) {
+        if (typeof body.route_logging_enabled !== "boolean") {
+          return json({ error: "Invalid route_logging_enabled payload." }, 400);
+        }
+        routeLoggingEnabled = body.route_logging_enabled;
+      }
+      const clearClassifierApiKey = body.clear_classifier_api_key === true;
+      const profilesProvided = hasOwn(body, "profiles");
+
+      const profilesParsed = profilesProvided
         ? z.array(routerProfileSchema).safeParse(body.profiles)
         : null;
 
-      if (!profilesParsed?.success) {
+      if (profilesProvided && !profilesParsed?.success) {
         return json({ error: "Invalid profiles payload.", issues: profilesParsed?.error.issues ?? [] }, 400);
       }
 
-      const profiles = normalizeProfiles(profilesParsed.data.map(sanitizeRouterProfile));
-      const seenProfileIds = new Set<string>();
-      for (const profile of profiles) {
-        const profileIdError = getProfileIdValidationError(profile.id);
-        if (profileIdError) {
-          return json({ error: `Profile "${profile.id || "<empty>"}" is invalid. ${profileIdError}` }, 400);
+      const profiles = profilesProvided && profilesParsed?.success
+        ? normalizeProfiles(profilesParsed.data.map(sanitizeRouterProfile))
+        : undefined;
+      if (profiles) {
+        const seenProfileIds = new Set<string>();
+        for (const profile of profiles) {
+          const profileIdError = getProfileIdValidationError(profile.id);
+          if (profileIdError) {
+            return json({ error: `Profile "${profile.id || "<empty>"}" is invalid. ${profileIdError}` }, 400);
+          }
+          if (seenProfileIds.has(profile.id)) {
+            return json({ error: `Duplicate profile id "${profile.id}" is not allowed.` }, 400);
+          }
+          seenProfileIds.add(profile.id);
         }
-        if (seenProfileIds.has(profile.id)) {
-          return json({ error: `Duplicate profile id "${profile.id}" is not allowed.` }, 400);
-        }
-        seenProfileIds.add(profile.id);
-      }
 
-      const gatewayRows = await loadGatewaysWithMigration({
-        db: bindings.ROUTER_DB,
-        userId: auth.userId,
-        upstreamBaseUrl: auth.upstreamBaseUrl ?? null,
-        upstreamApiKeyEnc: auth.upstreamApiKeyEnc ?? null,
-        customCatalogJson: auth.customCatalog ? JSON.stringify(auth.customCatalog) : null,
-      });
-      const validGatewayModelKeys = new Set(
-        gatewayRows.flatMap((row) =>
-          gatewayRowToInfo(row).models.map((model) => `${row.id}::${model.id}`),
-        ),
-      );
-
-      for (const profile of profiles) {
-        const defaultModel = sanitizeOptionalString(profile.defaultModel);
-        const classifierModel = sanitizeOptionalString(profile.classifierModel);
-        const resolvedKeys = new Set(
-          (profile.models ?? [])
-            .filter((model) => sanitizeOptionalString(model.gatewayId) && sanitizeOptionalString(model.modelId))
-            .map((model) => `${model.gatewayId}::${model.modelId}`),
+        const gatewayRows = await loadGatewaysWithMigration({
+          db: bindings.ROUTER_DB,
+          userId: auth.userId,
+          upstreamBaseUrl: auth.upstreamBaseUrl ?? null,
+          upstreamApiKeyEnc: auth.upstreamApiKeyEnc ?? null,
+          customCatalogJson: auth.customCatalog ? JSON.stringify(auth.customCatalog) : null,
+        });
+        const validGatewayModelKeys = new Set(
+          gatewayRows.flatMap((row) =>
+            gatewayRowToInfo(row).models.map((model) => `${row.id}::${model.id}`),
+          ),
         );
 
-        if (defaultModel && !resolvedKeys.has(defaultModel)) {
-          return json({ error: `Profile "${profile.id}" has an invalid fallback model selection.` }, 400);
-        }
+        for (const profile of profiles) {
+          const defaultModel = sanitizeOptionalString(profile.defaultModel);
+          const classifierModel = sanitizeOptionalString(profile.classifierModel);
+          const resolvedKeys = new Set(
+            (profile.models ?? [])
+              .filter((model) => sanitizeOptionalString(model.gatewayId) && sanitizeOptionalString(model.modelId))
+              .map((model) => `${model.gatewayId}::${model.modelId}`),
+          );
 
-        if (classifierModel && !validGatewayModelKeys.has(classifierModel)) {
-          return json({ error: `Profile "${profile.id}" has an invalid router model selection.` }, 400);
+          if (defaultModel && !resolvedKeys.has(defaultModel)) {
+            return json({ error: `Profile "${profile.id}" has an invalid fallback model selection.` }, 400);
+          }
+
+          if (classifierModel && !validGatewayModelKeys.has(classifierModel)) {
+            return json({ error: `Profile "${profile.id}" has an invalid router model selection.` }, 400);
+          }
         }
       }
 
@@ -230,36 +271,59 @@ export async function PUT(request: Request): Promise<Response> {
         }
       }
 
+      const routeLoggingColumnAvailable = await hasUsersRouteLoggingEnabledColumn(bindings.ROUTER_DB);
       const now = new Date().toISOString();
-      const updateSql = `UPDATE users
-             SET preferred_models = ?1,
-                 blocklist = NULL,
-                 default_model = NULL,
-                 classifier_model = NULL,
-                 routing_instructions = NULL,
-                 profiles = ?2,
-                 route_trigger_keywords = ?3,
-                 routing_frequency = ?4,
-                 updated_at = ?5
-             WHERE id = ?6`;
-      const updateStatement = bindings.ROUTER_DB.prepare(updateSql);
+      const touchesCredentials =
+        hasOwn(body, "classifier_base_url") || hasOwn(body, "classifier_api_key") || clearClassifierApiKey;
+      const touchesRoutingFields =
+        profiles !== undefined || routeTriggerKeywords !== undefined || routingFrequency !== undefined;
+      const userSetClauses: string[] = [];
+      const userBindArgs: unknown[] = [];
+      const bindValue = (value: unknown) => {
+        userBindArgs.push(value);
+        return `?${userBindArgs.length}`;
+      };
 
-      await updateStatement
-        .bind(
-          preferredModels.length > 0 ? JSON.stringify(preferredModels) : null,
-          JSON.stringify(profiles),
-          routeTriggerKeywords && routeTriggerKeywords.length > 0 ? JSON.stringify(routeTriggerKeywords) : null,
-          routingFrequency,
-          now,
-          auth.userId,
-        )
-        .run();
+      if (preferredModels !== undefined) {
+        userSetClauses.push(`preferred_models = ${bindValue(preferredModels.length > 0 ? JSON.stringify(preferredModels) : null)}`);
+      }
 
-      if (await hasUsersRouteLoggingEnabledColumn(bindings.ROUTER_DB)) {
-        await bindings.ROUTER_DB
-          .prepare("UPDATE users SET route_logging_enabled = ?1, updated_at = ?2 WHERE id = ?3")
-          .bind(routeLoggingEnabled ? 1 : 0, now, auth.userId)
-          .run();
+      if (touchesRoutingFields) {
+        userSetClauses.push("blocklist = NULL");
+        userSetClauses.push("default_model = NULL");
+        userSetClauses.push("classifier_model = NULL");
+        userSetClauses.push("routing_instructions = NULL");
+      }
+
+      if (profiles !== undefined) {
+        userSetClauses.push(`profiles = ${bindValue(JSON.stringify(profiles))}`);
+      }
+
+      if (routeTriggerKeywords !== undefined) {
+        userSetClauses.push(
+          `route_trigger_keywords = ${bindValue(
+            routeTriggerKeywords && routeTriggerKeywords.length > 0 ? JSON.stringify(routeTriggerKeywords) : null,
+          )}`,
+        );
+      }
+
+      if (routingFrequency !== undefined) {
+        userSetClauses.push(`routing_frequency = ${bindValue(routingFrequency)}`);
+      }
+
+      if (routeLoggingEnabled !== undefined && routeLoggingColumnAvailable) {
+        userSetClauses.push(`route_logging_enabled = ${bindValue(routeLoggingEnabled ? 1 : 0)}`);
+      }
+
+      if (userSetClauses.length > 0 || touchesCredentials) {
+        userSetClauses.push(`updated_at = ${bindValue(now)}`);
+        const updateSql = `UPDATE users
+               SET ${userSetClauses.join(", ")}
+               WHERE id = ${bindValue(auth.userId)} AND updated_at = ${bindValue(expectedUpdatedAt)}`;
+        const updateResult = await bindings.ROUTER_DB.prepare(updateSql).bind(...userBindArgs).run();
+        if ((updateResult.meta?.changes ?? 0) === 0) {
+          return json({ error: STALE_SETTINGS_MESSAGE }, 409);
+        }
       }
 
       await upsertUserUpstreamCredentials({

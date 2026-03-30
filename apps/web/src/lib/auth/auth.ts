@@ -54,6 +54,7 @@ export async function hashKey(raw: string): Promise<string> {
 export interface AuthResult {
     userId: string;
     userName: string;
+    updatedAt: string;
     preferredModels: string[] | null;
     defaultModel: string | null;
     classifierModel: string | null;
@@ -74,6 +75,7 @@ export interface AuthResult {
 interface AuthRow {
     user_id: string;
     name: string;
+    updated_at: string;
     preferred_models: string | null;
     default_model: string | null;
     classifier_model: string | null;
@@ -136,6 +138,7 @@ function rowToAuthResult(row: AuthRow): AuthResult {
     return {
         userId: row.user_id,
         userName: row.name,
+        updatedAt: row.updated_at,
         preferredModels: parseStringArray(row.preferred_models),
         defaultModel: row.default_model,
         classifierModel: row.classifier_model,
@@ -194,7 +197,7 @@ function buildAuthSelectQuery(includeSmartPinTurns: boolean, includeRouteLogging
 
     return `
         SELECT ak.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
-               u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect},
+               u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect}, u.updated_at,
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM api_keys ak
         JOIN users u ON u.id = ak.user_id
@@ -212,7 +215,7 @@ function buildSessionSelectQuery(includeSmartPinTurns: boolean, includeRouteLogg
 
     return `
         SELECT s.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
-               u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect},
+               u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect}, u.updated_at,
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM user_sessions s
         JOIN users u ON u.id = s.user_id
