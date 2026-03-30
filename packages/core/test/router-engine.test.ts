@@ -364,6 +364,54 @@ describe("RouterEngine (LLM Router)", () => {
         );
     });
 
+    it("honors the forceRoute decide override without mutating the request", async () => {
+        const mockLlmRouter = vi.fn().mockResolvedValue({
+            selectedModel: "openai/gpt-4o",
+            confidence: 0.89,
+            signals: ["forced_route_override"],
+        });
+        const engine = new RouterEngine({ llmRouter: mockLlmRouter });
+        const pinStore = new MockPinStore();
+
+        const request: RouterRequestLike = {
+            model: "planning-backend",
+            messages: [
+                { role: "user", content: "Use opus for planning" },
+                { role: "assistant", content: "Plan drafted." },
+                { role: "user", content: "continue with implementation" },
+            ],
+        };
+
+        const threadKey = buildProfileThreadKey(request);
+        await pinStore.set({
+            threadKey,
+            modelId: "anthropic/claude-3-opus",
+            requestId: "old-req",
+            pinnedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 10000).toISOString(),
+            turnCount: 2,
+        });
+
+        const decision = await engine.decide({
+            requestId: "req-force-route-override",
+            request,
+            config: defaultConfig,
+            catalog,
+            catalogVersion: "v1",
+            pinStore,
+            profiles: namedProfiles,
+            forceRoute: true,
+        });
+
+        expect(mockLlmRouter).toHaveBeenCalledOnce();
+        expect(decision.pinUsed).toBe(false);
+        expect(decision.explanation.decisionReason).toBe("initial_route");
+        expect(decision.explanation.pinBypassReason).toBe("force_route");
+        expect(decision.explanation.notes).toContain(
+            "Router requested a fresh decision for this turn. Bypassing thread pin."
+        );
+    });
+
     it("should not force re-route when $$route appears only in older user messages", async () => {
         const mockLlmRouter = vi.fn().mockResolvedValue({
             selectedModel: "openai/gpt-4o",

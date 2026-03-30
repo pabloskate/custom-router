@@ -984,6 +984,95 @@ describe("routeAndProxy", () => {
     expect(result.response.headers.get("x-router-degraded")).toBeNull();
   });
 
+  it("clears a reused pin and re-routes once when the pinned model returns 429", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    vi.mocked(repository.pinStore.get).mockResolvedValue({
+      threadKey: "thread:pinned",
+      modelId: "model/alpha",
+      requestId: "pin_req",
+      pinnedAt: "2026-03-20T00:00:00.000Z",
+      expiresAt: "2026-03-21T00:00:00.000Z",
+      turnCount: 0,
+    });
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+    classifierMock.mockResolvedValue({
+      selectedModel: "model/beta",
+      confidence: 0.83,
+      signals: ["reroute_after_pin_429"],
+    });
+    upstreamMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        errorBody: "rate limited",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        response: new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      });
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      userId: "user_1",
+      body: {
+        model: "planning-backend",
+        messages: [
+          { role: "assistant", content: "Previous answer" },
+          { role: "user", content: "Continue" },
+        ],
+      },
+      userConfig: {
+        profiles: [
+          {
+            id: "planning-backend", name: "Planning Backend",
+            models: [
+              { gatewayId: "gw_default", modelId: "model/classifier", name: "Classifier" },
+              { gatewayId: "gw_default", modelId: "model/alpha", name: "Alpha" },
+              { gatewayId: "gw_default", modelId: "model/beta", name: "Beta" },
+            ],
+            defaultModel: key("gw_default", "model/alpha"),
+            classifierModel: key("gw_default", "model/classifier"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [
+              { id: "model/classifier", name: "Classifier" },
+              { id: "model/alpha", name: "Alpha" },
+              { id: "model/beta", name: "Beta" },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.response.status).toBe(200);
+    expect(classifierMock).toHaveBeenCalledOnce();
+    expect(repository.pinStore.clear).toHaveBeenCalledWith(expect.stringMatching(/^thread:/));
+    expect(result.response.headers.get("x-router-model-selected")).toBe("model/beta");
+    expect(result.response.headers.get("x-router-confidence")).toBeNull();
+    expect(result.response.headers.get("x-router-degraded")).toBe("true");
+    expect(upstreamMock.mock.calls[0]?.[0]?.payload).toEqual(expect.objectContaining({ model: "model/alpha" }));
+    expect(upstreamMock.mock.calls[1]?.[0]?.payload).toEqual(expect.objectContaining({ model: "model/beta" }));
+  });
+
   it("omits confidence headers and marks degraded responses on fallback-after-failure", async () => {
     const secret = "1234567890abcdef";
     const defaultApiKeyEnc = await encryptByokSecret({

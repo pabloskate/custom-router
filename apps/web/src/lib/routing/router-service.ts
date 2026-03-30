@@ -202,17 +202,34 @@ export async function routeAndProxy(args: {
       })
     : new RouterEngine();
 
-  const decideStartMs = Date.now();
-  const decision = await engine.decide({
-    requestId,
-    request: args.body,
-    config: runtimeConfig,
-    catalog,
-    catalogVersion: "1.0", // TODO: wire up real version from catalog meta
-    pinStore,
-    profiles: args.userConfig?.profiles ?? undefined,
-  });
-  const decideLatencyMs = Date.now() - decideStartMs;
+  const decideRoute = async (options?: {
+    catalog?: typeof catalog;
+    config?: typeof runtimeConfig;
+    forceRoute?: boolean;
+    forceRouteNote?: string;
+  }) => {
+    const decideStartMs = Date.now();
+    const decision = await engine.decide({
+      requestId,
+      request: args.body,
+      config: options?.config ?? runtimeConfig,
+      catalog: options?.catalog ?? catalog,
+      catalogVersion: "1.0", // TODO: wire up real version from catalog meta
+      pinStore,
+      profiles: args.userConfig?.profiles ?? undefined,
+      forceRoute: options?.forceRoute,
+      forceRouteNote: options?.forceRouteNote,
+    });
+
+    return {
+      decision,
+      latencyMs: Date.now() - decideStartMs,
+    };
+  };
+
+  let activeCatalog = catalog;
+  let activeRuntimeConfig = runtimeConfig;
+  let { decision, latencyMs: decideLatencyMs } = await decideRoute();
 
   if (decision.routingError || !decision.selectedModel) {
     persistExplanation({
@@ -284,97 +301,155 @@ export async function routeAndProxy(args: {
     };
   }
 
-  const nowMs = Date.now();
-  const attempts = buildAttemptOrder({ decision, nowMs });
   const errors: string[] = [];
+  const rerouteNotes: string[] = [];
+  let degradedByPinnedRateLimitRetry = false;
+  let reroutedAfterPinnedRateLimit = false;
+  let lastAttempts: ReturnType<typeof buildAttemptOrder> = [];
 
-  for (const [index, attempt] of attempts.entries()) {
-    const attemptUpstream = resolveAttemptUpstream(
-      attempt.modelId,
-      catalog,
-      gatewayMap,
-      resolvedDefaultUpstream
-    );
-    const payload = buildAttemptPayload({
-      body: args.body,
-      selectedModelId: attempt.modelId,
-      selectedEffort: decision.selectedEffort,
-      catalog,
-      baseUrl: attemptUpstream.baseUrl,
-      apiPath: args.apiPath,
-    });
+  while (true) {
+    const attempts = buildAttemptOrder({ decision, nowMs: Date.now() });
+    lastAttempts = attempts;
+    let restartedAfterPinnedRateLimit = false;
 
-    const { result } = await executeRoutedAttempt({
-      apiPath: args.apiPath,
-      payload,
-      modelId: attempt.modelId,
-      provider: attempt.provider,
-      baseUrl: attemptUpstream.baseUrl,
-      apiKey: attemptUpstream.apiKey,
-      fallback: index > 0,
-    });
-
-    if (!result.ok) {
-      errors.push(
-        `model=${attempt.modelId} provider=${attempt.provider} status=${result.status} ${improveErrorMessage(attempt.modelId, result.errorBody)}`
+    for (const [index, attempt] of attempts.entries()) {
+      const attemptUpstream = resolveAttemptUpstream(
+        attempt.modelId,
+        activeCatalog,
+        gatewayMap,
+        resolvedDefaultUpstream
       );
-      continue;
+      const payload = buildAttemptPayload({
+        body: args.body,
+        selectedModelId: attempt.modelId,
+        selectedEffort: decision.selectedEffort,
+        catalog: activeCatalog,
+        baseUrl: attemptUpstream.baseUrl,
+        apiPath: args.apiPath,
+      });
+
+      const { result } = await executeRoutedAttempt({
+        apiPath: args.apiPath,
+        payload,
+        modelId: attempt.modelId,
+        provider: attempt.provider,
+        baseUrl: attemptUpstream.baseUrl,
+        apiKey: attemptUpstream.apiKey,
+        fallback: index > 0,
+      });
+
+      if (!result.ok) {
+        errors.push(
+          `model=${attempt.modelId} provider=${attempt.provider} status=${result.status} ${improveErrorMessage(attempt.modelId, result.errorBody)}`
+        );
+
+        const shouldRetryWithoutPin =
+          !reroutedAfterPinnedRateLimit
+          && result.status === 429
+          && decision.mode === "routed"
+          && decision.pinUsed
+          && index === 0
+          && attempts.length === 1
+          && activeCatalog.length > 1;
+
+        if (shouldRetryWithoutPin) {
+          await pinStore.clear(decision.threadKey);
+          const rerouteCatalog = activeCatalog.filter((item) => item.id !== attempt.modelId);
+          const rerouteConfig = activeRuntimeConfig.defaultModel === attempt.modelId
+            ? { ...activeRuntimeConfig, defaultModel: undefined }
+            : activeRuntimeConfig;
+
+          if (rerouteCatalog.length > 0) {
+            const rerouteOutcome = await decideRoute({
+              catalog: rerouteCatalog,
+              config: rerouteConfig,
+              forceRoute: true,
+              forceRouteNote: `Pinned model ${attempt.modelId} returned 429. Bypassing the existing thread pin for this turn.`,
+            });
+
+            if (
+              rerouteOutcome.decision.mode === "routed"
+              && rerouteOutcome.decision.selectedModel
+              && !rerouteOutcome.decision.routingError
+            ) {
+              activeCatalog = rerouteCatalog;
+              activeRuntimeConfig = rerouteConfig;
+              decision = rerouteOutcome.decision;
+              reroutedAfterPinnedRateLimit = true;
+              degradedByPinnedRateLimitRetry = true;
+              rerouteNotes.push(
+                `Pinned model ${attempt.modelId} returned 429. Cleared the thread pin and re-ran routing for this turn.`
+              );
+              restartedAfterPinnedRateLimit = true;
+              break;
+            }
+          }
+        }
+
+        continue;
+      }
+
+      const noteParts = [...decision.explanation.notes, ...rerouteNotes];
+      if (index > 0) {
+        noteParts.push("Fallback selected after previous model/provider failure.");
+      }
+
+      const explanation = {
+        ...decision.explanation,
+        selectedModel: attempt.modelId,
+        decisionReason: index > 0 ? ("fallback_after_failure" as const) : decision.explanation.decisionReason,
+        classifierInvoked,
+        classifierModel: effectiveClassifierModel ?? undefined,
+        classifierBaseUrl,
+        classifierGatewayId,
+        notes: noteParts,
+      };
+
+      await pinSelectedModel({
+        engine,
+        repository,
+        shouldPin: decision.shouldPin,
+        threadKey: decision.threadKey,
+        requestId,
+        selectedModel: attempt.modelId,
+        selectedFamily: decision.selectedFamily,
+        selectedEffort: decision.selectedEffort,
+        stepClassification: decision.stepClassification,
+        pinTurnCount: decision.pinTurnCount,
+        pinRerouteAfterTurns: decision.pinRerouteAfterTurns,
+        pinBudgetSource: decision.pinBudgetSource,
+      });
+      persistExplanation({
+        enabled: routeLoggingEnabled,
+        repository,
+        userId: args.userId,
+        explanation,
+      });
+
+      const response = decision.mode === "routed"
+        ? attachRouterHeaders(result.response, {
+            model: attempt.modelId,
+            catalogVersion: decision.catalogVersion,
+            requestId,
+            degraded: decision.degraded || index > 0 || degradedByPinnedRateLimitRetry,
+            confidence: getClassifierConfidence({
+              classifierInvoked,
+              classifierAccepted: decision.classifierAccepted,
+              classificationConfidence: decision.explanation.classificationConfidence,
+              usedFallbackAttempt: index > 0 || degradedByPinnedRateLimitRetry,
+            }),
+          })
+        : result.response;
+
+      return {
+        requestId,
+        response,
+      };
     }
 
-    const explanation = {
-      ...decision.explanation,
-      selectedModel: attempt.modelId,
-      decisionReason: index > 0 ? ("fallback_after_failure" as const) : decision.explanation.decisionReason,
-      classifierInvoked,
-      classifierModel: effectiveClassifierModel ?? undefined,
-      classifierBaseUrl,
-      classifierGatewayId,
-      notes:
-        index > 0
-          ? [...decision.explanation.notes, "Fallback selected after previous model/provider failure."]
-          : decision.explanation.notes,
-    };
-
-    await pinSelectedModel({
-      engine,
-      repository,
-      shouldPin: decision.shouldPin,
-      threadKey: decision.threadKey,
-      requestId,
-      selectedModel: attempt.modelId,
-      selectedFamily: decision.selectedFamily,
-      selectedEffort: decision.selectedEffort,
-      stepClassification: decision.stepClassification,
-      pinTurnCount: decision.pinTurnCount,
-      pinRerouteAfterTurns: decision.pinRerouteAfterTurns,
-      pinBudgetSource: decision.pinBudgetSource,
-    });
-    persistExplanation({
-      enabled: routeLoggingEnabled,
-      repository,
-      userId: args.userId,
-      explanation,
-    });
-
-    const response = decision.mode === "routed"
-      ? attachRouterHeaders(result.response, {
-          model: attempt.modelId,
-          catalogVersion: decision.catalogVersion,
-          requestId,
-          degraded: decision.degraded || index > 0,
-          confidence: getClassifierConfidence({
-            classifierInvoked,
-            classifierAccepted: decision.classifierAccepted,
-            classificationConfidence: decision.explanation.classificationConfidence,
-            usedFallbackAttempt: index > 0,
-          }),
-        })
-      : result.response;
-
-    return {
-      requestId,
-      response,
-    };
+    if (!restartedAfterPinnedRateLimit) {
+      break;
+    }
   }
 
   // All attempts failed — store explanation and return 502
@@ -390,12 +465,12 @@ export async function routeAndProxy(args: {
       classifierModel: effectiveClassifierModel ?? undefined,
       classifierBaseUrl,
       classifierGatewayId,
-      notes: [...decision.explanation.notes, ...errors],
+      notes: [...decision.explanation.notes, ...rerouteNotes, ...errors],
     },
   });
 
   const failureResponse = json(
-    { error: "All candidate models/providers failed.", request_id: requestId, candidates: attempts, details: errors },
+    { error: "All candidate models/providers failed.", request_id: requestId, candidates: lastAttempts, details: errors },
     502
   );
 

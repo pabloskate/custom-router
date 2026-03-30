@@ -54,6 +54,7 @@ export async function resolvePinPolicy(args: {
   threadKey: string;
   isContinuation: boolean;
   forceRoute: boolean;
+  forceRouteNote?: string;
   isLoop: boolean;
   defaultSmartPinTurns: number;
   allowedCatalog: CatalogItem[];
@@ -85,11 +86,11 @@ export async function resolvePinPolicy(args: {
     shouldPin = false;
     pinBypassReason = "routing_frequency_every_message";
     if (args.forceRoute) {
-      notes.push("Force route directive detected but routing frequency is 'every message' — classifier runs every turn regardless.");
+      notes.push(args.forceRouteNote ?? "Force route requested, but routing frequency is 'every message' — classifier runs every turn regardless.");
     }
   } else if (args.routingFrequency === "new_thread_only") {
     if (args.forceRoute) {
-      notes.push("Force route directive detected in latest user message. Bypassing thread pin even though routing frequency is 'new thread only'.");
+      notes.push(args.forceRouteNote ?? "Force route requested. Bypassing thread pin even though routing frequency is 'new thread only'.");
       pinBypassReason = "force_route";
     } else if (args.isContinuation) {
       if (activePin) {
@@ -121,7 +122,7 @@ export async function resolvePinPolicy(args: {
     }
   } else {
     if (args.forceRoute) {
-      notes.push("Force route directive detected in latest user message. Bypassing thread pin for this turn.");
+      notes.push(args.forceRouteNote ?? "Force route requested. Bypassing thread pin for this turn.");
       pinBypassReason = "force_route";
     }
 

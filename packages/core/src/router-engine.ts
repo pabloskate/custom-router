@@ -109,6 +109,8 @@ export class RouterEngine {
     catalogVersion: string;
     pinStore: PinStore;
     profiles?: RouterProfile[];
+    forceRoute?: boolean;
+    forceRouteNote?: string;
     now?: Date;
   }): Promise<RouteDecision> {
     const now = args.now ?? new Date();
@@ -158,11 +160,12 @@ export class RouterEngine {
     });
     const routingFrequency = effectiveConfig.routingFrequency ?? "smart";
     const defaultSmartPinTurns = effectiveConfig.smartPinTurns ?? effectiveConfig.cooldownTurns ?? DEFAULT_SMART_PIN_TURNS;
-    const forceRoute = hasForceRouteRequest({
+    const forceRouteFromRequest = hasForceRouteRequest({
       messages,
       input: args.request.input,
       triggerKeywords: effectiveConfig.routeTriggerKeywords,
     });
+    const forceRoute = args.forceRoute === true || forceRouteFromRequest;
     const isLoop = isAgentLoop(messages);
     const imageCapabilities = getRequestImageCapabilities(args.request as RouterRequestLike & Record<string, unknown>);
     const allowedCatalog = getAllowedCatalog(args.catalog, imageCapabilities);
@@ -174,6 +177,11 @@ export class RouterEngine {
       threadKey,
       isContinuation,
       forceRoute,
+      forceRouteNote: forceRouteFromRequest
+        ? "Force route directive detected in latest user message. Bypassing thread pin for this turn."
+        : args.forceRoute
+          ? (args.forceRouteNote ?? "Router requested a fresh decision for this turn. Bypassing thread pin.")
+          : undefined,
       isLoop,
       defaultSmartPinTurns,
       allowedCatalog,
