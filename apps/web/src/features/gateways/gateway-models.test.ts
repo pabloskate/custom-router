@@ -4,6 +4,7 @@ import {
   buildManualGatewayModel,
   createManualGatewayModelDraft,
   mergeFetchedGatewayModels,
+  removeGatewayModel,
 } from "@/src/features/gateways/gateway-models";
 
 describe("gateway model merge helpers", () => {
@@ -52,5 +53,19 @@ describe("gateway model merge helpers", () => {
       whenToUse: "general chat",
       description: undefined,
     });
+  });
+
+  it("removes only the selected gateway model from the inventory", () => {
+    const models = removeGatewayModel(
+      [
+        { id: "custom/model-a", name: "Model A" },
+        { id: "custom/model-b", name: "Model B" },
+      ],
+      "custom/model-a",
+    );
+
+    expect(models).toEqual([
+      { id: "custom/model-b", name: "Model B" },
+    ]);
   });
 });

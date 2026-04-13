@@ -41,7 +41,7 @@ Client
   └─ POST /api/v1/chat/completions
        │
        ├─ [auth]     apps/web/app/api/v1/chat/completions/route.ts
-       │               authenticateRequest() → checks API key against D1
+       │               createRoutedEndpoint() → withBrowserSessionOrApiKeyAuth()
        │
        ├─ [route]    apps/web/src/lib/routing/router-service.ts  routeAndProxy()
        │               loads config + catalog from storage/repository.ts
@@ -96,8 +96,8 @@ Client
 |------|---------------|
 | `routing/` | Feature-owned routing seams: routed endpoint factory, shared routing contracts, and router-service helper modules. |
 | `gateways/` | Shared gateway DTOs and feature entrypoints for gateway UI/server work. |
-| `account-settings/` | Shared user settings DTOs and hydration logic used by `/api/v1/user/me` and the admin UI. |
-| `admin-shell/` | Admin shell state hook (`useAdminData`) and feature-owned shell entrypoint. |
+| `account-settings/` | Shared user settings DTOs, hydration logic, and feature-owned server handlers for `/api/v1/user/me`. |
+| `admin-shell/` | Admin shell state hook (`useAdminData`), tab registry/types, and the feature-owned shell entrypoint. |
 | `routing-quickstart/` | Feature entrypoint for quickstart/integration guidance UI. |
 | `playground/` | Feature entrypoint for routing playground UI. |
 
@@ -124,6 +124,10 @@ PUT  /api/v1/router/config     → verifyAdminSecret
 | `RouterConfigPanel.tsx` | Conversation re-routing controls: routing frequency and trigger keywords. Autosaves without a manual save button. |
 | `ProfilesPanel.tsx` | Alias for the routing profile editor. Create/edit named profiles, use quick setup presets, bind routed models, choose fallback/classifier bindings, and autosave changes. |
 | `CatalogEditorPanel.tsx` | Per-user model catalog editor ("constitution") |
+
+Admin compatibility rule:
+- `apps/web/src/features/*` owns the real admin-shell, gateway, quickstart, playground, and account-settings server logic.
+- `apps/web/src/components/admin/*` may exist as compatibility or presentation adapters. If a component file is just a re-export, follow it to the owning feature slice before editing behavior.
 
 ### `packages/core/src/`
 
@@ -192,6 +196,7 @@ KV namespace (`ROUTER_KV`):
 
 Route rule:
 - Outside `app/api/v1/auth/*` and `app/api/v1/admin/verify/route.ts`, do not import `authenticateSession`, `authenticateRequest`, `isSameOriginRequest`, or `verifyAdminSecret` directly inside route files.
+- If a route grows beyond simple wiring, move the request parsing and business logic into `apps/web/src/features/<feature>/server/*` and keep the route handler as the auth/CSRF adapter only.
 
 ---
 
@@ -235,6 +240,12 @@ Rules:
 - Do not claim success based only on API curl checks.
 - `verify:admin` (UI login + session + Routing/API Keys checks) is required proof.
 - If `verify:admin` fails, treat localhost as broken and keep debugging.
+
+## Safe Search Targets
+
+- Prefer searching in `apps/web/app/api/v1`, `apps/web/src/features`, `apps/web/src/lib`, `packages/core/src`, `docs`, and `infra`.
+- Treat `apps/web/src/components/admin` as a compatibility/presentation layer first; many behavioral entrypoints now live in the matching feature slice.
+- Ignore generated and local artifact folders when orienting yourself: `.next`, `.open-next`, `.wrangler`, and screenshot/debug dumps under `scripts/`.
 
 ---
 

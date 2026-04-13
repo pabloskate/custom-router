@@ -59,4 +59,21 @@ describe("feature boundaries", () => {
     expect(gatewayPanel).not.toContain("export interface GatewayInfo");
     expect(gatewayPanel).not.toContain("export interface GatewayModel");
   });
+
+  it("keeps feature-owned admin shell wiring out of legacy admin adapters", () => {
+    const adminShell = fs.readFileSync(path.resolve(process.cwd(), "src/features/admin-shell/admin-shell.tsx"), "utf8");
+    const useAdminData = fs.readFileSync(path.resolve(process.cwd(), "src/features/admin-shell/use-admin-data.ts"), "utf8");
+
+    expect(adminShell).not.toMatch(/@\/src\/components\/admin\/admin-(extensions|tab-registry|tabs)/);
+    expect(adminShell).not.toContain('@/src/components/admin/types');
+    expect(useAdminData).not.toContain('@/src/components/admin/types');
+  });
+
+  it("keeps the user settings route as a thin adapter", () => {
+    const route = fs.readFileSync(path.resolve(process.cwd(), "app/api/v1/user/me/route.ts"), "utf8");
+
+    expect(route).toContain("handleGetCurrentUser");
+    expect(route).toContain("handleUpdateCurrentUser");
+    expect(route).not.toMatch(/\b(loadGatewaysWithMigration|getUserUpstreamCredentials|normalizeProfile|request\.json)\b/);
+  });
 });

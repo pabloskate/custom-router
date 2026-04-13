@@ -22,6 +22,10 @@ export function mergeFetchedGatewayModels(
   return Array.from(existingById.values()).sort((left, right) => left.id.localeCompare(right.id));
 }
 
+export function removeGatewayModel(models: GatewayModel[], modelId: string): GatewayModel[] {
+  return models.filter((model) => model.id !== modelId);
+}
+
 export function createManualGatewayModelDraft(): ManualGatewayModelDraft {
   return {
     modelId: "",

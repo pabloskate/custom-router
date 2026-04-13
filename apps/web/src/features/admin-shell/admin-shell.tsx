@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 
 import { AuthGate } from "@/src/components/admin/AuthGate";
-import { getAdminExtensionTabs } from "@/src/components/admin/admin-extensions";
-import { getInitialAdminTabId, groupAdminTabsBySection, mergeAdminTabs } from "@/src/components/admin/admin-tab-registry";
-import { getBaseAdminTabs } from "@/src/components/admin/admin-tabs";
-import type { AdminTabDefinition } from "@/src/components/admin/types";
+import { getAdminExtensionTabs } from "./admin-extensions";
+import { getInitialAdminTabId, groupAdminTabsBySection, mergeAdminTabs } from "./admin-tab-registry";
+import { getBaseAdminTabs } from "./admin-tabs";
+import type { AdminTabDefinition } from "./types";
 import type { UserInfo } from "@/src/features/account-settings/contracts";
 
 import { useAdminData } from "./use-admin-data";
