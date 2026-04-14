@@ -245,20 +245,20 @@ export async function handleUpdateCurrentUser(args: {
       return json({ error: "Invalid classifier_base_url." }, 400);
     }
 
-      const candidate = typeof body.classifier_base_url === "string" ? body.classifier_base_url.trim() : "";
-      if (candidate.length === 0) {
-        classifierBaseUrl = null;
-      } else {
-        const validation = validateUpstreamBaseUrl(candidate, resolveUpstreamHostPolicy(args.bindings));
-        if (!validation.ok) {
-          return json(
-            { error: getUpstreamBaseUrlValidationError({ fieldLabel: "classifier_base_url", result: validation }) },
-            400,
-          );
-        }
-        classifierBaseUrl = validation.normalized;
+    const candidate = typeof body.classifier_base_url === "string" ? body.classifier_base_url.trim() : "";
+    if (candidate.length === 0) {
+      classifierBaseUrl = null;
+    } else {
+      const validation = validateUpstreamBaseUrl(candidate, resolveUpstreamHostPolicy(args.bindings));
+      if (!validation.ok) {
+        return json(
+          { error: getUpstreamBaseUrlValidationError({ fieldLabel: "classifier_base_url", result: validation }) },
+          400,
+        );
       }
+      classifierBaseUrl = validation.normalized;
     }
+  }
 
   let classifierApiKeyEnc = existingCredentials?.classifier_api_key_enc ?? null;
   if (clearClassifierApiKey) {

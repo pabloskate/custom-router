@@ -20,6 +20,7 @@ import {
   REASONING_PRESET_SELECT_OPTIONS,
 } from "@/src/lib/reasoning-options";
 import type { GatewayInfo } from "@/src/features/gateways/contracts";
+import { collectGatewayModalities } from "@/src/features/gateways/gateway-models";
 import {
   availableGatewayModels,
   countResolvedProfileModels,
@@ -261,32 +262,6 @@ function autosaveMeta(state: ReturnType<typeof useRoutingProfilesEditor>["autosa
 
 function optionLabel(value: string): string {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function modalityOptions(gateways: GatewayInfo[], selectedValues: Array<string | undefined>): string[] {
-  const values = new Set<string>(["text->text", "text,image->text"]);
-  for (const gateway of gateways) {
-    for (const model of gateway.models) {
-      const modality = model.modality?.trim();
-      if (modality) {
-        values.add(modality);
-      }
-    }
-  }
-
-  for (const selectedValue of selectedValues) {
-    const modality = selectedValue?.trim();
-    if (modality) {
-      values.add(modality);
-    }
-  }
-
-  const sorted = Array.from(values).sort((a, b) => a.localeCompare(b));
-  if (!sorted.includes("text->text")) {
-    return sorted;
-  }
-
-  return ["text->text", ...sorted.filter((value) => value !== "text->text")];
 }
 
 function ProfileCard({
@@ -564,7 +539,7 @@ export function RoutingProfilesEditor(props: RoutingProfilesEditorProps) {
       name: model.name,
     }),
   }));
-  const availableModalities = modalityOptions(props.gateways, [
+  const availableModalities = collectGatewayModalities(props.gateways, [
     editor.modelEditor.draft.modality,
     editor.customModel.draft.modality,
   ]);

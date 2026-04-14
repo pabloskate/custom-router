@@ -6,8 +6,12 @@ import { CUSTOM_PRESET_ID, GATEWAY_PRESETS } from "@/src/lib/gateway-presets";
 import type { GatewayInfo, GatewayModel } from "@/src/features/gateways/contracts";
 import {
   buildManualGatewayModel,
+  collectGatewayModalities,
+  createGatewayModelDraft,
   createManualGatewayModelDraft,
   mergeFetchedGatewayModels,
+  removeGatewayModel,
+  upsertGatewayModel,
   type ManualGatewayModelDraft,
 } from "@/src/features/gateways/gateway-models";
 import {
@@ -217,7 +221,7 @@ async function syncGatewayModelsFromFetch(gateway: GatewayInfo): Promise<{
 }> {
   const response = await fetch(`/api/v1/user/gateways/${gateway.id}/fetch-models`);
   const payload = await response.json().catch(() => ({ error: "Failed to fetch gateway models." })) as {
-    models?: Array<Pick<GatewayModel, "id" | "name">>;
+    models?: Array<Pick<GatewayModel, "id" | "name" | "modality">>;
     error?: string;
   };
 
@@ -245,24 +249,37 @@ async function syncGatewayModelsFromFetch(gateway: GatewayInfo): Promise<{
   };
 }
 
-interface ManualGatewayModelFormProps {
+interface GatewayModelFormProps {
   gateway: GatewayInfo;
+  initialDraft?: ManualGatewayModelDraft;
+  mode?: "add" | "edit";
+  existingModelId?: string;
   onCancel: () => void;
   onError?: (message?: string) => void;
   onRefresh: () => Promise<void>;
   onStatus?: (message: string) => void;
 }
 
-function ManualGatewayModelForm({
+function GatewayModelForm({
   gateway,
+  initialDraft,
+  mode = "add",
+  existingModelId,
   onCancel,
   onError,
   onRefresh,
   onStatus,
-}: ManualGatewayModelFormProps) {
-  const [draft, setDraft] = useState<ManualGatewayModelDraft>(createManualGatewayModelDraft);
+}: GatewayModelFormProps) {
+  const [draft, setDraft] = useState<ManualGatewayModelDraft>(initialDraft ?? createManualGatewayModelDraft());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const availableModalities = collectGatewayModalities([gateway], [draft.modality]);
+  const isEdit = mode === "edit";
+
+  useEffect(() => {
+    setDraft(initialDraft ?? createManualGatewayModelDraft());
+    setError("");
+  }, [initialDraft, isEdit]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -272,7 +289,7 @@ function ManualGatewayModelForm({
       return;
     }
 
-    if (gateway.models.some((model) => model.id === modelId)) {
+    if (gateway.models.some((model) => model.id === modelId && model.id !== existingModelId)) {
       setError(`Model "${modelId}" already exists in this gateway.`);
       return;
     }
@@ -280,7 +297,9 @@ function ManualGatewayModelForm({
     setError("");
     setSaving(true);
     try {
-      const nextModels = [...gateway.models, buildManualGatewayModel(draft)].sort((left, right) => left.id.localeCompare(right.id));
+      const nextModels = isEdit
+        ? upsertGatewayModel(gateway.models, draft, existingModelId)
+        : [...gateway.models, buildManualGatewayModel(draft)].sort((left, right) => left.id.localeCompare(right.id));
       const result = await saveGatewayModels(gateway.id, nextModels);
       if (!result.ok) {
         const message = result.error ?? "Failed to save gateway model.";
@@ -289,8 +308,14 @@ function ManualGatewayModelForm({
         return;
       }
 
-      onStatus?.(`Added ${modelId} to ${gateway.name}. You can now use it in Routing Profiles.`);
-      setDraft(createManualGatewayModelDraft());
+      onStatus?.(
+        isEdit
+          ? `Saved details for ${modelId} on ${gateway.name}.`
+          : `Added ${modelId} to ${gateway.name}. You can now use it in Routing Profiles.`,
+      );
+      if (!isEdit) {
+        setDraft(createManualGatewayModelDraft());
+      }
       onCancel();
       await onRefresh();
     } finally {
@@ -312,9 +337,13 @@ function ManualGatewayModelForm({
       }}
     >
       <div>
-        <div style={{ fontWeight: 600, marginBottom: "var(--space-1)" }}>Add model manually</div>
+        <div style={{ fontWeight: 600, marginBottom: "var(--space-1)" }}>
+          {isEdit ? "Edit model details" : "Add model manually"}
+        </div>
         <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-          Use this when the gateway does not implement <code>/models</code>. Once saved, the model will appear in Routing Profiles for router, fallback, and profile model selection.
+          {isEdit
+            ? <>Adjust saved metadata and routing hints for this model. Re-sync keeps saved details for existing model IDs.</>
+            : <>Use this when the gateway does not implement <code>/models</code>. Once saved, the model will appear in Routing Profiles for router, fallback, and profile model selection.</>}
         </p>
       </div>
 
@@ -332,7 +361,11 @@ function ManualGatewayModelForm({
             value={draft.modelId}
             onChange={(event) => setDraft((current) => ({ ...current, modelId: event.target.value }))}
             placeholder="provider/model-id"
+            disabled={isEdit}
           />
+          {isEdit ? (
+            <span className="form-hint">Model ID stays locked so existing Routing Profile bindings do not break.</span>
+          ) : null}
         </label>
         <label className="form-group">
           <span className="form-label">Display name</span>
@@ -348,11 +381,15 @@ function ManualGatewayModelForm({
       <div className="form-row">
         <label className="form-group">
           <span className="form-label">Modality</span>
-          <input
-            className="input input--mono"
+          <select
+            className="input"
             value={draft.modality}
             onChange={(event) => setDraft((current) => ({ ...current, modality: event.target.value }))}
-          />
+          >
+            {availableModalities.map((modality) => (
+              <option key={modality} value={modality}>{modality}</option>
+            ))}
+          </select>
         </label>
         <label className="form-group">
           <span className="form-label">Reasoning preset</span>
@@ -395,7 +432,7 @@ function ManualGatewayModelForm({
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
         <button className="btn btn--primary btn--sm" type="submit" disabled={saving}>
           <IconPlus />
-          {saving ? "Saving…" : "Save model"}
+          {saving ? "Saving…" : isEdit ? "Save changes" : "Save model"}
         </button>
         <button className="btn btn--secondary btn--sm" type="button" onClick={onCancel} disabled={saving}>
           Cancel
@@ -408,16 +445,28 @@ function ManualGatewayModelForm({
 function GatewayModelsPreview({
   models,
   onAddManual,
+  onEditModel,
+  onCancelRemoveModel,
+  onRemoveModel,
   onSync,
   syncing,
   manualModelOpen,
+  editingModelId,
+  pendingRemoveModelId,
+  removingModelId,
   onToggleManual,
 }: {
   models: GatewayModel[];
   onAddManual?: () => void;
+  onEditModel?: (modelId: string) => void;
+  onCancelRemoveModel?: () => void;
+  onRemoveModel?: (modelId: string) => void;
   onSync?: () => void;
   syncing?: boolean;
   manualModelOpen?: boolean;
+  editingModelId?: string | null;
+  pendingRemoveModelId?: string | null;
+  removingModelId?: string | null;
   onToggleManual?: () => void;
 }) {
   const [showAllModels, setShowAllModels] = useState(false);
@@ -529,6 +578,18 @@ function GatewayModelsPreview({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filter synced model IDs"
           />
+          {pendingRemoveModelId ? (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-3)", alignItems: "center", flexWrap: "wrap" }}>
+              <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+                Click <strong>Confirm remove</strong> to prune a model from this gateway inventory.
+              </p>
+              {onCancelRemoveModel ? (
+                <button className="btn btn--ghost btn--sm" type="button" onClick={onCancelRemoveModel}>
+                  Cancel remove
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {filteredModels.length === 0 ? (
             <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
               No synced models match this filter.
@@ -537,7 +598,7 @@ function GatewayModelsPreview({
             <div
               style={{
                 display: "flex",
-                flexWrap: "wrap",
+                flexDirection: "column",
                 gap: "var(--space-2)",
                 maxHeight: 240,
                 overflowY: "auto",
@@ -545,9 +606,68 @@ function GatewayModelsPreview({
               }}
             >
               {filteredModels.map((model) => (
-                <span key={model.id} className="badge badge--info" title={model.name}>
-                  {model.id}
-                </span>
+                <div
+                  key={model.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "var(--space-3)",
+                    alignItems: "center",
+                    padding: "var(--space-2) var(--space-3)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--bg-canvas)",
+                  }}
+                >
+                  <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <code className="code" style={{ wordBreak: "break-all", whiteSpace: "pre-wrap" }}>
+                      {model.id}
+                    </code>
+                    {model.name && model.name !== model.id ? (
+                      <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{model.name}</span>
+                    ) : null}
+                    {model.modality || model.reasoningPreset || model.whenToUse || model.description ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-1)", marginTop: "2px" }}>
+                        {model.modality ? (
+                          <span className="badge badge--default">{model.modality}</span>
+                        ) : null}
+                        {model.reasoningPreset && model.reasoningPreset !== "provider_default" ? (
+                          <span className="badge badge--default">{model.reasoningPreset}</span>
+                        ) : null}
+                        {model.whenToUse ? (
+                          <span className="badge badge--default" title={model.whenToUse}>Hint added</span>
+                        ) : null}
+                        {model.description ? (
+                          <span className="badge badge--default" title={model.description}>Description added</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", flexShrink: 0 }}>
+                    {onEditModel ? (
+                      <button
+                        className={editingModelId === model.id ? "btn btn--secondary btn--sm" : "btn btn--ghost btn--sm"}
+                        type="button"
+                        onClick={() => onEditModel(model.id)}
+                        disabled={Boolean(removingModelId)}
+                      >
+                        <IconEdit />
+                        {editingModelId === model.id ? "Editing…" : "Edit"}
+                      </button>
+                    ) : null}
+                    {onRemoveModel ? (
+                      <button
+                        className={pendingRemoveModelId === model.id ? "btn btn--danger btn--sm" : "btn btn--ghost btn--sm"}
+                        type="button"
+                        onClick={() => onRemoveModel(model.id)}
+                        disabled={Boolean(removingModelId)}
+                      >
+                        <IconTrash />
+                        {removingModelId === model.id ? "Removing…" : pendingRemoveModelId === model.id ? "Confirm remove" : "Remove"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -574,16 +694,31 @@ function GatewayCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [manualModelOpen, setManualModelOpen] = useState(false);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [pendingRemoveModelId, setPendingRemoveModelId] = useState<string | null>(null);
+  const [removingModelId, setRemovingModelId] = useState<string | null>(null);
+  const editingModel = editingModelId
+    ? gateway.models.find((model) => model.id === editingModelId) ?? null
+    : null;
 
   useEffect(() => {
     if (openManualModel) {
       setManualModelOpen(true);
+      setEditingModelId(null);
       onManualModelPrimed?.();
     }
   }, [onManualModelPrimed, openManualModel]);
+
+  useEffect(() => {
+    setPendingRemoveModelId(null);
+    setRemovingModelId(null);
+    if (editingModelId && !gateway.models.some((model) => model.id === editingModelId)) {
+      setEditingModelId(null);
+    }
+  }, [editingModelId, gateway.models]);
 
   async function saveGateway(data: { name: string; baseUrl: string; apiKey: string }) {
     setSaving(true);
@@ -631,6 +766,7 @@ function GatewayCard({
   }
 
   async function syncModels() {
+    setPendingRemoveModelId(null);
     setSyncing(true);
     try {
       const result = await syncGatewayModelsFromFetch(gateway);
@@ -649,6 +785,32 @@ function GatewayCard({
       await onRefresh();
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function removeModelFromGateway(modelId: string) {
+    if (pendingRemoveModelId !== modelId) {
+      setPendingRemoveModelId(modelId);
+      return;
+    }
+
+    setRemovingModelId(modelId);
+    try {
+      const result = await saveGatewayModels(gateway.id, removeGatewayModel(gateway.models, modelId));
+      if (!result.ok) {
+        onError?.(result.error ?? "Failed to remove gateway model.");
+        setPendingRemoveModelId(null);
+        return;
+      }
+
+      onStatus?.(`Removed ${modelId} from ${gateway.name}. Existing profile entries keep their saved copy until you edit them.`);
+      setPendingRemoveModelId(null);
+      if (editingModelId === modelId) {
+        setEditingModelId(null);
+      }
+      await onRefresh();
+    } finally {
+      setRemovingModelId(null);
     }
   }
 
@@ -707,17 +869,48 @@ function GatewayCard({
           <GatewayModelsPreview
             models={gateway.models}
             onAddManual={() => setManualModelOpen(true)}
+            onEditModel={(modelId) => {
+              setEditingModelId(modelId);
+              setManualModelOpen(false);
+              setPendingRemoveModelId(null);
+            }}
+            onCancelRemoveModel={() => setPendingRemoveModelId(null)}
+            onRemoveModel={(modelId) => void removeModelFromGateway(modelId)}
             onSync={() => void syncModels()}
             syncing={syncing}
             manualModelOpen={manualModelOpen}
-            onToggleManual={() => setManualModelOpen((current) => !current)}
+            editingModelId={editingModelId}
+            pendingRemoveModelId={pendingRemoveModelId}
+            removingModelId={removingModelId}
+            onToggleManual={() => {
+              setManualModelOpen((current) => {
+                const next = !current;
+                if (next) {
+                  setEditingModelId(null);
+                }
+                return next;
+              });
+            }}
           />
         </div>
 
         {manualModelOpen ? (
-          <ManualGatewayModelForm
+          <GatewayModelForm
             gateway={gateway}
             onCancel={() => setManualModelOpen(false)}
+            onError={onError}
+            onRefresh={onRefresh}
+            onStatus={onStatus}
+          />
+        ) : null}
+
+        {editingModel ? (
+          <GatewayModelForm
+            gateway={gateway}
+            mode="edit"
+            existingModelId={editingModel.id}
+            initialDraft={createGatewayModelDraft(editingModel)}
+            onCancel={() => setEditingModelId(null)}
             onError={onError}
             onRefresh={onRefresh}
             onStatus={onStatus}
