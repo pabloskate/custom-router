@@ -1,7 +1,28 @@
+import { GATEWAY_PRESETS } from "../gateway-presets";
+import type { RouterRuntimeBindings } from "../infra/runtime-bindings";
+import { UPSTREAM } from "../constants";
+
 export interface UpstreamTarget {
   baseUrl: string;
   apiKey: string;
 }
+
+export interface UpstreamHostPolicy {
+  allowArbitraryHosts: boolean;
+  allowedHosts: ReadonlySet<string>;
+}
+
+export type UpstreamBaseUrlValidationResult =
+  | {
+      ok: true;
+      normalized: string;
+      hostname: string;
+    }
+  | {
+      ok: false;
+      code: "invalid_url" | "host_not_allowed";
+      hostname?: string;
+    };
 
 export type ResolveUpstreamResult =
   | {
@@ -56,9 +77,77 @@ function parseValidatedBaseUrl(baseUrl: string): URL | null {
   }
 }
 
-export function normalizeAndValidateUpstreamBaseUrl(baseUrl: string): string | null {
+function normalizeAllowedHost(hostOrUrl: string): string | null {
+  const trimmed = hostOrUrl.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmed).hostname.toLowerCase();
+  } catch {
+    return /^[a-z0-9.-]+$/i.test(trimmed) ? trimmed : null;
+  }
+}
+
+export function resolveUpstreamHostPolicy(
+  bindings?: Pick<RouterRuntimeBindings, "UPSTREAM_ALLOWED_HOSTS" | "UPSTREAM_ALLOW_ARBITRARY_HOSTS"> | null
+): UpstreamHostPolicy {
+  const allowedHosts = new Set(
+    GATEWAY_PRESETS.map((preset) => new URL(preset.baseUrl).hostname.toLowerCase())
+  );
+  const configuredHosts = bindings?.UPSTREAM_ALLOWED_HOSTS ?? "";
+  for (const candidate of configuredHosts.split(UPSTREAM.ALLOWED_HOSTS_SEPARATOR)) {
+    const normalized = normalizeAllowedHost(candidate);
+    if (normalized) {
+      allowedHosts.add(normalized);
+    }
+  }
+
+  return {
+    allowArbitraryHosts: bindings?.UPSTREAM_ALLOW_ARBITRARY_HOSTS === "true",
+    allowedHosts,
+  };
+}
+
+export function validateUpstreamBaseUrl(
+  baseUrl: string,
+  policy?: UpstreamHostPolicy | null
+): UpstreamBaseUrlValidationResult {
   const parsed = parseValidatedBaseUrl(baseUrl);
-  return parsed ? normalizeBaseUrl(parsed.toString()) : null;
+  if (!parsed) {
+    return { ok: false, code: "invalid_url" };
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (policy && !policy.allowArbitraryHosts && !policy.allowedHosts.has(hostname)) {
+    return { ok: false, code: "host_not_allowed", hostname };
+  }
+
+  return {
+    ok: true,
+    normalized: normalizeBaseUrl(parsed.toString()),
+    hostname,
+  };
+}
+
+export function normalizeAndValidateUpstreamBaseUrl(
+  baseUrl: string,
+  policy?: UpstreamHostPolicy | null
+): string | null {
+  const result = validateUpstreamBaseUrl(baseUrl, policy);
+  return result.ok ? result.normalized : null;
+}
+
+export function getUpstreamBaseUrlValidationError(args: {
+  fieldLabel: string;
+  result: Extract<UpstreamBaseUrlValidationResult, { ok: false }>;
+}): string {
+  if (args.result.code === "host_not_allowed") {
+    return `This deployment does not allow ${args.fieldLabel} host "${args.result.hostname ?? "unknown"}". Add it to UPSTREAM_ALLOWED_HOSTS or set UPSTREAM_ALLOW_ARBITRARY_HOSTS=true only on trusted self-hosted instances.`;
+  }
+
+  return `Invalid ${args.fieldLabel}. Use an https URL without query/hash/embedded credentials.`;
 }
 
 function validateBaseUrl(baseUrl: string, source: "override" | "fallback"): ResolveUpstreamResult {

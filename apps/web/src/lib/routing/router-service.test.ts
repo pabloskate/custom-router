@@ -73,6 +73,13 @@ describe("routeAndProxy", () => {
   const classifierMock = vi.mocked(routeWithFrontierModel);
   const upstreamMock = vi.mocked(callOpenAiCompatible);
 
+  function setRuntimeBindings(bindings: Record<string, unknown>) {
+    runtimeMock.mockReturnValue({
+      UPSTREAM_ALLOW_ARBITRARY_HOSTS: "true",
+      ...bindings,
+    } as any);
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -85,7 +92,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -149,7 +156,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -229,7 +236,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -292,7 +299,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -364,7 +371,7 @@ describe("routeAndProxy", () => {
     const classifierApiKeyEnc = await encryptByokSecret({ plaintext: classifierApiKey, secret });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -438,7 +445,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -506,7 +513,7 @@ describe("routeAndProxy", () => {
       globalBlocklist: [],
     });
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -551,7 +558,7 @@ describe("routeAndProxy", () => {
     const classifierKeyEnc = await encryptByokSecret({ plaintext: "classifier-key", secret });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -630,7 +637,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -717,7 +724,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -797,7 +804,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -859,7 +866,7 @@ describe("routeAndProxy", () => {
       turnCount: 0,
     });
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -929,7 +936,7 @@ describe("routeAndProxy", () => {
       turnCount: 0,
     });
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -1001,7 +1008,7 @@ describe("routeAndProxy", () => {
       turnCount: 0,
     });
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -1081,7 +1088,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -1156,7 +1163,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -1234,7 +1241,7 @@ describe("routeAndProxy", () => {
     });
     const repository = createRepository();
 
-    runtimeMock.mockReturnValue({
+    setRuntimeBindings({
       BYOK_ENCRYPTION_SECRET: secret,
     });
     repositoryMock.mockReturnValue(repository as any);
@@ -1297,5 +1304,38 @@ describe("routeAndProxy", () => {
     const payload = upstreamMock.mock.calls[0]?.[0]?.payload as Record<string, unknown>;
     expect(payload.model).toBe("openai/gpt-5.2:high");
     expect(payload.reasoning).toEqual({ effort: "xhigh" });
+  });
+
+  it("rejects legacy gateways whose hosts are not permitted on this deployment", async () => {
+    const secret = "1234567890abcdef";
+    const defaultApiKeyEnc = await encryptByokSecret({
+      plaintext: "gateway-default-key",
+      secret,
+    });
+
+    runtimeMock.mockReturnValue({
+      BYOK_ENCRYPTION_SECRET: secret,
+    } as any);
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      userId: "user_1",
+      body: {
+        model: "auto",
+        messages: [{ role: "user", content: "route this" }],
+      },
+      userConfig: {
+        gatewayRows: [
+          {
+            id: "gw_default",
+            baseUrl: "https://gateway.example/v1",
+            apiKeyEnc: defaultApiKeyEnc,
+            models: [{ id: "auto", name: "Auto Model" }],
+          },
+        ],
+      },
+    });
+
+    expect(result.response.status).toBe(400);
   });
 });

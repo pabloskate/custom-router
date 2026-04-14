@@ -146,6 +146,10 @@ export const UPSTREAM = {
   // Default upstream when no per-request override is provided.
   DEFAULT_BASE_URL: "https://openrouter.ai/api/v1",
 
+  // Comma-separated list of extra upstream hosts that this deployment allows
+  // for user-configured gateways and dedicated classifier overrides.
+  ALLOWED_HOSTS_SEPARATOR: ",",
+
   // Internal tracing header attached to upstream requests.
   REQUEST_ID_HEADER: "X-Router-Request-Id",
 

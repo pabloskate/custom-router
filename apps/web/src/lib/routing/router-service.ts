@@ -20,6 +20,10 @@ import { attachRouterHeaders, json } from "../infra/http";
 import { requestId as makeRequestId } from "../infra/request-id";
 import { getRuntimeBindings } from "../infra/runtime-bindings";
 import {
+  resolveUpstreamHostPolicy,
+  validateUpstreamBaseUrl,
+} from "../upstream/upstream";
+import {
   buildAttemptOrder,
   buildAttemptPayload,
   improveErrorMessage,
@@ -74,6 +78,7 @@ export async function routeAndProxy(args: {
   const requestId = makeRequestId("router");
   const routeLoggingEnabled = args.userConfig?.routeLoggingEnabled === true;
   const bindings = getRuntimeBindings();
+  const upstreamHostPolicy = resolveUpstreamHostPolicy(bindings);
   const byokSecret = resolveByokEncryptionSecret({
     byokSecret: bindings.BYOK_ENCRYPTION_SECRET ?? null,
   });
@@ -99,12 +104,19 @@ export async function routeAndProxy(args: {
   // The first successfully-decrypted gateway is the default upstream.
   const gatewayMap = new Map<string, { baseUrl: string; apiKey: string }>();
   let defaultUpstream: { baseUrl: string; apiKey: string } | null = null;
+  let rejectedGatewayHostCount = 0;
 
   for (const gw of args.userConfig.gatewayRows) {
+    const baseUrlValidation = validateUpstreamBaseUrl(gw.baseUrl, upstreamHostPolicy);
+    if (!baseUrlValidation.ok) {
+      rejectedGatewayHostCount += 1;
+      continue;
+    }
+
     const key = await decryptByokSecret({ ciphertext: gw.apiKeyEnc, secret: byokSecret });
     if (key) {
-      gatewayMap.set(gw.id, { baseUrl: gw.baseUrl, apiKey: key });
-      if (!defaultUpstream) defaultUpstream = { baseUrl: gw.baseUrl, apiKey: key };
+      gatewayMap.set(gw.id, { baseUrl: baseUrlValidation.normalized, apiKey: key });
+      if (!defaultUpstream) defaultUpstream = { baseUrl: baseUrlValidation.normalized, apiKey: key };
     }
   }
 
@@ -112,8 +124,13 @@ export async function routeAndProxy(args: {
     return {
       requestId,
       response: json(
-        { error: "Gateway keys cannot be decrypted. Re-save your gateways in the admin console.", request_id: requestId },
-        500
+        {
+          error: rejectedGatewayHostCount > 0
+            ? "No permitted gateways are configured for this deployment. Add the host to UPSTREAM_ALLOWED_HOSTS or set UPSTREAM_ALLOW_ARBITRARY_HOSTS=true only on trusted self-hosted instances."
+            : "Gateway keys cannot be decrypted. Re-save your gateways in the admin console.",
+          request_id: requestId,
+        },
+        rejectedGatewayHostCount > 0 ? 400 : 500
       ),
     };
   }
@@ -168,6 +185,7 @@ export async function routeAndProxy(args: {
     gatewayMap,
     userConfig: args.userConfig,
     byokSecret,
+    upstreamHostPolicy,
   });
   if (classifierResolution.failure) {
     persistExplanation({

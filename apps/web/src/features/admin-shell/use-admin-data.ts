@@ -10,9 +10,9 @@ import {
   type UserInfo,
 } from "@/src/features/account-settings/contracts";
 import type { GatewayInfo } from "@/src/features/gateways/contracts";
-import type { ApiKeyInfo, RoutingDraftState } from "@/src/components/admin/types";
 
 import { createSequentialTaskQueue, SETTINGS_REFRESHED_MESSAGE } from "./save-queue";
+import type { ApiKeyInfo, RoutingDraftState } from "./types";
 
 interface RegistrationStatus {
   mode: RegistrationMode;

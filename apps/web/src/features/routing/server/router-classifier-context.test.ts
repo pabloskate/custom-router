@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { RouterConfig } from "@custom-router/core";
+import { encryptByokSecret } from "@/src/lib/auth/byok-crypto";
+import { resolveUpstreamHostPolicy } from "@/src/lib/upstream";
 
 import { resolveClassifierContext } from "./router-classifier-context";
 
@@ -10,6 +12,7 @@ const runtimeConfig: RouterConfig = {
   defaultModel: "model/default",
   globalBlocklist: [],
 };
+const permissivePolicy = resolveUpstreamHostPolicy({ UPSTREAM_ALLOW_ARBITRARY_HOSTS: "true" });
 
 describe("resolveClassifierContext", () => {
   it("rejects partial dedicated classifier settings", async () => {
@@ -24,6 +27,32 @@ describe("resolveClassifierContext", () => {
         classifierBaseUrl: "https://classifier.example/v1",
       },
       byokSecret: "unused",
+      upstreamHostPolicy: permissivePolicy,
+    });
+
+    expect(result.failure?.response.status).toBe(400);
+  });
+
+  it("rejects dedicated classifier hosts that are not allowed on this deployment", async () => {
+    const byokSecret = "1234567890abcdef";
+    const classifierApiKeyEnc = await encryptByokSecret({
+      plaintext: "classifier-key",
+      secret: byokSecret,
+    });
+
+    const result = await resolveClassifierContext({
+      requestId: "req_blocked",
+      requestedModel: "planning-backend",
+      routedRequest: true,
+      runtimeConfig,
+      catalog: [{ id: "model/classifier", name: "Classifier", gatewayId: "gw_classifier" }],
+      gatewayMap: new Map([["gw_classifier", { baseUrl: "https://api.openai.com/v1", apiKey: "secret" }]]),
+      userConfig: {
+        classifierBaseUrl: "https://classifier.example/v1",
+        classifierApiKeyEnc,
+      },
+      byokSecret,
+      upstreamHostPolicy: resolveUpstreamHostPolicy({}),
     });
 
     expect(result.failure?.response.status).toBe(400);
@@ -54,6 +83,7 @@ describe("resolveClassifierContext", () => {
         ],
       },
       byokSecret: "unused",
+      upstreamHostPolicy: permissivePolicy,
     });
 
     expect(result.context).toEqual({
@@ -90,6 +120,7 @@ describe("resolveClassifierContext", () => {
         ],
       },
       byokSecret: "unused",
+      upstreamHostPolicy: permissivePolicy,
     });
 
     expect(result.context).toEqual({

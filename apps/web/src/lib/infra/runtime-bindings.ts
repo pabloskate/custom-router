@@ -20,6 +20,8 @@ export interface RouterRuntimeBindings {
   ROUTER_KV?: KVNamespace;
   BYOK_ENCRYPTION_SECRET?: string;
   ROUTER_CLASSIFIER_MODEL?: string;
+  UPSTREAM_ALLOWED_HOSTS?: string;
+  UPSTREAM_ALLOW_ARBITRARY_HOSTS?: string;
   ADMIN_SECRET?: string;
   SESSION_COOKIE_SECURE?: string;
   REGISTRATION_MODE?: string;
@@ -62,6 +64,10 @@ export function getRuntimeBindings(): RouterRuntimeBindings {
       fromGlobal?.BYOK_ENCRYPTION_SECRET ?? process.env.BYOK_ENCRYPTION_SECRET,
     ROUTER_CLASSIFIER_MODEL:
       fromGlobal?.ROUTER_CLASSIFIER_MODEL ?? process.env.ROUTER_CLASSIFIER_MODEL,
+    UPSTREAM_ALLOWED_HOSTS:
+      fromGlobal?.UPSTREAM_ALLOWED_HOSTS ?? process.env.UPSTREAM_ALLOWED_HOSTS,
+    UPSTREAM_ALLOW_ARBITRARY_HOSTS:
+      fromGlobal?.UPSTREAM_ALLOW_ARBITRARY_HOSTS ?? process.env.UPSTREAM_ALLOW_ARBITRARY_HOSTS,
     ADMIN_SECRET:
       fromGlobal?.ADMIN_SECRET ?? process.env.ADMIN_SECRET,
     SESSION_COOKIE_SECURE:

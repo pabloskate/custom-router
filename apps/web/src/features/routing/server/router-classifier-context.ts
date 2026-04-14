@@ -3,6 +3,7 @@ import type { CatalogItem, RouterConfig, RouterProfile, RoutingExplanation } fro
 import { decryptByokSecret } from "@/src/lib/auth/byok-crypto";
 import { json } from "@/src/lib/infra";
 import { parseProfileModelKey } from "@/src/lib/routing/profile-config";
+import { getUpstreamBaseUrlValidationError, type UpstreamHostPolicy, validateUpstreamBaseUrl } from "@/src/lib/upstream";
 
 import { buildRoutingExplanation, resolveEffectiveClassifierModel } from "./router-decision";
 import { resolveGatewayCapabilityForBaseUrl } from "./gateway-capabilities";
@@ -32,6 +33,7 @@ export async function resolveClassifierContext(args: {
   gatewayMap: Map<string, { baseUrl: string; apiKey: string }>;
   userConfig?: UserRouterConfig;
   byokSecret: string;
+  upstreamHostPolicy: UpstreamHostPolicy;
 }): Promise<{ context: ResolvedClassifierContext; failure?: never } | { context?: never; failure: ClassifierFailure }> {
   const effectiveClassifierModel = args.routedRequest
     ? resolveEffectiveClassifierModel({
@@ -112,11 +114,42 @@ export async function resolveClassifierContext(args: {
   }
 
   if (hasClassifierBase && hasClassifierKey) {
-    const classifierCapability = resolveGatewayCapabilityForBaseUrl(args.userConfig?.classifierBaseUrl ?? null);
+    const classifierBaseUrlValidation = validateUpstreamBaseUrl(
+      args.userConfig?.classifierBaseUrl ?? "",
+      args.upstreamHostPolicy,
+    );
+    if (!classifierBaseUrlValidation.ok) {
+      return {
+        failure: {
+          explanation: buildRoutingExplanation({
+            requestId: args.requestId,
+            catalogVersion: "1.0",
+            requestedModel: args.requestedModel,
+            message: getUpstreamBaseUrlValidationError({
+              fieldLabel: "classifier_base_url",
+              result: classifierBaseUrlValidation,
+            }),
+            profileId: args.matchedProfile?.id,
+            classifierModel: effectiveClassifierModel,
+          }),
+          response: json(
+            {
+              error: getUpstreamBaseUrlValidationError({
+                fieldLabel: "classifier_base_url",
+                result: classifierBaseUrlValidation,
+              }),
+              request_id: args.requestId,
+            },
+            400
+          ),
+        },
+      };
+    }
+    const classifierCapability = resolveGatewayCapabilityForBaseUrl(classifierBaseUrlValidation.normalized);
     return {
       context: {
         effectiveClassifierModel,
-        classifierBaseUrl: args.userConfig?.classifierBaseUrl ?? undefined,
+        classifierBaseUrl: classifierBaseUrlValidation.normalized,
         classifierApiKey: classifierApiKeyOverride ?? undefined,
         classifierSupportsReasoningEffort: classifierCapability.supportsReasoningEffort,
       },

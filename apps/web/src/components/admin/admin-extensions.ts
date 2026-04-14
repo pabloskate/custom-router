@@ -1,5 +1,1 @@
-import { type AdminTabDefinition } from "./types";
-
-export function getAdminExtensionTabs(): AdminTabDefinition[] {
-  return [];
-}
+export { getAdminExtensionTabs } from "@/src/features/admin-shell/admin-extensions";

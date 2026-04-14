@@ -12,7 +12,11 @@ import {
   updateUserGateway,
 } from "@/src/lib/storage";
 import { updateGatewaySchema } from "@/src/lib/schemas";
-import { normalizeAndValidateUpstreamBaseUrl } from "@/src/lib/upstream";
+import {
+  getUpstreamBaseUrlValidationError,
+  resolveUpstreamHostPolicy,
+  validateUpstreamBaseUrl,
+} from "@/src/lib/upstream";
 
 export async function GET(
   request: Request,
@@ -57,14 +61,17 @@ export async function PATCH(
       }
 
       if (parsed.data.baseUrl !== undefined) {
-        const normalizedUrl = normalizeAndValidateUpstreamBaseUrl(parsed.data.baseUrl);
-        if (!normalizedUrl) {
+        const baseUrlValidation = validateUpstreamBaseUrl(
+          parsed.data.baseUrl,
+          resolveUpstreamHostPolicy(bindings),
+        );
+        if (!baseUrlValidation.ok) {
           return json(
-            { error: "Invalid baseUrl. Use an https URL without query/hash/embedded credentials." },
+            { error: getUpstreamBaseUrlValidationError({ fieldLabel: "baseUrl", result: baseUrlValidation }) },
             400
           );
         }
-        updateArgs.baseUrl = normalizedUrl;
+        updateArgs.baseUrl = baseUrlValidation.normalized;
       }
 
       if (parsed.data.apiKey !== undefined) {

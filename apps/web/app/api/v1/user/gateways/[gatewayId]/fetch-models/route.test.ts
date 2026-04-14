@@ -91,4 +91,25 @@ describe("/api/v1/user/gateways/[gatewayId]/fetch-models route", () => {
       },
     ]);
   });
+
+  it("blocks gateway hosts that are not allowed on this deployment", async () => {
+    getUserGatewayMock.mockResolvedValue({
+      id: "gw_custom",
+      user_id: "user_1",
+      name: "Custom",
+      base_url: "https://gateway.example/v1",
+      api_key_enc: "enc",
+      models_json: "[]",
+      created_at: "2026-03-21T00:00:00.000Z",
+      updated_at: "2026-03-21T00:00:00.000Z",
+    } as any);
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/user/gateways/gw_custom/fetch-models"),
+      { params: Promise.resolve({ gatewayId: "gw_custom" }) }
+    );
+
+    expect(response.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

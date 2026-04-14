@@ -25,7 +25,8 @@
     "eval:router:dry": "node scripts/router-eval.mjs --mode router --dry-run",
     "eval:model:dry": "node scripts/router-eval.mjs --mode model --dry-run",
     "eval:router": "node scripts/router-eval.mjs --mode router",
-    "eval:model": "node scripts/router-eval.mjs --mode model"
+    "eval:model": "node scripts/router-eval.mjs --mode model",
+    "doctor:agent": "node scripts/agent-diagnose.mjs"
   },
   "engines": {
     "node": ">=20.0.0"

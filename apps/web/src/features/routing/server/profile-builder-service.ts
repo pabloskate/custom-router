@@ -11,7 +11,12 @@ import {
 } from "@/src/lib/routing/profile-config";
 import { profileBuilderApplySchema, profileBuilderRequestSchema } from "@/src/lib/schemas";
 import { gatewayRowToPublic, loadGatewaysWithMigration } from "@/src/lib/storage";
-import { callOpenAiCompatible, normalizeBaseUrl } from "@/src/lib/upstream/upstream";
+import {
+  callOpenAiCompatible,
+  getUpstreamBaseUrlValidationError,
+  resolveUpstreamHostPolicy,
+  validateUpstreamBaseUrl,
+} from "@/src/lib/upstream/upstream";
 import { getGatewayPresetId } from "@/src/lib/routing-presets";
 import { parseJsonBody } from "@/src/lib/auth/route-helpers";
 import type { RouterRuntimeBindings } from "@/src/lib/infra/runtime-bindings";
@@ -803,6 +808,19 @@ async function callProfileBuilderExecutor(args: {
     throw new Error("Gateway key cannot be decrypted. Re-save the gateway and try again.");
   }
 
+  const baseUrlValidation = validateUpstreamBaseUrl(
+    args.gateway.baseUrl,
+    resolveUpstreamHostPolicy(args.bindings),
+  );
+  if (!baseUrlValidation.ok) {
+    throw new Error(
+      getUpstreamBaseUrlValidationError({
+        fieldLabel: "gateway baseUrl",
+        result: baseUrlValidation,
+      }),
+    );
+  }
+
   const candidatePayload = args.shortlist.map((candidate) => ({
     id: candidate.model.id,
     name: candidate.model.name ?? candidate.knowledge.name,
@@ -875,7 +893,7 @@ async function callProfileBuilderExecutor(args: {
 
   const upstream = await callOpenAiCompatible({
     apiPath: "/chat/completions",
-    baseUrl: normalizeBaseUrl(args.gateway.baseUrl),
+    baseUrl: baseUrlValidation.normalized,
     apiKey,
     payload: {
       model: args.executor.model.id,

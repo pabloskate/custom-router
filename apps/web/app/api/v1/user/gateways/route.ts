@@ -13,7 +13,11 @@ import {
   loadGatewaysWithMigration,
 } from "@/src/lib/storage";
 import { createGatewaySchema } from "@/src/lib/schemas";
-import { normalizeAndValidateUpstreamBaseUrl } from "@/src/lib/upstream";
+import {
+  getUpstreamBaseUrlValidationError,
+  resolveUpstreamHostPolicy,
+  validateUpstreamBaseUrl,
+} from "@/src/lib/upstream";
 
 export async function GET(request: Request): Promise<Response> {
   return withSessionAuth(request, async (auth, bindings) => {
@@ -43,10 +47,13 @@ export async function POST(request: Request): Promise<Response> {
         return json({ error: "Invalid payload.", issues: parsed.error.issues }, 400);
       }
 
-      const normalizedUrl = normalizeAndValidateUpstreamBaseUrl(parsed.data.baseUrl);
-      if (!normalizedUrl) {
+      const baseUrlValidation = validateUpstreamBaseUrl(
+        parsed.data.baseUrl,
+        resolveUpstreamHostPolicy(bindings),
+      );
+      if (!baseUrlValidation.ok) {
         return json(
-          { error: "Invalid baseUrl. Use an https URL without query/hash/embedded credentials." },
+          { error: getUpstreamBaseUrlValidationError({ fieldLabel: "baseUrl", result: baseUrlValidation }) },
           400
         );
       }
@@ -69,13 +76,15 @@ export async function POST(request: Request): Promise<Response> {
         id,
         userId: auth.userId,
         name: parsed.data.name,
-        baseUrl: normalizedUrl,
+        baseUrl: baseUrlValidation.normalized,
         apiKeyEnc,
       });
 
       const rows = await getUserGateways(bindings.ROUTER_DB!, auth.userId);
       const row = rows.find((r) => r.id === id);
-      return json({ gateway: row ? gatewayRowToInfo(row) : { id, name: parsed.data.name, baseUrl: normalizedUrl } }, 201);
+      return json({
+        gateway: row ? gatewayRowToInfo(row) : { id, name: parsed.data.name, baseUrl: baseUrlValidation.normalized },
+      }, 201);
     });
   });
 }

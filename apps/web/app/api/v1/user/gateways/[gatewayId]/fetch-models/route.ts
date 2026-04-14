@@ -1,6 +1,7 @@
 import { decryptByokSecret, resolveByokEncryptionSecret, withSessionAuth } from "@/src/lib/auth";
 import { json } from "@/src/lib/infra";
 import { getUserGateway } from "@/src/lib/storage";
+import { getUpstreamBaseUrlValidationError, resolveUpstreamHostPolicy, validateUpstreamBaseUrl } from "@/src/lib/upstream";
 
 interface OpenAIModel {
   id: string;
@@ -65,6 +66,14 @@ export async function GET(
     const row = await getUserGateway(bindings.ROUTER_DB!, auth.userId, gatewayId);
     if (!row) return json({ error: "Not found." }, 404);
 
+    const baseUrlValidation = validateUpstreamBaseUrl(row.base_url, resolveUpstreamHostPolicy(bindings));
+    if (!baseUrlValidation.ok) {
+      return json(
+        { error: getUpstreamBaseUrlValidationError({ fieldLabel: "gateway baseUrl", result: baseUrlValidation }) },
+        400
+      );
+    }
+
     const byokSecret = resolveByokEncryptionSecret({
       byokSecret: bindings.BYOK_ENCRYPTION_SECRET ?? null,
     });
@@ -83,7 +92,7 @@ export async function GET(
     // Proxy the /models request to the gateway
     let upstreamResponse: Response;
     try {
-      upstreamResponse = await fetch(`${row.base_url}/models`, {
+      upstreamResponse = await fetch(`${baseUrlValidation.normalized}/models`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",

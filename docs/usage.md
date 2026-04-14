@@ -65,6 +65,8 @@ From `.env.example`, the important variables are:
 - `REGISTRATION_MODE` (`open`, `closed`, `invite`)
 - `SESSION_COOKIE_SECURE` (`true` / `false`)
 - `ROUTER_CLASSIFIER_MODEL` (optional default)
+- `UPSTREAM_ALLOWED_HOSTS` (optional extra host allowlist for custom gateways/classifier overrides)
+- `UPSTREAM_ALLOW_ARBITRARY_HOSTS` (`true` only on trusted self-hosted instances that intentionally allow arbitrary upstream destinations)
 - `RESEND_API_KEY` (required if you want real password reset email delivery)
 - `PASSWORD_RESET_FROM_EMAIL` (required if you want real password reset email delivery)
 - `PASSWORD_RESET_BASE_URL` (required for password reset links; use `http://localhost:3010` locally or your canonical `https://...` app URL in production)
@@ -365,6 +367,10 @@ Payload:
 - `name`
 - `baseUrl`
 - `apiKey`
+
+Security note:
+- By default, the deployment only accepts gateway hosts from the built-in provider presets plus any hosts listed in `UPSTREAM_ALLOWED_HOSTS`.
+- To allow arbitrary custom hosts, a trusted self-hosted operator must set `UPSTREAM_ALLOW_ARBITRARY_HOSTS=true`.
 
 #### `GET /api/v1/user/gateways/{gatewayId}`
 
