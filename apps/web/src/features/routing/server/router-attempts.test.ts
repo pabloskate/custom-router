@@ -205,4 +205,124 @@ describe("buildAttemptPayload", () => {
     expect(payload.modalities).toEqual(["image", "text"]);
     expect(payload.image_config).toEqual({ aspect_ratio: "16:9" });
   });
+
+  it("normalizes responses-style image parts before sending chat completions upstream", () => {
+    const payload = buildAttemptPayload({
+      body: {
+        model: "opencode-go-coding",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "Describe this screenshot." },
+              { type: "input_image", image_url: "data:image/png;base64,abc", detail: "auto" },
+            ],
+          },
+        ],
+      },
+      selectedModelId: "kimi-k2.6",
+      catalog: [
+        {
+          id: "kimi-k2.6",
+          name: "Kimi K2.6",
+          modality: "text,image->text",
+        },
+      ],
+      baseUrl: "https://opencode.ai/zen/go/v1",
+      apiPath: "/chat/completions",
+    });
+
+    expect(payload.messages).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Describe this screenshot." },
+          { type: "image_url", image_url: { url: "data:image/png;base64,abc" }, detail: "auto" },
+        ],
+      },
+    ]);
+  });
+
+  it("normalizes generic base64 image parts before sending chat completions upstream", () => {
+    const payload = buildAttemptPayload({
+      body: {
+        model: "opencode-go-coding",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Describe this screenshot." },
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/png",
+                  data: "abc",
+                },
+              },
+            ],
+          },
+        ],
+      },
+      selectedModelId: "kimi-k2.6",
+      catalog: [
+        {
+          id: "kimi-k2.6",
+          name: "Kimi K2.6",
+          modality: "text,image->text",
+        },
+      ],
+      baseUrl: "https://opencode.ai/zen/go/v1",
+      apiPath: "/chat/completions",
+    });
+
+    expect(payload.messages).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Describe this screenshot." },
+          { type: "image_url", image_url: { url: "data:image/png;base64,abc" } },
+        ],
+      },
+    ]);
+  });
+
+  it("normalizes chat image parts before sending responses upstream", () => {
+    const payload = buildAttemptPayload({
+      body: {
+        model: "vision-profile",
+        input: [
+          {
+            type: "message",
+            role: "user",
+            content: [
+              { type: "text", text: "Describe this screenshot." },
+              { type: "image_url", image_url: { url: "https://example.com/screenshot.png" } },
+            ],
+          },
+        ],
+      },
+      selectedModelId: "openai/gpt-5.2",
+      catalog: [
+        {
+          id: "openai/gpt-5.2",
+          name: "GPT-5.2",
+          modality: "text,image->text",
+        },
+      ],
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiPath: "/responses",
+    });
+
+    expect(payload.input).toEqual([
+      {
+        type: "message",
+        role: "user",
+        content: [
+          { type: "input_text", text: "Describe this screenshot." },
+          { type: "input_image", image_url: "https://example.com/screenshot.png" },
+        ],
+      },
+    ]);
+  });
 });
