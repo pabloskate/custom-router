@@ -84,4 +84,80 @@ describe("/api/v1/models route", () => {
       "openai/gpt-5.2:xhigh",
     ]));
   });
+
+  it("advertises profile image input support from the routed model pool", async () => {
+    withApiKeyAuthMock.mockImplementation(async (_request, handler) => (
+      handler(createAuth({
+        profiles: [
+          {
+            id: "opencode-go-coding",
+            name: "OpenCode Go Coding",
+            models: [
+              { gatewayId: "gw_1", modelId: "kimi-k2.6", name: "Kimi K2.6", modality: "text,image->text" },
+              { gatewayId: "gw_1", modelId: "deepseek-v4-flash", name: "DeepSeek V4 Flash", modality: "text->text" },
+            ],
+          },
+        ],
+      }), { ROUTER_DB: {} as any })
+    ));
+
+    const response = await GET(new Request("http://localhost/api/v1/models"));
+    expect(response.status).toBe(200);
+
+    const body = await response.json() as {
+      data: Array<{
+        id: string;
+        attachment?: boolean;
+        modalities?: { input: string[]; output: string[] };
+      }>;
+    };
+    const profileModel = body.data.find((item) => item.id === "opencode-go-coding");
+
+    expect(profileModel).toMatchObject({
+      id: "opencode-go-coding",
+      attachment: true,
+      modalities: {
+        input: ["image", "text"],
+        output: ["text"],
+      },
+    });
+  });
+
+  it("falls back to preset modality metadata for existing saved profiles", async () => {
+    withApiKeyAuthMock.mockImplementation(async (_request, handler) => (
+      handler(createAuth({
+        profiles: [
+          {
+            id: "opencode-go-coding",
+            name: "OpenCode Go Coding",
+            models: [
+              { gatewayId: "gw_1", modelId: "kimi-k2.6", name: "Kimi K2.6" },
+              { gatewayId: "gw_1", modelId: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
+            ],
+          },
+        ],
+      }), { ROUTER_DB: {} as any })
+    ));
+
+    const response = await GET(new Request("http://localhost/api/v1/models"));
+    expect(response.status).toBe(200);
+
+    const body = await response.json() as {
+      data: Array<{
+        id: string;
+        attachment?: boolean;
+        modalities?: { input: string[]; output: string[] };
+      }>;
+    };
+    const profileModel = body.data.find((item) => item.id === "opencode-go-coding");
+
+    expect(profileModel).toMatchObject({
+      id: "opencode-go-coding",
+      attachment: true,
+      modalities: {
+        input: ["image", "text"],
+        output: ["text"],
+      },
+    });
+  });
 });
