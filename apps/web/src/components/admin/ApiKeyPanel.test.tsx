@@ -28,6 +28,7 @@ describe("ApiKeyPanel", () => {
             id: "key_1",
             prefix: "ar_sk_test_",
             label: "API Key",
+            rateLimitPerMinute: 60,
             revoked: false,
             createdAt: "2026-03-13T00:00:00.000Z",
           },
@@ -40,5 +41,6 @@ describe("ApiKeyPanel", () => {
 
     expect(markup).toContain("Revoke");
     expect(markup).toContain("Delete");
+    expect(markup).toContain("60/min");
   });
 });

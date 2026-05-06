@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authenticateSession, generateApiKey, hashKey, isSameOriginRequest, withCsrf, withSessionAuth } from "@/src/lib/auth";
 import { getRuntimeBindings } from "@/src/lib/infra";
-import { DELETE, POST } from "./route";
+import { DELETE, PATCH, POST } from "./route";
 
 vi.mock("@/src/lib/infra", async () => {
   const actual = await vi.importActual<typeof import("@/src/lib/infra")>("@/src/lib/infra");
@@ -72,7 +72,7 @@ describe("/api/v1/user/keys route", () => {
       new Request("http://localhost/api/v1/user/keys", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label: "API Key" }),
+        body: JSON.stringify({ label: "API Key", rate_limit_per_minute: 120 }),
       })
     );
 
@@ -80,6 +80,24 @@ describe("/api/v1/user/keys route", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     const body = await response.json() as { apiKey: string };
     expect(body.apiKey).toBe("ar_sk_test_key");
+  });
+
+  it("updates a key rate limit", async () => {
+    const db = createDbMock();
+    runtimeMock.mockReturnValue({ ROUTER_DB: db as any });
+    sameOriginMock.mockReturnValue(true);
+    authMock.mockResolvedValue({ userId: "user_1" } as any);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/v1/user/keys?keyId=key_1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rate_limit_per_minute: 30 }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.prepare).toHaveBeenCalledWith("UPDATE api_keys SET rate_limit_per_minute = ?1 WHERE id = ?2 AND user_id = ?3 AND revoked_at IS NULL");
   });
 
   it("deletes a key when action=delete is requested", async () => {

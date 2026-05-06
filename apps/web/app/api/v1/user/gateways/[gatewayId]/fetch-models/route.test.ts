@@ -51,6 +51,9 @@ describe("/api/v1/user/gateways/[gatewayId]/fetch-models route", () => {
       data: [
         {
           id: "openai/gpt-5-image",
+          name: "fallback-name",
+          displayName: "GPT-5 Image",
+          description: "Image-capable test model.",
           architecture: {
             modality: "text+image->text+image",
           },
@@ -81,13 +84,47 @@ describe("/api/v1/user/gateways/[gatewayId]/fetch-models route", () => {
     expect(body.models).toEqual([
       {
         id: "openai/gpt-5-image",
-        name: "openai/gpt-5-image",
+        name: "GPT-5 Image",
         modality: "text,image->text,image",
+        description: "Image-capable test model.",
       },
       {
         id: "openai/gpt-5.4-mini",
         name: "openai/gpt-5.4-mini",
         modality: "text,image,file->text",
+      },
+    ]);
+  });
+
+  it("derives Fireworks vision modality from supportsImageInput", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      models: [
+        {
+          id: "accounts/fireworks/models/kimi-k2p5",
+          displayName: "Kimi K2.5",
+          supportsImageInput: true,
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/user/gateways/gw_fireworks/fetch-models"),
+      { params: Promise.resolve({ gatewayId: "gw_fireworks" }) }
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      models: Array<{ id: string; name: string; modality?: string }>;
+    };
+
+    expect(body.models).toEqual([
+      {
+        id: "accounts/fireworks/models/kimi-k2p5",
+        name: "Kimi K2.5",
+        modality: "text,image->text",
       },
     ]);
   });

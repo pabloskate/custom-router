@@ -149,6 +149,7 @@ Routing catalog resolution order for each request:
 - Generated format is `ar_sk_...`.
 - Keys are shown only once at creation.
 - Revoking keeps past keys unusable from the time revoked.
+- Each key can optionally have a per-minute request limit. Blank means unlimited.
 
 ## 6) Request auth modes
 
@@ -340,7 +341,7 @@ Legacy user-level routing fields such as `blocklist`, `default_model`, `classifi
 
 #### `GET /api/v1/user/keys`
 
-List API keys (id, prefix, label, revoked state).
+List API keys (id, prefix, label, revoked state, rate limit).
 
 #### `POST /api/v1/user/keys`
 
@@ -348,8 +349,15 @@ Create API key. Optional body fields:
 
 - `rotate: true`
 - `label`
+- `rate_limit_per_minute` as a whole number, or `null` for unlimited
 
 Response includes raw key once and `note`.
+
+#### `PATCH /api/v1/user/keys?keyId=<id>`
+
+Update one active key. Body:
+
+- `rate_limit_per_minute` as a whole number, or `null` for unlimited
 
 #### `DELETE /api/v1/user/keys?keyId=<id>`
 

@@ -1,18 +1,44 @@
 import { generateApiKey, hashKey, withCsrf, withSessionAuth } from "@/src/lib/auth";
+import { AUTH } from "@/src/lib/constants";
 import { json, jsonNoStore } from "@/src/lib/infra";
+
+function parseRateLimitPerMinute(value: unknown): number | null | Response {
+    if (value == null || value === "") {
+        return null;
+    }
+
+    if (typeof value !== "number" || !Number.isInteger(value)) {
+        return json({ error: "rate_limit_per_minute must be a whole number or null." }, 400);
+    }
+
+    if (
+        value < AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE ||
+        value > AUTH.API_KEY_RATE_LIMIT_MAX_PER_MINUTE
+    ) {
+        return json(
+            {
+                error: `rate_limit_per_minute must be between ${AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE} and ${AUTH.API_KEY_RATE_LIMIT_MAX_PER_MINUTE}.`,
+            },
+            400
+        );
+    }
+
+    return value;
+}
 
 export async function GET(request: Request): Promise<Response> {
     return withSessionAuth(request, async (auth, bindings) => {
         const { results } = await bindings.ROUTER_DB
-            .prepare("SELECT id, key_prefix, label, revoked_at, created_at FROM api_keys WHERE user_id = ?1 ORDER BY created_at DESC")
+            .prepare("SELECT id, key_prefix, label, rate_limit_per_minute, revoked_at, created_at FROM api_keys WHERE user_id = ?1 ORDER BY created_at DESC")
             .bind(auth.userId)
-            .all<{ id: string; key_prefix: string; label: string | null; revoked_at: string | null; created_at: string }>();
+            .all<{ id: string; key_prefix: string; label: string | null; rate_limit_per_minute: number | null; revoked_at: string | null; created_at: string }>();
 
         return json({
             keys: results.map((k) => ({
                 id: k.id,
                 prefix: k.key_prefix,
                 label: k.label,
+                rateLimitPerMinute: k.rate_limit_per_minute,
                 revoked: !!k.revoked_at,
                 revokedAt: k.revoked_at,
                 createdAt: k.created_at
@@ -35,6 +61,10 @@ export async function POST(request: Request): Promise<Response> {
             keyData.hash = await hashKey(keyData.raw);
             const keyId = crypto.randomUUID();
             const now = new Date().toISOString();
+            const rateLimitPerMinute = parseRateLimitPerMinute(body.rate_limit_per_minute);
+            if (rateLimitPerMinute instanceof Response) {
+                return rateLimitPerMinute;
+            }
 
             if (body.rotate === true) {
                 await bindings.ROUTER_DB
@@ -44,13 +74,14 @@ export async function POST(request: Request): Promise<Response> {
             }
 
             await bindings.ROUTER_DB
-                .prepare("INSERT INTO api_keys (id, user_id, key_hash, key_prefix, label, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+                .prepare("INSERT INTO api_keys (id, user_id, key_hash, key_prefix, label, rate_limit_per_minute, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
                 .bind(
                     keyId,
                     auth.userId,
                     keyData.hash,
                     keyData.prefix,
                     typeof body.label === "string" ? body.label : "default",
+                    rateLimitPerMinute,
                     now
                 )
                 .run();
@@ -62,6 +93,42 @@ export async function POST(request: Request): Promise<Response> {
                 rotated: body.rotate === true,
                 note: "Save this API key — it will not be shown again."
             }, 201);
+        });
+    });
+}
+
+export async function PATCH(request: Request): Promise<Response> {
+    return withSessionAuth(request, async (auth, bindings) => {
+        return withCsrf(request, async () => {
+            const url = new URL(request.url);
+            const keyId = url.searchParams.get("keyId");
+
+            if (!keyId) {
+                return json({ error: "keyId query parameter is required." }, 400);
+            }
+
+            let body: Record<string, unknown>;
+            try {
+                body = (await request.json()) as Record<string, unknown>;
+            } catch {
+                return json({ error: "Invalid JSON body." }, 400);
+            }
+
+            if (!Object.prototype.hasOwnProperty.call(body, "rate_limit_per_minute")) {
+                return json({ error: "rate_limit_per_minute is required." }, 400);
+            }
+
+            const rateLimitPerMinute = parseRateLimitPerMinute(body.rate_limit_per_minute);
+            if (rateLimitPerMinute instanceof Response) {
+                return rateLimitPerMinute;
+            }
+
+            await bindings.ROUTER_DB
+                .prepare("UPDATE api_keys SET rate_limit_per_minute = ?1 WHERE id = ?2 AND user_id = ?3 AND revoked_at IS NULL")
+                .bind(rateLimitPerMinute, keyId, auth.userId)
+                .run();
+
+            return json({ ok: true, rateLimitPerMinute }, 200);
         });
     });
 }

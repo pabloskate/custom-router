@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
   key_hash TEXT NOT NULL UNIQUE,
   key_prefix TEXT NOT NULL,
   label TEXT,
+  rate_limit_per_minute INTEGER,
   revoked_at TEXT,
   created_at TEXT NOT NULL
 );

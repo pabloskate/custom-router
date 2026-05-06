@@ -1,23 +1,15 @@
 import type { ComponentType, ReactNode } from "react";
 
-import type { UserInfo } from "@/src/features/account-settings/contracts";
+import type { ApiKeyInfo, UserInfo } from "@/src/features/account-settings/contracts";
 import type { GatewayInfo } from "@/src/features/gateways/contracts";
 
-export type { ServerUserInfo, UserInfo, hydrateUser } from "@/src/features/account-settings/contracts";
+export type { ApiKeyInfo, ServerUserInfo, UserInfo, hydrateUser } from "@/src/features/account-settings/contracts";
 export type { GatewayInfo } from "@/src/features/gateways/contracts";
 
 export type AdminSection = "configure" | "use" | "account";
 
 export type AdminTabIcon = ComponentType<{ className?: string }>;
 export type RoutingDraftState = "pristine" | "dirty" | "saving" | "saved";
-
-export type ApiKeyInfo = {
-  id: string;
-  prefix: string;
-  label: string | null;
-  revoked: boolean;
-  createdAt: string;
-};
 
 export type AdminExtensionContext = {
   user: UserInfo;

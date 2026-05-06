@@ -19,6 +19,15 @@ export type ServerUserInfo = {
 
 export type UserInfo = ServerUserInfo;
 
+export type ApiKeyInfo = {
+  id: string;
+  prefix: string;
+  label: string | null;
+  rateLimitPerMinute: number | null;
+  revoked: boolean;
+  createdAt: string;
+};
+
 export type UpdateUserInfoRequest = {
   expected_updated_at: string;
   profiles?: RouterProfile[] | null;

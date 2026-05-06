@@ -6,6 +6,7 @@ export {
   constantTimeEqual,
   createSession,
   generateApiKey,
+  hasApiKeysRateLimitPerMinuteColumn,
   getSessionTokenFromRequest,
   hasUsersRouteLoggingEnabledColumn,
   hasUsersSmartPinTurnsColumn,

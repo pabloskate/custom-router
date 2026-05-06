@@ -25,15 +25,22 @@ export interface ManualGatewayModelDraft {
 
 export function mergeFetchedGatewayModels(
   existing: GatewayModel[],
-  fetched: Array<Pick<GatewayModel, "id" | "name" | "modality">>,
+  fetched: Array<Pick<GatewayModel, "id" | "name" | "modality" | "description">>,
 ): GatewayModel[] {
   const existingById = new Map(existing.map((model) => [model.id, model] as const));
   for (const fetchedModel of fetched) {
-    if (!existingById.has(fetchedModel.id)) {
+    const existingModel = existingById.get(fetchedModel.id);
+    if (existingModel) {
+      existingById.set(fetchedModel.id, {
+        ...existingModel,
+        modality: fetchedModel.modality ?? existingModel.modality,
+      });
+    } else {
       existingById.set(fetchedModel.id, {
         id: fetchedModel.id,
         name: fetchedModel.name,
         modality: fetchedModel.modality,
+        description: fetchedModel.description,
       });
     }
   }

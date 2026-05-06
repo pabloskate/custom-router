@@ -17,13 +17,52 @@
 import { z, type ZodTypeAny } from "zod";
 
 import { authenticateRequest, authenticateSession, type AuthResult, verifyAdminSecret } from "./auth";
+import { consumeRateLimit } from "./rate-limit";
 import { isSameOriginRequest } from "./csrf";
+import { AUTH } from "../constants";
 import { json } from "../infra/http";
 import { getRuntimeBindings, type RouterRuntimeBindings } from "../infra/runtime-bindings";
 
 type BindingsWithDb = RouterRuntimeBindings & {
   ROUTER_DB: NonNullable<RouterRuntimeBindings["ROUTER_DB"]>;
 };
+
+async function enforceApiKeyRateLimit(
+  auth: AuthResult,
+  bindings: BindingsWithDb
+): Promise<Response | null> {
+  const limit = auth.apiKeyRateLimitPerMinute;
+  if (
+    auth.authType !== "api_key" ||
+    !auth.apiKeyId ||
+    limit == null ||
+    limit < AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE
+  ) {
+    return null;
+  }
+
+  const rateLimit = await consumeRateLimit({
+    db: bindings.ROUTER_DB,
+    bucket: "api_key:minute",
+    identifier: auth.apiKeyId,
+    maxRequests: limit,
+    windowSeconds: AUTH.API_KEY_RATE_LIMIT_WINDOW_SECONDS,
+  });
+
+  if (rateLimit.allowed) {
+    return null;
+  }
+
+  return json(
+    { error: "Rate limit exceeded for this API key. Try again later." },
+    429,
+    {
+      "retry-after": String(rateLimit.retryAfterSeconds),
+      "x-ratelimit-limit": String(limit),
+      "x-ratelimit-remaining": String(rateLimit.remaining),
+    }
+  );
+}
 
 // ── withDb ────────────────────────────────────────────────────────────────────
 // Guards against misconfigured deployments where ROUTER_DB isn't bound.
@@ -54,6 +93,10 @@ export async function withApiKeyAuth(
   if (!auth) {
     return json({ error: "Unauthorized. Provide a valid API key via Authorization: Bearer <key>." }, 401);
   }
+  const rateLimitResponse = await enforceApiKeyRateLimit(auth, bindings as BindingsWithDb);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
   return handler(auth, bindings as BindingsWithDb);
 }
 
@@ -77,6 +120,10 @@ export async function withBrowserSessionOrApiKeyAuth(
 
   if (!auth) {
     return json({ error: "Unauthorized. Provide a valid API key via Authorization: Bearer <key>." }, 401);
+  }
+  const rateLimitResponse = await enforceApiKeyRateLimit(auth, bindings as BindingsWithDb);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
   return handler(auth, bindings as BindingsWithDb);

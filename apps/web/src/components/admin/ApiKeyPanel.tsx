@@ -12,13 +12,8 @@
 
 import React, { useState } from "react";
 
-export type ApiKeyInfo = {
-  id: string;
-  prefix: string;
-  label: string | null;
-  revoked: boolean;
-  createdAt: string;
-};
+import type { ApiKeyInfo } from "@/src/features/account-settings/contracts";
+import { AUTH } from "@/src/lib/constants";
 
 interface Props {
   keys: ApiKeyInfo[];
@@ -159,7 +154,7 @@ function NewKeyReveal({
   );
 }
 
-function EmptyState({ onGenerate }: { onGenerate: () => void }) {
+function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <div className="empty-state">
       <div
@@ -178,29 +173,59 @@ function EmptyState({ onGenerate }: { onGenerate: () => void }) {
       <p className="empty-state-desc">
         Generate your first API key to start making requests to CustomRouter.
       </p>
-      <button className="btn btn--primary" onClick={onGenerate}>
-        <IconPlus />
-        Generate API Key
-      </button>
+      {children}
     </div>
   );
 }
 
+function formatRateLimit(limit: number | null): string {
+  return limit == null ? "" : String(limit);
+}
+
+function parseRateLimitDraft(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return Number(trimmed);
+}
+
+function isValidRateLimit(value: number | null): boolean {
+  return (
+    value == null ||
+    (Number.isInteger(value) &&
+      value >= AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE &&
+      value <= AUTH.API_KEY_RATE_LIMIT_MAX_PER_MINUTE)
+  );
+}
 
 export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
   const [newKey, setNewKey] = useState<string | null>(null);
+  const [newKeyRateLimit, setNewKeyRateLimit] = useState("");
+  const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
+  const [savingLimitId, setSavingLimitId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function getLimitDraft(key: ApiKeyInfo): string {
+    return limitDrafts[key.id] ?? formatRateLimit(key.rateLimitPerMinute);
+  }
 
   async function generateKey() {
     onStatus("Generating key...");
     onError?.(undefined);
     setNewKey(null);
+    const rateLimitPerMinute = parseRateLimitDraft(newKeyRateLimit);
+    if (!isValidRateLimit(rateLimitPerMinute)) {
+      onError?.(`Use a whole number from ${AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE} to ${AUTH.API_KEY_RATE_LIMIT_MAX_PER_MINUTE}, or leave it blank.`);
+      onStatus("Error");
+      return;
+    }
 
     const res = await fetch("/api/v1/user/keys", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ label: "API Key" }),
+      body: JSON.stringify({ label: "API Key", rate_limit_per_minute: rateLimitPerMinute }),
     });
 
     if (!res.ok) {
@@ -213,6 +238,40 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
     setNewKey(data.apiKey);
 
     onStatus("API key generated — copy it now!");
+    onKeysChanged();
+  }
+
+  async function saveRateLimit(key: ApiKeyInfo) {
+    const rateLimitPerMinute = parseRateLimitDraft(getLimitDraft(key));
+    if (!isValidRateLimit(rateLimitPerMinute)) {
+      onError?.(`Use a whole number from ${AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE} to ${AUTH.API_KEY_RATE_LIMIT_MAX_PER_MINUTE}, or leave it blank.`);
+      return;
+    }
+
+    setSavingLimitId(key.id);
+    onStatus("Saving rate limit...");
+    onError?.(undefined);
+
+    const res = await fetch(`/api/v1/user/keys?keyId=${key.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rate_limit_per_minute: rateLimitPerMinute }),
+    });
+
+    if (!res.ok) {
+      onError?.("Failed to save rate limit");
+      onStatus("Error");
+      setSavingLimitId(null);
+      return;
+    }
+
+    setLimitDrafts((current) => {
+      const next = { ...current };
+      delete next[key.id];
+      return next;
+    });
+    onStatus("Rate limit saved");
+    setSavingLimitId(null);
     onKeysChanged();
   }
 
@@ -259,6 +318,29 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
   }
 
   const activeKeys = keys.filter((k) => !k.revoked);
+  const newKeyControls = (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-3)", flexWrap: "wrap" }}>
+      <label style={{ display: "grid", gap: "var(--space-1)", minWidth: 180 }}>
+        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Requests per minute
+        </span>
+        <input
+          className="input"
+          type="number"
+          min={AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE}
+          max={AUTH.API_KEY_RATE_LIMIT_MAX_PER_MINUTE}
+          step={1}
+          placeholder="Unlimited"
+          value={newKeyRateLimit}
+          onChange={(event) => setNewKeyRateLimit(event.target.value)}
+        />
+      </label>
+      <button className="btn btn--primary" onClick={() => void generateKey()}>
+        <IconPlus />
+        Generate API Key
+      </button>
+    </div>
+  );
 
   return (
     <div>
@@ -272,15 +354,12 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
 
       {/* Empty State */}
       {keys.length === 0 ? (
-        <EmptyState onGenerate={() => void generateKey()} />
+        <EmptyState>{newKeyControls}</EmptyState>
       ) : (
         <>
           {/* Generate Button */}
           <div style={{ marginBottom: "var(--space-5)" }}>
-            <button className="btn btn--primary" onClick={() => void generateKey()}>
-              <IconPlus />
-              Generate New Key
-            </button>
+            {newKeyControls}
           </div>
 
           {/* Keys List */}
@@ -335,6 +414,34 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
                   <code className="mono" style={{ color: "var(--text-primary)", fontSize: "0.875rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
                     {key.prefix}••••••••
                   </code>
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-2)", flexWrap: "wrap", marginBottom: "var(--space-3)" }}>
+                  <label style={{ display: "grid", gap: "var(--space-1)", minWidth: 170 }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Requests per minute
+                    </span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={AUTH.API_KEY_RATE_LIMIT_MIN_PER_MINUTE}
+                      max={AUTH.API_KEY_RATE_LIMIT_MAX_PER_MINUTE}
+                      step={1}
+                      placeholder="Unlimited"
+                      value={getLimitDraft(key)}
+                      disabled={key.revoked || savingLimitId === key.id}
+                      onChange={(event) => setLimitDrafts((current) => ({ ...current, [key.id]: event.target.value }))}
+                    />
+                  </label>
+                  <button
+                    className="btn btn--sm btn--secondary"
+                    onClick={() => void saveRateLimit(key)}
+                    disabled={key.revoked || savingLimitId === key.id || getLimitDraft(key) === formatRateLimit(key.rateLimitPerMinute)}
+                  >
+                    {savingLimitId === key.id ? "Saving..." : "Save"}
+                  </button>
+                  <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", paddingBottom: "0.45rem" }}>
+                    {key.rateLimitPerMinute == null ? "Unlimited" : `${key.rateLimitPerMinute}/min`}
+                  </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--space-2)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>

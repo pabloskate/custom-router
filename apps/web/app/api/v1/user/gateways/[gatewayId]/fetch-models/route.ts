@@ -5,10 +5,13 @@ import { getUpstreamBaseUrlValidationError, resolveUpstreamHostPolicy, validateU
 
 interface OpenAIModel {
   id: string;
+  displayName?: string;
   name?: string;
   object?: string;
   created?: number;
   owned_by?: string;
+  description?: string;
+  supportsImageInput?: boolean;
   architecture?: {
     modality?: string;
     input_modalities?: unknown[];
@@ -42,18 +45,28 @@ function deriveModelModality(model: OpenAIModel): string | undefined {
   const inputModalities = normalizeModalityTokens(model.architecture?.input_modalities);
   const outputModalities = normalizeModalityTokens(model.architecture?.output_modalities);
 
+  if (model.supportsImageInput) {
+    inputModalities.push("text");
+    inputModalities.push("image");
+    outputModalities.push("text");
+  }
+
   if (inputModalities.length === 0 && outputModalities.length === 0) {
     return undefined;
   }
 
-  const inputSegment = inputModalities.join(",");
-  const outputSegment = outputModalities.join(",");
+  const inputSegment = Array.from(new Set(inputModalities)).join(",");
+  const outputSegment = Array.from(new Set(outputModalities)).join(",");
 
   if (!inputSegment) {
     return outputSegment || undefined;
   }
 
-  return outputSegment ? `${inputSegment}->${outputSegment}` : inputSegment;
+  if (outputSegment) {
+    return `${inputSegment}->${outputSegment}`;
+  }
+
+  return inputSegment;
 }
 
 export async function GET(
@@ -132,8 +145,9 @@ export async function GET(
       .filter((m) => m.id)
       .map((m) => ({
         id: m.id,
-        name: m.id,
+        name: m.displayName || m.name || m.id,
         modality: deriveModelModality(m),
+        description: m.description,
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
 

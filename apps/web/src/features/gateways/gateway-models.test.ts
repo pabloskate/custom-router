@@ -11,18 +11,24 @@ import {
 } from "@/src/features/gateways/gateway-models";
 
 describe("gateway model merge helpers", () => {
-  it("preserves existing manual metadata when fetched models overlap", () => {
+  it("preserves manual metadata while refreshing fetched capability metadata", () => {
     const models = mergeFetchedGatewayModels(
       [
         {
           id: "custom/model-a",
           name: "Model A",
           description: "manual seed",
+          modality: "text->text",
         },
       ],
       [
         { id: "custom/model-a", name: "Fetched name", modality: "text,image->text" },
-        { id: "custom/model-b", name: "Model B", modality: "text,image->text" },
+        {
+          id: "custom/model-b",
+          name: "Model B",
+          modality: "text,image->text",
+          description: "fetched description",
+        },
       ],
     );
 
@@ -31,11 +37,13 @@ describe("gateway model merge helpers", () => {
         id: "custom/model-a",
         name: "Model A",
         description: "manual seed",
+        modality: "text,image->text",
       },
       {
         id: "custom/model-b",
         name: "Model B",
         modality: "text,image->text",
+        description: "fetched description",
       },
     ]);
   });

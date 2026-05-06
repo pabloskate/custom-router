@@ -52,6 +52,9 @@ export async function hashKey(raw: string): Promise<string> {
 // ── Auth result ──
 
 export interface AuthResult {
+    authType?: "api_key" | "session";
+    apiKeyId?: string | null;
+    apiKeyRateLimitPerMinute?: number | null;
     userId: string;
     userName: string;
     updatedAt: string;
@@ -73,6 +76,9 @@ export interface AuthResult {
 }
 
 interface AuthRow {
+    auth_type?: "api_key" | "session" | null;
+    api_key_id?: string | null;
+    rate_limit_per_minute?: number | null;
     user_id: string;
     name: string;
     updated_at: string;
@@ -99,6 +105,7 @@ interface TableInfoRow {
 
 const usersSmartPinTurnsColumnCache = new WeakMap<D1Database, Promise<boolean>>();
 const usersRouteLoggingEnabledColumnCache = new WeakMap<D1Database, Promise<boolean>>();
+const apiKeysRateLimitPerMinuteColumnCache = new WeakMap<D1Database, Promise<boolean>>();
 
 function parseJsonArray(value: string | null): any[] | null {
     if (!value) {
@@ -136,6 +143,9 @@ function rowToAuthResult(row: AuthRow): AuthResult {
     const profiles = routingConfigRequiresReset ? null : normalizeProfiles(rawProfiles as any);
 
     return {
+        authType: row.auth_type ?? undefined,
+        apiKeyId: row.api_key_id ?? null,
+        apiKeyRateLimitPerMinute: row.rate_limit_per_minute ?? null,
         userId: row.user_id,
         userName: row.name,
         updatedAt: row.updated_at,
@@ -189,14 +199,38 @@ export function hasUsersRouteLoggingEnabledColumn(db: D1Database): Promise<boole
     return lookup;
 }
 
-function buildAuthSelectQuery(includeSmartPinTurns: boolean, includeRouteLoggingEnabled: boolean): string {
+export function hasApiKeysRateLimitPerMinuteColumn(db: D1Database): Promise<boolean> {
+    const cached = apiKeysRateLimitPerMinuteColumnCache.get(db);
+    if (cached) {
+        return cached;
+    }
+
+    const lookup = db
+        .prepare("PRAGMA table_info(api_keys)")
+        .all<TableInfoRow>()
+        .then(({ results }) => results.some((column) => column.name === "rate_limit_per_minute"))
+        .catch(() => false);
+
+    apiKeysRateLimitPerMinuteColumnCache.set(db, lookup);
+    return lookup;
+}
+
+function buildAuthSelectQuery(
+    includeSmartPinTurns: boolean,
+    includeRouteLoggingEnabled: boolean,
+    includeApiKeyRateLimitPerMinute: boolean
+): string {
     const smartPinTurnsSelect = includeSmartPinTurns ? "u.smart_pin_turns" : "NULL AS smart_pin_turns";
     const routeLoggingEnabledSelect = includeRouteLoggingEnabled
         ? "u.route_logging_enabled"
         : "0 AS route_logging_enabled";
+    const rateLimitSelect = includeApiKeyRateLimitPerMinute
+        ? "ak.rate_limit_per_minute"
+        : "NULL AS rate_limit_per_minute";
 
     return `
-        SELECT ak.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
+        SELECT 'api_key' AS auth_type, ak.id AS api_key_id, ${rateLimitSelect}, ak.user_id,
+               u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
                u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect}, u.updated_at,
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM api_keys ak
@@ -214,7 +248,8 @@ function buildSessionSelectQuery(includeSmartPinTurns: boolean, includeRouteLogg
         : "0 AS route_logging_enabled";
 
     return `
-        SELECT s.user_id, u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
+        SELECT 'session' AS auth_type, NULL AS api_key_id, NULL AS rate_limit_per_minute, s.user_id,
+               u.name, u.preferred_models, u.default_model, u.classifier_model, u.routing_instructions, u.blocklist, u.custom_catalog, u.profiles,
                u.route_trigger_keywords, u.routing_frequency, ${routeLoggingEnabledSelect}, ${smartPinTurnsSelect}, u.updated_at,
                uc.upstream_base_url, uc.upstream_api_key_enc, uc.classifier_base_url, uc.classifier_api_key_enc
         FROM user_sessions s
@@ -327,13 +362,14 @@ export async function authenticateRequest(
     const keyHash = await hashKey(rawKey);
 
     await ensureUserUpstreamCredentialsTable(db);
-    const [includeSmartPinTurns, includeRouteLoggingEnabled] = await Promise.all([
+    const [includeSmartPinTurns, includeRouteLoggingEnabled, includeApiKeyRateLimitPerMinute] = await Promise.all([
         hasUsersSmartPinTurnsColumn(db),
         hasUsersRouteLoggingEnabledColumn(db),
+        hasApiKeysRateLimitPerMinuteColumn(db),
     ]);
 
     const row = await db
-        .prepare(buildAuthSelectQuery(includeSmartPinTurns, includeRouteLoggingEnabled))
+        .prepare(buildAuthSelectQuery(includeSmartPinTurns, includeRouteLoggingEnabled, includeApiKeyRateLimitPerMinute))
         .bind(keyHash)
         .first<AuthRow>();
 

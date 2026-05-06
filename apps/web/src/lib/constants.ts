@@ -61,6 +61,11 @@ export const AUTH = {
   // (e.g. "ar_sk_1a2b3c…"). Covers the literal prefix + a few hex chars.
   API_KEY_DISPLAY_PREFIX_LENGTH: 12,
 
+  // Per-key request limits. Null in storage means unlimited.
+  API_KEY_RATE_LIMIT_MIN_PER_MINUTE: 1,
+  API_KEY_RATE_LIMIT_MAX_PER_MINUTE: 10_000,
+  API_KEY_RATE_LIMIT_WINDOW_SECONDS: 60,
+
   // PBKDF2-SHA256 iterations. NIST SP 800-132 recommends ≥ 10 000; 100 000
   // is the current recommended minimum for password hashing.
   PBKDF2_ITERATIONS: 100_000,

@@ -221,7 +221,7 @@ async function syncGatewayModelsFromFetch(gateway: GatewayInfo): Promise<{
 }> {
   const response = await fetch(`/api/v1/user/gateways/${gateway.id}/fetch-models`);
   const payload = await response.json().catch(() => ({ error: "Failed to fetch gateway models." })) as {
-    models?: Array<Pick<GatewayModel, "id" | "name" | "modality">>;
+    models?: Array<Pick<GatewayModel, "id" | "name" | "modality" | "description">>;
     error?: string;
   };
 
