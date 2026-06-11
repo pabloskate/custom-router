@@ -1306,16 +1306,27 @@ describe("routeAndProxy", () => {
     expect(payload.reasoning).toBeUndefined();
   });
 
-  it("rejects legacy gateways whose hosts are not permitted on this deployment", async () => {
+  it("routes through custom gateway hosts even when legacy allowlist mode is configured", async () => {
     const secret = "1234567890abcdef";
     const defaultApiKeyEnc = await encryptByokSecret({
       plaintext: "gateway-default-key",
       secret,
     });
+    const repository = createRepository();
 
     runtimeMock.mockReturnValue({
       BYOK_ENCRYPTION_SECRET: secret,
+      UPSTREAM_ALLOW_ARBITRARY_HOSTS: "false",
     } as any);
+    repositoryMock.mockReturnValue(repository as any);
+    upstreamMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      response: new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    });
 
     const result = await routeAndProxy({
       apiPath: "/chat/completions",
@@ -1336,6 +1347,10 @@ describe("routeAndProxy", () => {
       },
     });
 
-    expect(result.response.status).toBe(400);
+    expect(result.response.status).toBe(200);
+    expect(upstreamMock).toHaveBeenCalledWith(expect.objectContaining({
+      baseUrl: "https://gateway.example/v1",
+      apiKey: "gateway-default-key",
+    }));
   });
 });

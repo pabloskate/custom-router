@@ -104,12 +104,12 @@ export async function routeAndProxy(args: {
   // The first successfully-decrypted gateway is the default upstream.
   const gatewayMap = new Map<string, { baseUrl: string; apiKey: string }>();
   let defaultUpstream: { baseUrl: string; apiKey: string } | null = null;
-  let rejectedGatewayHostCount = 0;
+  let invalidGatewayBaseUrlCount = 0;
 
   for (const gw of args.userConfig.gatewayRows) {
     const baseUrlValidation = validateUpstreamBaseUrl(gw.baseUrl, upstreamHostPolicy);
     if (!baseUrlValidation.ok) {
-      rejectedGatewayHostCount += 1;
+      invalidGatewayBaseUrlCount += 1;
       continue;
     }
 
@@ -125,12 +125,12 @@ export async function routeAndProxy(args: {
       requestId,
       response: json(
         {
-          error: rejectedGatewayHostCount > 0
-            ? "No permitted gateways are configured for this deployment. Add the host to UPSTREAM_ALLOWED_HOSTS or set UPSTREAM_ALLOW_ARBITRARY_HOSTS=true only on trusted self-hosted instances."
+          error: invalidGatewayBaseUrlCount > 0
+            ? "Configured gateway base URLs are invalid. Re-save your gateways in the admin console."
             : "Gateway keys cannot be decrypted. Re-save your gateways in the admin console.",
           request_id: requestId,
         },
-        rejectedGatewayHostCount > 0 ? 400 : 500
+        invalidGatewayBaseUrlCount > 0 ? 400 : 500
       ),
     };
   }

@@ -33,7 +33,7 @@ describe("resolveClassifierContext", () => {
     expect(result.failure?.response.status).toBe(400);
   });
 
-  it("rejects dedicated classifier hosts that are not allowed on this deployment", async () => {
+  it("rejects invalid dedicated classifier base URLs", async () => {
     const byokSecret = "1234567890abcdef";
     const classifierApiKeyEnc = await encryptByokSecret({
       plaintext: "classifier-key",
@@ -48,7 +48,7 @@ describe("resolveClassifierContext", () => {
       catalog: [{ id: "model/classifier", name: "Classifier", gatewayId: "gw_classifier" }],
       gatewayMap: new Map([["gw_classifier", { baseUrl: "https://api.openai.com/v1", apiKey: "secret" }]]),
       userConfig: {
-        classifierBaseUrl: "https://classifier.example/v1",
+        classifierBaseUrl: "http://classifier.example/v1",
         classifierApiKeyEnc,
       },
       byokSecret,

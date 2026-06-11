@@ -129,7 +129,23 @@ describe("/api/v1/user/gateways/[gatewayId]/fetch-models route", () => {
     ]);
   });
 
-  it("blocks gateway hosts that are not allowed on this deployment", async () => {
+  it("fetches custom gateway models even when legacy allowlist mode is configured", async () => {
+    withSessionAuthMock.mockImplementation(async (request, handler) => (
+      handler(
+        { userId: "user_1" } as any,
+        {
+          ROUTER_DB: {} as any,
+          BYOK_ENCRYPTION_SECRET: "secret",
+          UPSTREAM_ALLOW_ARBITRARY_HOSTS: "false",
+        } as any
+      )
+    ));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: "custom/model", name: "Custom Model" }],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
     getUserGatewayMock.mockResolvedValue({
       id: "gw_custom",
       user_id: "user_1",
@@ -146,7 +162,12 @@ describe("/api/v1/user/gateways/[gatewayId]/fetch-models route", () => {
       { params: Promise.resolve({ gatewayId: "gw_custom" }) }
     );
 
-    expect(response.status).toBe(400);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith("https://gateway.example/v1/models", {
+      headers: {
+        Authorization: "Bearer gateway-key",
+        "Content-Type": "application/json",
+      },
+    });
   });
 });

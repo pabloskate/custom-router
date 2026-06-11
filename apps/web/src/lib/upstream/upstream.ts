@@ -20,7 +20,7 @@ export type UpstreamBaseUrlValidationResult =
     }
   | {
       ok: false;
-      code: "invalid_url" | "host_not_allowed";
+      code: "invalid_url";
       hostname?: string;
     };
 
@@ -105,7 +105,7 @@ export function resolveUpstreamHostPolicy(
   }
 
   return {
-    allowArbitraryHosts: bindings?.UPSTREAM_ALLOW_ARBITRARY_HOSTS === "true",
+    allowArbitraryHosts: bindings?.UPSTREAM_ALLOW_ARBITRARY_HOSTS !== "false",
     allowedHosts,
   };
 }
@@ -114,15 +114,14 @@ export function validateUpstreamBaseUrl(
   baseUrl: string,
   policy?: UpstreamHostPolicy | null
 ): UpstreamBaseUrlValidationResult {
+  void policy;
+
   const parsed = parseValidatedBaseUrl(baseUrl);
   if (!parsed) {
     return { ok: false, code: "invalid_url" };
   }
 
   const hostname = parsed.hostname.toLowerCase();
-  if (policy && !policy.allowArbitraryHosts && !policy.allowedHosts.has(hostname)) {
-    return { ok: false, code: "host_not_allowed", hostname };
-  }
 
   return {
     ok: true,
@@ -143,10 +142,6 @@ export function getUpstreamBaseUrlValidationError(args: {
   fieldLabel: string;
   result: Extract<UpstreamBaseUrlValidationResult, { ok: false }>;
 }): string {
-  if (args.result.code === "host_not_allowed") {
-    return `This deployment does not allow ${args.fieldLabel} host "${args.result.hostname ?? "unknown"}". Add it to UPSTREAM_ALLOWED_HOSTS or set UPSTREAM_ALLOW_ARBITRARY_HOSTS=true only on trusted self-hosted instances.`;
-  }
-
   return `Invalid ${args.fieldLabel}. Use an https URL without query/hash/embedded credentials.`;
 }
 
