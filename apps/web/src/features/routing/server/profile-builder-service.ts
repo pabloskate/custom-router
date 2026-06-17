@@ -8,7 +8,6 @@ import {
   getProfileIdValidationError,
   normalizeProfileIdInput,
   normalizeProfiles,
-  profileModelKeyResolves,
 } from "@/src/lib/routing/profile-config";
 import { profileBuilderApplySchema, profileBuilderRequestSchema } from "@/src/lib/schemas";
 import { gatewayRowToPublic, loadGatewaysWithMigration } from "@/src/lib/storage";
@@ -1296,7 +1295,7 @@ async function appendProfileToUser(args: {
   if (args.profile.defaultModel && !validGatewayModelKeys.has(args.profile.defaultModel)) {
     return json({ error: `Profile "${args.profile.id}" has an invalid fallback model selection.` }, 400);
   }
-  if (args.profile.classifierModel && !profileModelKeyResolves(args.profile.classifierModel, validGatewayModelKeys)) {
+  if (args.profile.classifierModel && !validGatewayModelKeys.has(args.profile.classifierModel)) {
     return json({ error: `Profile "${args.profile.id}" has an invalid router model selection.` }, 400);
   }
 

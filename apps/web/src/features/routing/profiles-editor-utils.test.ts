@@ -262,7 +262,7 @@ describe("createProfileFromPreset", () => {
     );
   });
 
-  it("binds the OSS frontier coding preset and preserves the Nitro router variant", () => {
+  it("binds the OSS frontier coding preset to synced OpenRouter models", () => {
     const ossFrontierCoding = ROUTING_PRESETS.find((preset) => preset.id === "coding-oss-frontier");
     expect(ossFrontierCoding).toBeTruthy();
 
@@ -283,7 +283,7 @@ describe("createProfileFromPreset", () => {
     ]);
 
     expect(profile.defaultModel).toBe("gw_openrouter::moonshotai/kimi-k2.7-code");
-    expect(profile.classifierModel).toBe("gw_openrouter::deepseek/deepseek-v4-flash:nitro");
+    expect(profile.classifierModel).toBe("gw_openrouter::deepseek/deepseek-v4-flash");
     expect(profile.models).toHaveLength(3);
     expect(validateProfilesDraft([profile], [
       {

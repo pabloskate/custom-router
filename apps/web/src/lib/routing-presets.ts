@@ -904,9 +904,9 @@ Default to MiniMax M2.7 when the task is ordinary implementation work and the ro
     id: "coding-oss-frontier",
     name: "OSS Frontier Coding",
     description:
-      "OpenRouter OSS-frontier coding preset: Kimi K2.7 Code as the default implementation and vision lane, GLM 5.2 for complex planning and hard engineering tasks, MiniMax M3 for codebase research and repository Q&A, with DeepSeek V4 Flash Nitro as the fast router model",
+      "OpenRouter OSS-frontier coding preset: Kimi K2.7 Code as the default implementation and vision lane, GLM 5.2 for complex planning and hard engineering tasks, MiniMax M3 for codebase research and repository Q&A, with DeepSeek V4 Flash as the fast router model",
     gatewayPresetId: "openrouter",
-    classifierModel: "deepseek/deepseek-v4-flash:nitro",
+    classifierModel: "deepseek/deepseek-v4-flash",
     defaultModel: "moonshotai/kimi-k2.7-code",
     models: [
       {
@@ -944,7 +944,7 @@ MODEL REFERENCE
   moonshotai/kimi-k2.7-code         — default implementation, frontend, and vision lane
   z-ai/glm-5.2                      — complex planning, architecture, and difficult engineering lane
   minimax/minimax-m3                — codebase research, repository Q&A, and long-context synthesis lane
-  deepseek/deepseek-v4-flash:nitro  — router/classifier model only
+  deepseek/deepseek-v4-flash        — router/classifier model only
 
 ROUTING RULES (apply in order)
 
@@ -963,7 +963,7 @@ LESS-COMPLEX IMPLEMENTATION / FRONTEND WORK / ORDINARY BUG FIX / ROUTINE FEATURE
 EVERYTHING ELSE
   → moonshotai/kimi-k2.7-code
 
-Use DeepSeek V4 Flash Nitro only as the router model. Do not select it as the task executor unless it is explicitly added to the routed pool.
+Use DeepSeek V4 Flash only as the router model. Do not select it as the task executor unless it is explicitly added to the routed pool.
 `.trim(),
   },
 

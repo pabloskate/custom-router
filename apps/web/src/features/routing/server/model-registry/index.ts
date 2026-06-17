@@ -159,11 +159,6 @@ const GATEWAY_MAPPING_OVERRIDES = new Map<string, readonly GatewayMappingOverrid
         displayName: "DeepSeek V4 Flash",
       },
       {
-        gatewayPresetId: "openrouter",
-        modelId: "deepseek/deepseek-v4-flash:nitro",
-        displayName: "DeepSeek V4 Flash Nitro",
-      },
-      {
         gatewayPresetId: "opencode-go",
         modelId: "deepseek-v4-flash",
         displayName: "DeepSeek V4 Flash",

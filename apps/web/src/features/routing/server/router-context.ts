@@ -1,6 +1,6 @@
 import type { CatalogItem, RouterConfig, RouterProfile } from "@custom-router/core";
 
-import { buildProfileModelKey, modelIdBindingCandidates, parseProfileModelKey, profileModelToCatalogItem } from "@/src/lib/routing/profile-config";
+import { parseProfileModelKey, profileModelToCatalogItem } from "@/src/lib/routing/profile-config";
 import { getRouterRepository, type RouterRepository } from "@/src/lib/storage/repository";
 
 import { findMatchedProfile, isRoutedRequestModel } from "./router-decision";
@@ -74,12 +74,12 @@ export async function resolveUserRoutingContext(args: {
           : systemCatalog;
 
   if (activeProfile) {
-    const selectedProfileModels = new Map<string, NonNullable<RouterProfile["models"]>[number]>(
+    const selectedProfileModels = new Map(
       (activeProfile.models ?? [])
         .filter((model) => model.gatewayId && model.modelId)
         .map((model) => [`${model.gatewayId}::${model.modelId}`, model] as const),
     );
-    const gatewayModels = new Map<string, CatalogItem>(
+    const gatewayModels = new Map(
       gatewayInventoryItems
         .filter((model) => model.gatewayId)
         .map((model) => [`${model.gatewayId}::${model.id}`, model] as const),
@@ -91,13 +91,11 @@ export async function resolveUserRoutingContext(args: {
       ? selectedProfileModels.get(`${defaultBinding.gatewayId}::${defaultBinding.modelId}`)
       : undefined;
     const classifierGatewayModel = classifierBinding
-      ? modelIdBindingCandidates(classifierBinding.modelId)
-          .map((modelId) => gatewayModels.get(buildProfileModelKey(classifierBinding.gatewayId, modelId)))
-          .find((model): model is CatalogItem => Boolean(model))
+      ? gatewayModels.get(`${classifierBinding.gatewayId}::${classifierBinding.modelId}`)
       : undefined;
 
     runtimeConfig.defaultModel = defaultProfileModel?.modelId;
-    runtimeConfig.classifierModel = classifierGatewayModel ? classifierBinding?.modelId : undefined;
+    runtimeConfig.classifierModel = classifierGatewayModel?.id;
     runtimeConfig.routingInstructions = activeProfile.routingInstructions;
   } else if (routedRequest) {
     runtimeConfig.defaultModel = undefined;
