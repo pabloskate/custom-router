@@ -61,6 +61,21 @@ export function buildProfileModelKey(gatewayId: string, modelId: string): string
   return `${gatewayId}${PROFILE_MODEL_KEY_SEPARATOR}${modelId}`;
 }
 
+export function modelIdBindingCandidates(modelId: string | null | undefined): string[] {
+  const normalized = sanitizeOptionalString(modelId);
+  if (!normalized) {
+    return [];
+  }
+
+  const separatorIndex = normalized.indexOf(":");
+  if (separatorIndex <= 0) {
+    return [normalized];
+  }
+
+  const baseModelId = normalized.slice(0, separatorIndex);
+  return baseModelId && baseModelId !== normalized ? [normalized, baseModelId] : [normalized];
+}
+
 export function parseProfileModelKey(value: string | null | undefined): { gatewayId: string; modelId: string } | null {
   const trimmed = sanitizeOptionalString(value);
   if (!trimmed) {
@@ -79,6 +94,19 @@ export function parseProfileModelKey(value: string | null | undefined): { gatewa
   }
 
   return { gatewayId, modelId };
+}
+
+export function profileModelKeyBindingCandidates(value: string | null | undefined): string[] {
+  const parsed = parseProfileModelKey(value);
+  if (!parsed) {
+    return [];
+  }
+
+  return modelIdBindingCandidates(parsed.modelId).map((modelId) => buildProfileModelKey(parsed.gatewayId, modelId));
+}
+
+export function profileModelKeyResolves(value: string | null | undefined, validKeys: ReadonlySet<string>): boolean {
+  return profileModelKeyBindingCandidates(value).some((candidate) => validKeys.has(candidate));
 }
 
 export function normalizeProfileModel(model: RouterProfileModel): RouterProfileModel {

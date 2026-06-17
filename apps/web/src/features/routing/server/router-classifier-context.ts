@@ -2,7 +2,7 @@ import type { CatalogItem, RouterConfig, RouterProfile, RoutingExplanation } fro
 
 import { decryptByokSecret } from "@/src/lib/auth/byok-crypto";
 import { json } from "@/src/lib/infra";
-import { parseProfileModelKey } from "@/src/lib/routing/profile-config";
+import { modelIdBindingCandidates, parseProfileModelKey } from "@/src/lib/routing/profile-config";
 import { getUpstreamBaseUrlValidationError, type UpstreamHostPolicy, validateUpstreamBaseUrl } from "@/src/lib/upstream";
 
 import { buildRoutingExplanation, resolveEffectiveClassifierModel } from "./router-decision";
@@ -157,9 +157,10 @@ export async function resolveClassifierContext(args: {
   }
 
   const classifierBinding = parseProfileModelKey(args.matchedProfile?.classifierModel);
+  const classifierModelCandidates = modelIdBindingCandidates(effectiveClassifierModel);
   const boundGatewayHasModel = classifierBinding
     ? args.userConfig?.gatewayRows?.some(
-        (gateway) => gateway.id === classifierBinding.gatewayId && gateway.models.some((model) => model.id === effectiveClassifierModel),
+        (gateway) => gateway.id === classifierBinding.gatewayId && gateway.models.some((model) => classifierModelCandidates.includes(model.id)),
       )
     : false;
   const classifierCatalogItem = args.catalog.find((item) => item.id === effectiveClassifierModel);

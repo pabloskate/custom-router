@@ -7,10 +7,12 @@ import {
   buildProfileModelKey,
   getProfileIdValidationError,
   hasResolvedProfileModel,
+  modelIdBindingCandidates as baseModelIdBindingCandidates,
   normalizeProfileIdInput,
   normalizeProfiles,
   normalizeProfile,
   normalizeProfileModel,
+  profileModelKeyResolves,
 } from "@/src/lib/routing/profile-config";
 import {
   getGatewayPresetId,
@@ -55,16 +57,19 @@ function modelBindingCandidates(modelId?: string): string[] {
     return [];
   }
 
-  const candidates = [normalized, ...(MODEL_BINDING_ALIASES[normalized] ?? [])];
+  const candidates = [
+    ...baseModelIdBindingCandidates(normalized),
+    ...(MODEL_BINDING_ALIASES[normalized] ?? []),
+  ];
   const separatorIndex = normalized.indexOf(":");
   if (separatorIndex <= 0) {
-    return candidates;
+    return Array.from(new Set(candidates));
   }
 
   const baseModelId = normalized.slice(0, separatorIndex);
   return baseModelId && baseModelId !== normalized
-    ? [...candidates, ...modelBindingCandidates(baseModelId)]
-    : candidates;
+    ? Array.from(new Set([...candidates, ...modelBindingCandidates(baseModelId)]))
+    : Array.from(new Set(candidates));
 }
 
 function resolveGatewayModelMatch(
@@ -289,7 +294,7 @@ function createSuggestedProfileModel(gateways: GatewayInfo[], preset: RoutingPre
   if (match) {
     return {
       gatewayId: match.gatewayId,
-      modelId: match.model.id,
+      modelId: presetModel.id.includes(":") ? presetModel.id : match.model.id,
       name: presetModel.name,
       modality: presetModel.modality,
       reasoningPreset: presetModel.reasoningPreset ?? presetModel.thinking,
@@ -326,7 +331,12 @@ export function createProfileFromPreset(preset: RoutingPreset, gateways: Gateway
     description: preset.description,
     routingInstructions: preset.routingInstructions,
     defaultModel: defaultModel ? buildProfileModelKey(defaultModel.gatewayId, defaultModel.modelId) : undefined,
-    classifierModel: classifierMatch ? buildProfileModelKey(classifierMatch.gatewayId, classifierMatch.model.id) : undefined,
+    classifierModel: classifierMatch
+      ? buildProfileModelKey(
+          classifierMatch.gatewayId,
+          preset.classifierModel.includes(":") ? preset.classifierModel : classifierMatch.model.id,
+        )
+      : undefined,
     models,
   };
 }
@@ -444,7 +454,7 @@ export function validateProfilesDraft(profiles: RouterProfile[], gateways: Gatew
       return `Profile "${displayName}" has an invalid fallback model selection.`;
     }
 
-    if (profile.classifierModel && !validGatewayKeys.has(profile.classifierModel)) {
+    if (profile.classifierModel && !profileModelKeyResolves(profile.classifierModel, validGatewayKeys)) {
       return `Profile "${displayName}" has an invalid router model selection.`;
     }
   }

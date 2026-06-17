@@ -899,7 +899,75 @@ Default to MiniMax M2.7 when the task is ordinary implementation work and the ro
 `.trim(),
   },
 
-  // ── 11. OpenCode Go Coding Subscription ───────────────────────────────────
+  // ── 11. OSS Frontier Coding ───────────────────────────────────────────────
+  {
+    id: "coding-oss-frontier",
+    name: "OSS Frontier Coding",
+    description:
+      "OpenRouter OSS-frontier coding preset: Kimi K2.7 Code as the default implementation and vision lane, GLM 5.2 for complex planning and hard engineering tasks, MiniMax M3 for codebase research and repository Q&A, with DeepSeek V4 Flash Nitro as the fast router model",
+    gatewayPresetId: "openrouter",
+    classifierModel: "deepseek/deepseek-v4-flash:nitro",
+    defaultModel: "moonshotai/kimi-k2.7-code",
+    models: [
+      {
+        id: "moonshotai/kimi-k2.7-code",
+        name: "Kimi K2.7 Code",
+        modality: "text,image->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Default for ordinary implementation, UI/frontend work, screenshot-driven debugging, visual coding tasks, and less-complex feature work that still benefits from a coding-specialized multimodal model.",
+      },
+      {
+        id: "z-ai/glm-5.2",
+        name: "GLM 5.2",
+        modality: "text->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Complex engineering tasks, architecture planning, difficult refactors, multi-step implementation strategy, and long-horizon agent work where deeper text reasoning matters most.",
+      },
+      {
+        id: "minimax/minimax-m3",
+        name: "MiniMax M3",
+        modality: "text,image,video->text",
+        thinking: "none",
+        reasoningPreset: "none",
+        whenToUse:
+          "Codebase research, repository questions, large-context synthesis, broad file or document review, and investigation before deciding what to implement.",
+      },
+    ],
+    routingInstructions: `
+Route every request to the best OSS-frontier coding model in the pool. Optimize for successful engineering work first, then cost and latency.
+
+MODEL REFERENCE
+  moonshotai/kimi-k2.7-code         — default implementation, frontend, and vision lane
+  z-ai/glm-5.2                      — complex planning, architecture, and difficult engineering lane
+  minimax/minimax-m3                — codebase research, repository Q&A, and long-context synthesis lane
+  deepseek/deepseek-v4-flash:nitro  — router/classifier model only
+
+ROUTING RULES (apply in order)
+
+IMAGE INPUT / SCREENSHOT / UI MOCKUP / VISUAL DEBUGGING / VISION-RELATED CODING
+  → moonshotai/kimi-k2.7-code
+
+CODEBASE RESEARCH / REPOSITORY QUESTIONS / LARGE-CONTEXT READS / "EXPLAIN THIS CODEBASE" / BROAD SYNTHESIS
+  → minimax/minimax-m3
+
+COMPLEX PLANNING / ARCHITECTURE / HARD REFACTOR / MULTI-STEP IMPLEMENTATION STRATEGY / DEEP ENGINEERING REASONING
+  → z-ai/glm-5.2
+
+LESS-COMPLEX IMPLEMENTATION / FRONTEND WORK / ORDINARY BUG FIX / ROUTINE FEATURE / AMBIGUOUS CODING TASK
+  → moonshotai/kimi-k2.7-code
+
+EVERYTHING ELSE
+  → moonshotai/kimi-k2.7-code
+
+Use DeepSeek V4 Flash Nitro only as the router model. Do not select it as the task executor unless it is explicitly added to the routed pool.
+`.trim(),
+  },
+
+  // ── 12. OpenCode Go Coding Subscription ───────────────────────────────────
   {
     id: "opencode-go-coding",
     name: "OpenCode Go Coding",
@@ -986,7 +1054,7 @@ Default to Kimi K2.6 when the task is ordinary coding work and the route is ambi
 `.trim(),
   },
 
-  // ── 12. Vercel Customer Support ────────────────────────────────────────────
+  // ── 13. Vercel Customer Support ────────────────────────────────────────────
   {
     id: "vercel-customer-support",
     name: "Vercel Customer Support",
@@ -1072,7 +1140,7 @@ Default to Claude Sonnet 4.6 when the support task is ambiguous or emotionally s
 `.trim(),
   },
 
-  // ── 13. Vercel Fast Coding ─────────────────────────────────────────────────
+  // ── 14. Vercel Fast Coding ─────────────────────────────────────────────────
   {
     id: "vercel-coding-fast",
     name: "Vercel Fast Coding",
@@ -1158,7 +1226,7 @@ Default to Grok Code Fast 1 when the task is ordinary coding and the route is am
 `.trim(),
   },
 
-  // ── 14. Vercel Deep Premium Agentic ────────────────────────────────────────
+  // ── 15. Vercel Deep Premium Agentic ────────────────────────────────────────
   {
     id: "vercel-coding-agentic-premium",
     name: "Vercel Deep Premium Agentic",

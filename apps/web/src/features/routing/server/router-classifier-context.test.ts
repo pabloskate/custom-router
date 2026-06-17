@@ -95,6 +95,46 @@ describe("resolveClassifierContext", () => {
     });
   });
 
+  it("resolves OpenRouter virtual classifier variants through the base gateway model", async () => {
+    const result = await resolveClassifierContext({
+      requestId: "req_nitro",
+      requestedModel: "coding-oss-frontier",
+      routedRequest: true,
+      runtimeConfig: {
+        ...runtimeConfig,
+        classifierModel: "deepseek/deepseek-v4-flash:nitro",
+      },
+      matchedProfile: {
+        id: "coding-oss-frontier",
+        name: "OSS Frontier Coding",
+        classifierModel: "gw_openrouter::deepseek/deepseek-v4-flash:nitro",
+        models: [{ gatewayId: "gw_openrouter", modelId: "moonshotai/kimi-k2.7-code", name: "Kimi K2.7 Code" }],
+      },
+      catalog: [{ id: "moonshotai/kimi-k2.7-code", name: "Kimi K2.7 Code", gatewayId: "gw_openrouter" }],
+      gatewayMap: new Map([["gw_openrouter", { baseUrl: "https://openrouter.ai/api/v1", apiKey: "secret" }]]),
+      userConfig: {
+        gatewayRows: [
+          {
+            id: "gw_openrouter",
+            baseUrl: "https://openrouter.ai/api/v1",
+            apiKeyEnc: "enc:key",
+            models: [{ id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" }],
+          },
+        ],
+      },
+      byokSecret: "unused",
+      upstreamHostPolicy: permissivePolicy,
+    });
+
+    expect(result.context).toEqual({
+      effectiveClassifierModel: "deepseek/deepseek-v4-flash:nitro",
+      classifierBaseUrl: "https://openrouter.ai/api/v1",
+      classifierApiKey: "secret",
+      classifierGatewayId: "gw_openrouter",
+      classifierSupportsReasoningEffort: true,
+    });
+  });
+
   it("marks recognized classifier gateways as supporting reasoning controls", async () => {
     const result = await resolveClassifierContext({
       requestId: "req_3",

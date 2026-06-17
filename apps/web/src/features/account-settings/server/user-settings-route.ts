@@ -12,6 +12,7 @@ import {
   normalizeProfiles,
   normalizeProfile,
   normalizeProfileModel,
+  profileModelKeyResolves,
 } from "@/src/lib/routing/profile-config";
 import { routerProfileSchema } from "@/src/lib/schemas";
 import {
@@ -219,7 +220,7 @@ export async function handleUpdateCurrentUser(args: {
         return json({ error: `Profile "${profile.id}" has an invalid fallback model selection.` }, 400);
       }
 
-      if (classifierModel && !validGatewayModelKeys.has(classifierModel)) {
+      if (classifierModel && !profileModelKeyResolves(classifierModel, validGatewayModelKeys)) {
         return json({ error: `Profile "${profile.id}" has an invalid router model selection.` }, 400);
       }
     }

@@ -282,7 +282,7 @@ function ProfileCard({
     key: buildProfileModelKey(model.gatewayId, model.modelId),
     label: formatGatewayModelOptionLabel(gateways, model),
   }));
-  const classifierOptions = gateways.flatMap((gateway) =>
+  const baseClassifierOptions = gateways.flatMap((gateway) =>
     gateway.models.map((model) => ({
       key: buildProfileModelKey(gateway.id, model.id),
       label: formatGatewayModelOptionLabel(gateways, {
@@ -292,6 +292,15 @@ function ProfileCard({
       }),
     })),
   );
+  const classifierOptions = profile.classifierModel && !baseClassifierOptions.some((option) => option.key === profile.classifierModel)
+    ? [
+        {
+          key: profile.classifierModel,
+          label: profile.classifierModel,
+        },
+        ...baseClassifierOptions,
+      ]
+    : baseClassifierOptions;
 
   return (
     <div className={`routing-profile-card ${status.needsSetup ? "is-warning" : ""} ${isExpanded ? "is-open" : ""}`}>

@@ -10,6 +10,7 @@ import {
   parseImportedProfileJson,
   refreshProfileFromPreset,
   serializeProfileForJson,
+  validateProfilesDraft,
 } from "./profiles-editor-utils";
 import { ROUTING_PRESETS } from "@/src/lib/routing-presets";
 
@@ -256,6 +257,58 @@ describe("createProfileFromPreset", () => {
         expect.objectContaining({
           gatewayId: "gw_openrouter",
           modelId: "moonshotai/kimi-k2.5",
+        }),
+      ]),
+    );
+  });
+
+  it("binds the OSS frontier coding preset and preserves the Nitro router variant", () => {
+    const ossFrontierCoding = ROUTING_PRESETS.find((preset) => preset.id === "coding-oss-frontier");
+    expect(ossFrontierCoding).toBeTruthy();
+
+    const profile = createProfileFromPreset(ossFrontierCoding!, [
+      {
+        id: "gw_openrouter",
+        name: "OpenRouter",
+        baseUrl: "https://openrouter.ai/api/v1",
+        createdAt: "2026-06-17T00:00:00.000Z",
+        updatedAt: "2026-06-17T00:00:00.000Z",
+        models: [
+          { id: "moonshotai/kimi-k2.7-code", name: "MoonshotAI: Kimi K2.7 Code" },
+          { id: "z-ai/glm-5.2", name: "Z.ai: GLM 5.2" },
+          { id: "minimax/minimax-m3", name: "MiniMax: MiniMax M3" },
+          { id: "deepseek/deepseek-v4-flash", name: "DeepSeek: DeepSeek V4 Flash" },
+        ],
+      },
+    ]);
+
+    expect(profile.defaultModel).toBe("gw_openrouter::moonshotai/kimi-k2.7-code");
+    expect(profile.classifierModel).toBe("gw_openrouter::deepseek/deepseek-v4-flash:nitro");
+    expect(profile.models).toHaveLength(3);
+    expect(validateProfilesDraft([profile], [
+      {
+        id: "gw_openrouter",
+        name: "OpenRouter",
+        baseUrl: "https://openrouter.ai/api/v1",
+        createdAt: "2026-06-17T00:00:00.000Z",
+        updatedAt: "2026-06-17T00:00:00.000Z",
+        models: [
+          { id: "moonshotai/kimi-k2.7-code", name: "MoonshotAI: Kimi K2.7 Code" },
+          { id: "z-ai/glm-5.2", name: "Z.ai: GLM 5.2" },
+          { id: "minimax/minimax-m3", name: "MiniMax: MiniMax M3" },
+          { id: "deepseek/deepseek-v4-flash", name: "DeepSeek: DeepSeek V4 Flash" },
+        ],
+      },
+    ])).toBeNull();
+    expect(profile.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          gatewayId: "gw_openrouter",
+          modelId: "z-ai/glm-5.2",
+        }),
+        expect.objectContaining({
+          gatewayId: "gw_openrouter",
+          modelId: "minimax/minimax-m3",
         }),
       ]),
     );

@@ -2,6 +2,7 @@ import type { ModelIntelligenceMetricFact, ModelIntelligenceModel, ProfileBuilde
 import { benchmarkClaimFact, fact, opencodeGoAvailabilityFacts } from "../shared";
 
 const VERIFIED_AT = "2026-04-27";
+const DEEPSEEK_V4_FLASH_OPENROUTER_VERIFIED_AT = "2026-06-17";
 
 function currentSource(label: string, url: string): ProfileBuilderSource {
   return { label, url, verifiedAt: VERIFIED_AT };
@@ -37,6 +38,43 @@ function openRouterOperationalFacts(args: {
       label: "OpenRouter output price",
       kind: "cost",
       value: args.outputPricePerMillion,
+      unit: "usd_per_million_tokens",
+      direction: "lower_better",
+      source: apiSource,
+    }),
+  ];
+}
+
+function deepseekV4FlashOpenRouterOperationalFacts(): ModelIntelligenceMetricFact[] {
+  const apiSource = {
+    label: "OpenRouter models API",
+    url: "https://openrouter.ai/api/v1/models",
+    verifiedAt: DEEPSEEK_V4_FLASH_OPENROUTER_VERIFIED_AT,
+  };
+  return [
+    fact({
+      metricId: "openrouter_context_window_tokens",
+      label: "OpenRouter context window",
+      kind: "context",
+      value: 1_048_576,
+      unit: "tokens",
+      direction: "higher_better",
+      source: apiSource,
+    }),
+    fact({
+      metricId: "openrouter_input_price_per_million",
+      label: "OpenRouter input price",
+      kind: "cost",
+      value: 0.09,
+      unit: "usd_per_million_tokens",
+      direction: "lower_better",
+      source: apiSource,
+    }),
+    fact({
+      metricId: "openrouter_output_price_per_million",
+      label: "OpenRouter output price",
+      kind: "cost",
+      value: 0.18,
       unit: "usd_per_million_tokens",
       direction: "lower_better",
       source: apiSource,
@@ -139,7 +177,7 @@ export const OPENCODE_GO_REGISTRY_ENTRIES: readonly ModelIntelligenceModel[] = [
   {
     id: "deepseek/deepseek-v4-pro",
     name: "DeepSeek V4 Pro",
-    supportedGateways: ["opencode-go"],
+    supportedGateways: ["openrouter", "opencode-go"],
     modality: "text->text",
     openSource: true,
     structuredOutput: true,
@@ -226,11 +264,7 @@ export const OPENCODE_GO_REGISTRY_ENTRIES: readonly ModelIntelligenceModel[] = [
     lastVerified: VERIFIED_AT,
     metrics: [
       ...opencodeGoAvailabilityFacts("deepseek-v4-flash"),
-      ...openRouterOperationalFacts({
-        contextWindow: 1_048_576,
-        inputPricePerMillion: 0.14,
-        outputPricePerMillion: 0.28,
-      }),
+      ...deepseekV4FlashOpenRouterOperationalFacts(),
       artificialAnalysisBenchmarkFact({
         metricId: "artificial_analysis_intelligence_index",
         label: "Artificial Analysis Intelligence Index",
@@ -253,7 +287,7 @@ export const OPENCODE_GO_REGISTRY_ENTRIES: readonly ModelIntelligenceModel[] = [
     lenses: [
       {
         lens: "classifier_candidate",
-        rank: 1,
+        rank: 3,
         rationale: "Best OpenCode Go hot-path router candidate: cheap, 1M-class context, structured-output capable, and explicitly positioned as the Flash member of the V4 family.",
       },
       {

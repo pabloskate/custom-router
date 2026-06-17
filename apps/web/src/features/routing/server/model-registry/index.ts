@@ -22,11 +22,13 @@ import { WORKHORSE_REGISTRY_ENTRIES } from "./entries/workhorses";
 import { SPEED_AND_SPECIALIST_REGISTRY_ENTRIES } from "./entries/speed-and-specialists";
 import { IMAGE_AND_OPEN_REGISTRY_ENTRIES } from "./entries/image-and-open";
 import { OPENCODE_GO_REGISTRY_ENTRIES } from "./entries/opencode-go";
+import { OSS_FRONTIER_REGISTRY_ENTRIES } from "./entries/oss-frontier";
 
 export const MODEL_INTELLIGENCE: readonly ModelIntelligenceModel[] = [
   ...FRONTIER_REGISTRY_ENTRIES,
   ...WORKHORSE_REGISTRY_ENTRIES,
   ...SPEED_AND_SPECIALIST_REGISTRY_ENTRIES,
+  ...OSS_FRONTIER_REGISTRY_ENTRIES,
   ...IMAGE_AND_OPEN_REGISTRY_ENTRIES,
   ...OPENCODE_GO_REGISTRY_ENTRIES,
 ] as const;
@@ -151,6 +153,16 @@ const GATEWAY_MAPPING_OVERRIDES = new Map<string, readonly GatewayMappingOverrid
   [
     "deepseek/deepseek-v4-flash",
     [
+      {
+        gatewayPresetId: "openrouter",
+        modelId: "deepseek/deepseek-v4-flash",
+        displayName: "DeepSeek V4 Flash",
+      },
+      {
+        gatewayPresetId: "openrouter",
+        modelId: "deepseek/deepseek-v4-flash:nitro",
+        displayName: "DeepSeek V4 Flash Nitro",
+      },
       {
         gatewayPresetId: "opencode-go",
         modelId: "deepseek-v4-flash",
