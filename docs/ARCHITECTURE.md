@@ -13,7 +13,7 @@ Shared packages:
 
 - `packages/core`: framework-agnostic routing engine and shared routing types.
 - `packages/data`: OpenRouter catalog ingestion adapters.
-- `packages/vision-mcp`: generic local stdio MCP bridge that reads local images/screenshots and calls the CustomRouter vision endpoint.
+- `packages/vision-helper`: local helper that reads local images/screenshots and calls the CustomRouter vision endpoint. It can run directly from the CLI or as a stdio MCP server for MCP-capable clients.
 
 Infrastructure:
 

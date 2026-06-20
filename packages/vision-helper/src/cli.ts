@@ -48,7 +48,7 @@ async function handleMessage(message: JsonRpcMessage): Promise<void> {
         protocolVersion: "2025-06-18",
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
-          name: "customrouter-vision-mcp",
+          name: "customrouter-vision-helper",
           version: "0.1.0",
         },
       },
@@ -103,7 +103,7 @@ function startMcpServer(): void {
         const parsed = JSON.parse(line) as JsonRpcMessage;
         await handleMessage(parsed);
       } catch (error) {
-        process.stderr.write(`customrouter-vision-mcp error: ${error instanceof Error ? error.message : String(error)}\n`);
+        process.stderr.write(`customrouter-vision-helper error: ${error instanceof Error ? error.message : String(error)}\n`);
       }
     })();
   });
@@ -112,7 +112,7 @@ function startMcpServer(): void {
 async function runDirectDescribe(args: string[]): Promise<void> {
   const source = args[0];
   if (!source) {
-    throw new Error("Usage: customrouter-vision-mcp describe <image-path-or-url>");
+    throw new Error("Usage: customrouter-vision-helper describe <image-path-or-url>");
   }
   const result = await callTool("describe_image", { source });
   process.stdout.write(`${result.content[0]?.text ?? ""}\n`);

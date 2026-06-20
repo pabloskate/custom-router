@@ -161,18 +161,22 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
     "  }'",
   ].join("\n");
 
-  const localBuildSnippet = [
-    "cd /path/to/your/custom-router",
-    "npm install",
-    "npm run build --workspace packages/vision-mcp",
+  const helperInstallSnippet = [
+    `curl -fsSL "${routerBaseUrl}/api/v1/vision/helper/install.sh" | sh`,
+  ].join("\n");
+
+  const cliSnippet = [
+    "CUSTOMROUTER_BASE_URL=\"" + routerBaseUrl + "\" \\",
+    "CUSTOMROUTER_API_KEY=\"ar_sk_...\" \\",
+    "node \"$HOME/.customrouter/vision-helper/customrouter-vision-helper.mjs\" describe ./screenshot.png",
   ].join("\n");
 
   const mcpSnippet = [
     "{",
     "  \"mcpServers\": {",
     "    \"customrouter-vision\": {",
-    "      \"command\": \"node\",",
-    "      \"args\": [\"/path/to/your/custom-router/packages/vision-mcp/dist/cli.js\"],",
+    "      \"command\": \"sh\",",
+    "      \"args\": [\"-lc\", \"exec node \\\"$HOME/.customrouter/vision-helper/customrouter-vision-helper.mjs\\\"\"],",
     "      \"env\": {",
     `        "CUSTOMROUTER_BASE_URL": "${routerBaseUrl}",`,
     "        \"CUSTOMROUTER_API_KEY\": \"ar_sk_...\"",
@@ -265,11 +269,12 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
 
       <div className="card">
         <div className="card-header">
-          <h3>Generic MCP Bridge</h3>
+          <h3>Local Vision Helper</h3>
         </div>
         <div className="card-body" style={{ display: "grid", gap: "var(--space-5)" }}>
-          <CodeBlock label="Build local MCP bridge" value={localBuildSnippet} onCopied={() => onStatus?.("Build commands copied")} />
-          <CodeBlock label="Local MCP server configuration" value={mcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
+          <CodeBlock label="Install local helper" value={helperInstallSnippet} onCopied={() => onStatus?.("Install command copied")} />
+          <CodeBlock label="MCP client configuration" value={mcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
+          <CodeBlock label="Direct CLI check" value={cliSnippet} onCopied={() => onStatus?.("CLI command copied")} />
           <CodeBlock label="Agent instruction snippet" value={rulesSnippet} onCopied={() => onStatus?.("Vision rules copied")} />
           <CodeBlock label="Direct endpoint call" value={endpointSnippet} onCopied={() => onStatus?.("Endpoint example copied")} />
         </div>

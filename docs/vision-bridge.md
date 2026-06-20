@@ -1,41 +1,43 @@
-# CustomRouter Vision Bridge
+# CustomRouter Vision Helper
 
-CustomRouter Vision adds a local MCP bridge for text-only agents that need image descriptions. The bridge runs on the user's machine, reads local screenshots or image files, sends them to the user's self-hosted CustomRouter instance as data URLs, and CustomRouter calls the user's selected vision-capable gateway model.
+CustomRouter Vision adds a local helper for text-only agents that need image descriptions. The helper runs on the user's machine, reads local screenshots or image files, sends them to the organization's self-hosted CustomRouter instance as data URLs, and CustomRouter calls the selected vision-capable gateway model.
 
 ## Pieces
 
 - Self-hosted endpoint: `POST /api/v1/vision/describe` on the user's CustomRouter domain
-- Local MCP bridge source: `packages/vision-mcp`
+- Local helper installer: `GET /api/v1/vision/helper/install.sh`
+- Local helper asset: `GET /vision-helper/customrouter-vision-helper.mjs`
 - Admin UI: `Vision` tab
 
-The endpoint is authenticated with any generated CustomRouter API key. The MCP bridge is generic and uses standard stdio MCP JSON-RPC; it is not tied to any single MCP client.
+The endpoint is authenticated with any generated CustomRouter API key. The helper can run as a direct CLI command or as a standard stdio MCP server; it is not tied to any single agent client.
 
 ## Setup
 
-Use this flow for a brand-new CustomRouter user:
+Use this flow for a brand-new CustomRouter deployment:
 
-1. Create or sign in to a CustomRouter account.
+1. Deploy CustomRouter on the organization's domain.
 2. Open `Gateways`, add the provider or gateway that has the vision model, and sync models. Manual models also work if the model modality includes image input, such as `text,image->text`.
 3. Open `Vision`.
 4. Select the gateway and vision-capable model CustomRouter should use for screenshots and image descriptions.
 5. Save the vision model.
-6. Open `API Keys` and generate a CustomRouter API key, or reuse an existing generated key.
-7. Build the local MCP bridge from the user's CustomRouter checkout on the same machine where the MCP client runs:
+6. Open `API Keys` and generate a CustomRouter API key for each user, or let users generate their own if they have access.
+
+Each individual user then does this on the machine running their MCP client:
+
+1. Install the local helper from the organization's CustomRouter domain:
 
 ```bash
-cd /path/to/your/custom-router
-npm install
-npm run build --workspace packages/vision-mcp
+curl -fsSL "https://your-customrouter-domain.example.com/api/v1/vision/helper/install.sh" | sh
 ```
 
-8. Add the local MCP server configuration below to any MCP client that supports stdio MCP servers.
+2. For MCP-capable clients, add this local server configuration:
 
 ```json
 {
   "mcpServers": {
     "customrouter-vision": {
-      "command": "node",
-      "args": ["/path/to/your/custom-router/packages/vision-mcp/dist/cli.js"],
+      "command": "sh",
+      "args": ["-lc", "exec node \"$HOME/.customrouter/vision-helper/customrouter-vision-helper.mjs\""],
       "env": {
         "CUSTOMROUTER_BASE_URL": "https://your-customrouter-domain.example.com",
         "CUSTOMROUTER_API_KEY": "ar_sk_..."
@@ -47,11 +49,20 @@ npm run build --workspace packages/vision-mcp
 
 Replace:
 
-- `/path/to/your/custom-router` with the local checkout path from step 7.
-- `CUSTOMROUTER_BASE_URL` with the user's self-hosted CustomRouter origin, for example `https://router.example.com` or `http://localhost:3010`.
+- `https://your-customrouter-domain.example.com` with the organization's self-hosted CustomRouter origin.
 - `CUSTOMROUTER_API_KEY` with the generated CustomRouter API key.
 
 The MCP server must run locally on the user's machine. That local process is what can read local files, clipboard images, and screenshots. The self-hosted CustomRouter endpoint cannot read local filesystem paths directly.
+
+Users do not need the CustomRouter source repo in their working codebase. They only need Node.js 20+, the organization's CustomRouter URL, and an API key.
+
+For shell-capable agents or a quick manual check, the same helper can run directly:
+
+```bash
+CUSTOMROUTER_BASE_URL="https://your-customrouter-domain.example.com" \
+CUSTOMROUTER_API_KEY="ar_sk_..." \
+node "$HOME/.customrouter/vision-helper/customrouter-vision-helper.mjs" describe ./screenshot.png
+```
 
 ## How Agents Should Use It
 
@@ -87,7 +98,7 @@ curl -X POST "$CUSTOMROUTER_BASE_URL/api/v1/vision/describe" \
   }'
 ```
 
-The self-hosted endpoint accepts HTTPS image URLs and `data:image/...` base64 URLs. Local file paths must go through the local MCP bridge first.
+The self-hosted endpoint accepts HTTPS image URLs and `data:image/...` base64 URLs. Local file paths must go through the local helper first.
 
 ## Troubleshooting
 

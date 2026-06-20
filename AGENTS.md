@@ -26,7 +26,7 @@ The router is **transparent** — it speaks OpenAI's API, so any SDK pointing at
 ├── packages/
 │   ├── core/             ← Routing engine (framework-agnostic)
 │   ├── data/             ← OpenRouter catalog adapter
-│   └── vision-mcp/       ← Generic local MCP bridge for screenshot/image descriptions
+│   └── vision-helper/    ← Local helper for screenshot/image descriptions
 ├── docs/                 ← Deployment guide, eval methodology
 ├── infra/d1/schema.sql   ← D1 database schema
 ├── .env.example          ← Required env vars (copy to .env.local)
