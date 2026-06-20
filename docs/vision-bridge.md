@@ -41,7 +41,7 @@ npm run build -w @custom-router/vision-mcp
       "args": ["/absolute/path/to/custom-router/packages/vision-mcp/dist/cli.js"],
       "env": {
         "CUSTOMROUTER_BASE_URL": "https://your-router.example.com",
-        "CUSTOMROUTER_API_KEY": "cr_..."
+        "CUSTOMROUTER_API_KEY": "ar_sk_..."
       }
     }
   }

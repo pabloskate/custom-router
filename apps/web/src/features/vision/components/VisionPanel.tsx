@@ -176,7 +176,7 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
     "      \"args\": [\"/absolute/path/to/custom-router/packages/vision-mcp/dist/cli.js\"],",
     "      \"env\": {",
     `        "CUSTOMROUTER_BASE_URL": "${routerBaseUrl}",`,
-    "        \"CUSTOMROUTER_API_KEY\": \"cr_...\"",
+    "        \"CUSTOMROUTER_API_KEY\": \"ar_sk_...\"",
     "      }",
     "    }",
     "  }",
