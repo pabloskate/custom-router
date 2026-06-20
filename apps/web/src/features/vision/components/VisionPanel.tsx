@@ -161,12 +161,19 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
     "  }'",
   ].join("\n");
 
+  const localBuildSnippet = [
+    "git clone https://github.com/pabloskate/custom-router.git",
+    "cd custom-router",
+    "npm install",
+    "npm run build -w @custom-router/vision-mcp",
+  ].join("\n");
+
   const mcpSnippet = [
     "{",
     "  \"mcpServers\": {",
     "    \"customrouter-vision\": {",
-    "      \"command\": \"npx\",",
-    "      \"args\": [\"-y\", \"@custom-router/vision-mcp\"],",
+    "      \"command\": \"node\",",
+    "      \"args\": [\"/absolute/path/to/custom-router/packages/vision-mcp/dist/cli.js\"],",
     "      \"env\": {",
     `        "CUSTOMROUTER_BASE_URL": "${routerBaseUrl}",`,
     "        \"CUSTOMROUTER_API_KEY\": \"cr_...\"",
@@ -262,6 +269,7 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
           <h3>Generic MCP Bridge</h3>
         </div>
         <div className="card-body" style={{ display: "grid", gap: "var(--space-5)" }}>
+          <CodeBlock label="Build local MCP bridge" value={localBuildSnippet} onCopied={() => onStatus?.("Build commands copied")} />
           <CodeBlock label="Local MCP server configuration" value={mcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
           <CodeBlock label="Agent instruction snippet" value={rulesSnippet} onCopied={() => onStatus?.("Vision rules copied")} />
           <CodeBlock label="Direct endpoint call" value={endpointSnippet} onCopied={() => onStatus?.("Endpoint example copied")} />

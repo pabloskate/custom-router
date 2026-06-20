@@ -5,10 +5,12 @@ CustomRouter Vision adds a local MCP bridge for text-only agents that need image
 ## Pieces
 
 - Hosted endpoint: `POST /api/v1/vision/describe`
-- Local MCP package: `@custom-router/vision-mcp`
+- Local MCP package: `packages/vision-mcp`
 - Admin UI: `Vision` tab
 
 The hosted endpoint is authenticated with any generated CustomRouter API key. The MCP package is generic and uses standard stdio MCP JSON-RPC; it is not tied to any single MCP client.
+
+`@custom-router/vision-mcp` is not published to npm yet. Build the local bridge from this repository before adding it to an MCP client.
 
 ## Setup
 
@@ -20,14 +22,23 @@ Use this flow for a brand-new CustomRouter user:
 4. Select the gateway and vision-capable model CustomRouter should use for screenshots and image descriptions.
 5. Save the vision model.
 6. Open `API Keys` and generate a CustomRouter API key, or reuse an existing generated key.
-7. Add the local MCP server configuration below to any MCP client that supports stdio MCP servers.
+7. Build the local MCP bridge on the same machine where the MCP client runs:
+
+```bash
+git clone https://github.com/pabloskate/custom-router.git
+cd custom-router
+npm install
+npm run build -w @custom-router/vision-mcp
+```
+
+8. Add the local MCP server configuration below to any MCP client that supports stdio MCP servers.
 
 ```json
 {
   "mcpServers": {
     "customrouter-vision": {
-      "command": "npx",
-      "args": ["-y", "@custom-router/vision-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/custom-router/packages/vision-mcp/dist/cli.js"],
       "env": {
         "CUSTOMROUTER_BASE_URL": "https://your-router.example.com",
         "CUSTOMROUTER_API_KEY": "cr_..."
@@ -39,6 +50,7 @@ Use this flow for a brand-new CustomRouter user:
 
 Replace:
 
+- `/absolute/path/to/custom-router` with the local clone path from step 7.
 - `CUSTOMROUTER_BASE_URL` with the URL where CustomRouter is running, for example `https://router.example.com` or `http://localhost:3010`.
 - `CUSTOMROUTER_API_KEY` with the generated CustomRouter API key.
 
