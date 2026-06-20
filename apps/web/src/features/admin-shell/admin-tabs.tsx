@@ -11,6 +11,7 @@ import { PlaygroundPanel } from "@/src/features/playground/PlaygroundPanel";
 import { LogsPanelWithState } from "@/src/features/routing-logs/LogsPanel";
 import { RoutingProfilesEditor as ProfilesPanel } from "@/src/features/routing/components/RoutingProfilesEditor";
 import { QuickstartPanel } from "@/src/features/routing-quickstart/QuickstartPanel";
+import { VisionPanel } from "@/src/features/vision/components/VisionPanel";
 import { type RegistrationMode } from "@/src/lib/constants";
 
 type BaseAdminTabsArgs = {
@@ -72,6 +73,15 @@ function IconPlayground({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function IconVision({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -275,6 +285,22 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
             hasKeys={args.keys.some((k) => !k.revoked)}
           />
         </div>
+      ),
+    },
+    {
+      id: "vision",
+      label: "Vision",
+      section: "use",
+      title: "Vision Bridge",
+      subtitle: "Choose a sidecar model for screenshots and image descriptions",
+      order: 175,
+      icon: IconVision,
+      render: () => (
+        <VisionPanel
+          gateways={args.gateways}
+          onStatus={args.setStatus}
+          onError={args.setError}
+        />
       ),
     },
     {

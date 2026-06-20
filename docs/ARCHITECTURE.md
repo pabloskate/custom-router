@@ -13,6 +13,7 @@ Shared packages:
 
 - `packages/core`: framework-agnostic routing engine and shared routing types.
 - `packages/data`: OpenRouter catalog ingestion adapters.
+- `packages/vision-mcp`: generic local stdio MCP bridge that reads local images/screenshots and calls the CustomRouter vision endpoint.
 
 Infrastructure:
 
@@ -66,6 +67,7 @@ The main request path is:
 - `features/playground`: inspect/chat playground UI.
 - `features/routing-quickstart`: quickstart UI.
 - `features/routing-logs`: recent routing history UI.
+- `features/vision`: sidecar vision model settings, API-key vision endpoint handlers, and generic MCP setup UI.
 
 `src/components/admin/*` is allowed to contain compatibility re-exports and small presentation components. If behavior is feature-owned, edit the feature slice first.
 

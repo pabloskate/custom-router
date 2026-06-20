@@ -25,7 +25,8 @@ The router is **transparent** — it speaks OpenAI's API, so any SDK pointing at
 │   └── ingest-worker/    ← Cloudflare cron: daily catalog refresh
 ├── packages/
 │   ├── core/             ← Routing engine (framework-agnostic)
-│   └── data/             ← OpenRouter catalog adapter
+│   ├── data/             ← OpenRouter catalog adapter
+│   └── vision-mcp/       ← Generic local MCP bridge for screenshot/image descriptions
 ├── docs/                 ← Deployment guide, eval methodology
 ├── infra/d1/schema.sql   ← D1 database schema
 ├── .env.example          ← Required env vars (copy to .env.local)
@@ -81,6 +82,7 @@ Client
 | `docs/config-agent-deprecation.md` | Background on the retired Config Agent feature and why its runtime hooks were removed. |
 | `storage/repository.ts` | `CloudflareRepository` (D1+KV) and `MemoryRepository` (local dev). `getRouterRepository()` auto-selects. |
 | `storage/gateway-store.ts` | D1 helpers for user-configured upstream gateways and model catalogs. |
+| `storage/vision-settings-store.ts` | D1 helpers for each user's selected sidecar vision gateway/model. |
 | `storage/defaults.ts` | Default router config and classifier instructions. Execution model inventories are not hard-coded here. |
 | `upstream/upstream.ts` | OpenAI-compatible upstream transport + URL normalization helpers. |
 | `upstream/openrouter.ts` | Thin wrapper that proxies a request to OpenRouter and normalises the result. |
@@ -100,6 +102,7 @@ Client
 | `admin-shell/` | Admin shell state hook (`useAdminData`), tab registry/types, and the feature-owned shell entrypoint. |
 | `routing-quickstart/` | Feature entrypoint for quickstart/integration guidance UI. |
 | `playground/` | Feature entrypoint for routing playground UI. |
+| `vision/` | Feature entrypoint for sidecar vision model settings, API-key endpoint behavior, and generic MCP setup UI. |
 
 ### `apps/web/app/api/v1/`
 
@@ -152,6 +155,7 @@ Adapts OpenRouter's catalog API into `CatalogItem[]` that the router engine unde
 GUARDRAIL.*    — circuit breaker thresholds (error rate, fallback rate, latency)
 AUTH.*         — PBKDF2 iterations, session TTL, cookie name, API key prefix
 CLASSIFIER.*   — default model, temperature, max_tokens, OpenRouter URL
+VISION.*       — sidecar image limits, default mode, prompt bounds
 ```
 
 ---

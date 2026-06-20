@@ -178,6 +178,14 @@ CREATE TABLE IF NOT EXISTS user_gateways (
 
 CREATE INDEX IF NOT EXISTS idx_user_gateways_user ON user_gateways(user_id);
 
+CREATE TABLE IF NOT EXISTS user_vision_settings (
+  user_id      TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  gateway_id   TEXT NOT NULL,
+  model_id     TEXT NOT NULL,
+  default_mode TEXT NOT NULL DEFAULT 'ui',
+  updated_at   TEXT NOT NULL
+);
+
 -- ── User sessions ──
 CREATE TABLE IF NOT EXISTS user_sessions (
   id TEXT PRIMARY KEY,
