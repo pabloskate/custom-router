@@ -79,7 +79,7 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
   const [gatewayId, setGatewayId] = useState(() => getInitialGatewayId(gateways));
   const [modelId, setModelId] = useState(() => getInitialModelId(gateways, getInitialGatewayId(gateways)));
   const [defaultMode, setDefaultMode] = useState<VisionMode>("ui");
-  const [routerBaseUrl, setRouterBaseUrl] = useState("https://your-router.example.com");
+  const [routerBaseUrl, setRouterBaseUrl] = useState("https://your-customrouter-domain.example.com");
 
   const visionOptions = useMemo(() => collectVisionModelOptions(gateways), [gateways]);
   const selectedGateway = gateways.find((gateway) => gateway.id === gatewayId) ?? null;
@@ -162,10 +162,9 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
   ].join("\n");
 
   const localBuildSnippet = [
-    "git clone https://github.com/pabloskate/custom-router.git",
-    "cd custom-router",
+    "cd /path/to/your/custom-router",
     "npm install",
-    "npm run build -w @custom-router/vision-mcp",
+    "npm run build --workspace packages/vision-mcp",
   ].join("\n");
 
   const mcpSnippet = [
@@ -173,7 +172,7 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
     "  \"mcpServers\": {",
     "    \"customrouter-vision\": {",
     "      \"command\": \"node\",",
-    "      \"args\": [\"/absolute/path/to/custom-router/packages/vision-mcp/dist/cli.js\"],",
+    "      \"args\": [\"/path/to/your/custom-router/packages/vision-mcp/dist/cli.js\"],",
     "      \"env\": {",
     `        "CUSTOMROUTER_BASE_URL": "${routerBaseUrl}",`,
     "        \"CUSTOMROUTER_API_KEY\": \"ar_sk_...\"",

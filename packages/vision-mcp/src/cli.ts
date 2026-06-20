@@ -48,7 +48,7 @@ async function handleMessage(message: JsonRpcMessage): Promise<void> {
         protocolVersion: "2025-06-18",
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
-          name: "@custom-router/vision-mcp",
+          name: "customrouter-vision-mcp",
           version: "0.1.0",
         },
       },

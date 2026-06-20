@@ -1,16 +1,14 @@
 # CustomRouter Vision Bridge
 
-CustomRouter Vision adds a local MCP bridge for text-only agents that need image descriptions. The local bridge reads local screenshots or image files, sends them to CustomRouter as data URLs, and CustomRouter calls the user's selected vision-capable gateway model.
+CustomRouter Vision adds a local MCP bridge for text-only agents that need image descriptions. The bridge runs on the user's machine, reads local screenshots or image files, sends them to the user's self-hosted CustomRouter instance as data URLs, and CustomRouter calls the user's selected vision-capable gateway model.
 
 ## Pieces
 
-- Hosted endpoint: `POST /api/v1/vision/describe`
-- Local MCP package: `packages/vision-mcp`
+- Self-hosted endpoint: `POST /api/v1/vision/describe` on the user's CustomRouter domain
+- Local MCP bridge source: `packages/vision-mcp`
 - Admin UI: `Vision` tab
 
-The hosted endpoint is authenticated with any generated CustomRouter API key. The MCP package is generic and uses standard stdio MCP JSON-RPC; it is not tied to any single MCP client.
-
-`@custom-router/vision-mcp` is not published to npm yet. Build the local bridge from this repository before adding it to an MCP client.
+The endpoint is authenticated with any generated CustomRouter API key. The MCP bridge is generic and uses standard stdio MCP JSON-RPC; it is not tied to any single MCP client.
 
 ## Setup
 
@@ -22,13 +20,12 @@ Use this flow for a brand-new CustomRouter user:
 4. Select the gateway and vision-capable model CustomRouter should use for screenshots and image descriptions.
 5. Save the vision model.
 6. Open `API Keys` and generate a CustomRouter API key, or reuse an existing generated key.
-7. Build the local MCP bridge on the same machine where the MCP client runs:
+7. Build the local MCP bridge from the user's CustomRouter checkout on the same machine where the MCP client runs:
 
 ```bash
-git clone https://github.com/pabloskate/custom-router.git
-cd custom-router
+cd /path/to/your/custom-router
 npm install
-npm run build -w @custom-router/vision-mcp
+npm run build --workspace packages/vision-mcp
 ```
 
 8. Add the local MCP server configuration below to any MCP client that supports stdio MCP servers.
@@ -38,9 +35,9 @@ npm run build -w @custom-router/vision-mcp
   "mcpServers": {
     "customrouter-vision": {
       "command": "node",
-      "args": ["/absolute/path/to/custom-router/packages/vision-mcp/dist/cli.js"],
+      "args": ["/path/to/your/custom-router/packages/vision-mcp/dist/cli.js"],
       "env": {
-        "CUSTOMROUTER_BASE_URL": "https://your-router.example.com",
+        "CUSTOMROUTER_BASE_URL": "https://your-customrouter-domain.example.com",
         "CUSTOMROUTER_API_KEY": "ar_sk_..."
       }
     }
@@ -50,11 +47,11 @@ npm run build -w @custom-router/vision-mcp
 
 Replace:
 
-- `/absolute/path/to/custom-router` with the local clone path from step 7.
-- `CUSTOMROUTER_BASE_URL` with the URL where CustomRouter is running, for example `https://router.example.com` or `http://localhost:3010`.
+- `/path/to/your/custom-router` with the local checkout path from step 7.
+- `CUSTOMROUTER_BASE_URL` with the user's self-hosted CustomRouter origin, for example `https://router.example.com` or `http://localhost:3010`.
 - `CUSTOMROUTER_API_KEY` with the generated CustomRouter API key.
 
-The MCP server must run locally on the user's machine. That local process is what can read local files, clipboard images, and screenshots. The hosted CustomRouter endpoint cannot read local filesystem paths directly.
+The MCP server must run locally on the user's machine. That local process is what can read local files, clipboard images, and screenshots. The self-hosted CustomRouter endpoint cannot read local filesystem paths directly.
 
 ## How Agents Should Use It
 
@@ -90,7 +87,7 @@ curl -X POST "$CUSTOMROUTER_BASE_URL/api/v1/vision/describe" \
   }'
 ```
 
-The hosted endpoint accepts HTTPS image URLs and `data:image/...` base64 URLs. Local file paths must go through the local MCP bridge first.
+The self-hosted endpoint accepts HTTPS image URLs and `data:image/...` base64 URLs. Local file paths must go through the local MCP bridge first.
 
 ## Troubleshooting
 
