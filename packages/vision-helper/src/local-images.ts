@@ -1,7 +1,8 @@
 import { createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, extname, isAbsolute, join, resolve } from "node:path";
+import { basename, extname, isAbsolute, join, parse, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
 
@@ -111,6 +112,75 @@ function getMimeType(path: string): string {
   return MIME_BY_EXT[extname(path).toLowerCase()] ?? "application/octet-stream";
 }
 
+function isNotFoundError(error: unknown): boolean {
+  return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+function canonicalizePathSegment(value: string): string {
+  return value.normalize("NFC").replace(/\p{Zs}/gu, " ");
+}
+
+async function findUnicodeSpaceInsensitiveEntry(parent: string, segment: string): Promise<string | null> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(parent, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+
+  const target = canonicalizePathSegment(segment);
+  const matches = entries.filter((entry) => canonicalizePathSegment(entry.name) === target);
+  if (matches.length === 0) {
+    return null;
+  }
+
+  const normalizedTarget = segment.normalize("NFC");
+  const preferred = matches.find((entry) => entry.name.normalize("NFC") === normalizedTarget) ?? matches[0];
+  if (!preferred) {
+    return null;
+  }
+  return join(parent, preferred.name);
+}
+
+export async function resolveExistingPath(sourcePath: string): Promise<string> {
+  try {
+    await stat(sourcePath);
+    return sourcePath;
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      throw error;
+    }
+  }
+
+  const parsed = parse(sourcePath);
+  const segments = sourcePath
+    .slice(parsed.root.length)
+    .split(/[\\/]+/)
+    .filter((segment) => segment.length > 0);
+  let current = parsed.root || ".";
+
+  for (const segment of segments) {
+    const directPath = join(current, segment);
+    try {
+      await stat(directPath);
+      current = directPath;
+      continue;
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        throw error;
+      }
+    }
+
+    const matchedPath = await findUnicodeSpaceInsensitiveEntry(current, segment);
+    if (!matchedPath) {
+      return sourcePath;
+    }
+    current = matchedPath;
+  }
+
+  return current;
+}
+
 export function isRemoteImageReference(source: string): boolean {
   return /^data:image\/[a-z0-9.+-]+;base64,/i.test(source) || /^https:\/\//i.test(source);
 }
@@ -129,7 +199,7 @@ export async function imageSourceToRequestImage(source: string, maxImageBytes: n
     throw new Error("Only HTTPS image URLs are accepted.");
   }
 
-  const path = getPathFromSource(trimmed);
+  const path = await resolveExistingPath(getPathFromSource(trimmed));
   const fileStat = await stat(path);
   if (!fileStat.isFile()) {
     throw new Error(`${path} is not a file.`);

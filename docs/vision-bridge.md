@@ -94,6 +94,8 @@ Users do not need the CustomRouter source repo in their working codebase. They o
 
 Some MCP clients route dragged image attachments only to models with native image input. With a text-only model, the client may reject the attachment before the model can call a vision tool, and any temporary screenshot file path may be deleted before `describe_image` can read it. For reliable screenshot use, copy the screenshot to the clipboard or provide a stable file path. On macOS, `Cmd+Ctrl+Shift+4` copies a selected screenshot to the clipboard instead of saving it as a temporary file.
 
+Recent macOS screenshot filenames may contain a narrow no-break space (`U+202F`) before `AM` or `PM`. If a client or model rewrites that character as a normal space, the helper retries local file resolution by matching path segments against the actual directory entries with Unicode-space-insensitive comparison.
+
 For shell-capable agents or a quick manual check, the same helper can run directly:
 
 ```bash
@@ -154,5 +156,6 @@ The self-hosted endpoint accepts HTTPS image URLs and `data:image/...` base64 UR
 - `No vision model configured.`: the API key belongs to a CustomRouter account that has not saved Vision settings. Configure Vision for that account, or use a key from an account that already has the intended Vision gateway and model settings.
 - `No synced gateway models advertise image input`: sync the gateway models, or manually add a model with modality like `text,image->text`.
 - `Only HTTPS image URLs are accepted.`: use HTTPS URLs, data URLs, or local file paths through `describe_image`.
+- `ENOENT` for a visible macOS screenshot file: update the helper and rerun the request. Version `0.1.2` and later recover common Unicode-space mismatches in screenshot filenames.
 - `Clipboard does not contain an image.`: copy a screenshot to the clipboard first, or call `describe_screen` so the helper can try screen capture.
 - `Screen capture failed. On macOS, grant Screen Recording permission...`: open System Settings → Privacy & Security → Screen Recording and enable the terminal or MCP host app, then restart that app.

@@ -68,9 +68,9 @@ async function describeWithCustomRouter(config, args) {
 
 // src/local-images.ts
 import { createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, extname, isAbsolute, join, resolve } from "node:path";
+import { basename, extname, isAbsolute, join, parse, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
 var MIME_BY_EXT = {
@@ -163,6 +163,62 @@ function getPathFromSource(source) {
 function getMimeType(path) {
   return MIME_BY_EXT[extname(path).toLowerCase()] ?? "application/octet-stream";
 }
+function isNotFoundError(error) {
+  return error instanceof Error && error.code === "ENOENT";
+}
+function canonicalizePathSegment(value) {
+  return value.normalize("NFC").replace(new RegExp("\\p{Zs}", "gu"), " ");
+}
+async function findUnicodeSpaceInsensitiveEntry(parent, segment) {
+  let entries;
+  try {
+    entries = await readdir(parent, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const target = canonicalizePathSegment(segment);
+  const matches = entries.filter((entry) => canonicalizePathSegment(entry.name) === target);
+  if (matches.length === 0) {
+    return null;
+  }
+  const normalizedTarget = segment.normalize("NFC");
+  const preferred = matches.find((entry) => entry.name.normalize("NFC") === normalizedTarget) ?? matches[0];
+  if (!preferred) {
+    return null;
+  }
+  return join(parent, preferred.name);
+}
+async function resolveExistingPath(sourcePath) {
+  try {
+    await stat(sourcePath);
+    return sourcePath;
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      throw error;
+    }
+  }
+  const parsed = parse(sourcePath);
+  const segments = sourcePath.slice(parsed.root.length).split(/[\\/]+/).filter((segment) => segment.length > 0);
+  let current = parsed.root || ".";
+  for (const segment of segments) {
+    const directPath = join(current, segment);
+    try {
+      await stat(directPath);
+      current = directPath;
+      continue;
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        throw error;
+      }
+    }
+    const matchedPath = await findUnicodeSpaceInsensitiveEntry(current, segment);
+    if (!matchedPath) {
+      return sourcePath;
+    }
+    current = matchedPath;
+  }
+  return current;
+}
 function isRemoteImageReference(source) {
   return /^data:image\/[a-z0-9.+-]+;base64,/i.test(source) || /^https:\/\//i.test(source);
 }
@@ -177,7 +233,7 @@ async function imageSourceToRequestImage(source, maxImageBytes) {
   if (/^https?:\/\//i.test(trimmed)) {
     throw new Error("Only HTTPS image URLs are accepted.");
   }
-  const path = getPathFromSource(trimmed);
+  const path = await resolveExistingPath(getPathFromSource(trimmed));
   const fileStat = await stat(path);
   if (!fileStat.isFile()) {
     throw new Error(`${path} is not a file.`);
@@ -548,7 +604,7 @@ async function handleMessage(message) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: "customrouter-vision-helper",
-          version: "0.1.1"
+          version: "0.1.2"
         }
       }
     });

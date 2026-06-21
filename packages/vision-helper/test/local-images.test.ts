@@ -8,6 +8,7 @@ import {
   isRemoteImageReference,
   normalizeMacClipboardError,
   normalizeMacScreenshotError,
+  resolveExistingPath,
 } from "../src/local-images.js";
 
 describe("local image handling", () => {
@@ -24,6 +25,21 @@ describe("local image handling", () => {
       await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
       const dataUrl = await imageSourceToRequestImage(imagePath, 1024);
       expect(dataUrl).toBe("data:image/png;base64,iVBORw==");
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("recovers macOS screenshot paths when narrow no-break space is normalized to ASCII space", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "customrouter-vision-test-"));
+    const realImagePath = join(dir, "Screenshot 2026-06-20 at 11.18.34\u202fPM.png");
+    const asciiSpacePath = join(dir, "Screenshot 2026-06-20 at 11.18.34 PM.png");
+
+    try {
+      await writeFile(realImagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+      await expect(resolveExistingPath(asciiSpacePath)).resolves.toBe(realImagePath);
+      await expect(imageSourceToRequestImage(asciiSpacePath, 1024)).resolves.toBe("data:image/png;base64,iVBORw==");
     } finally {
       await rm(dir, { force: true, recursive: true });
     }
