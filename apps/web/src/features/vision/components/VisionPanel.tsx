@@ -150,33 +150,47 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
     setSaving(false);
   }
 
-  const endpointSnippet = [
-    "curl -X POST \"$CUSTOMROUTER_BASE_URL/api/v1/vision/describe\" \\",
-    "  -H \"Authorization: Bearer $CUSTOMROUTER_API_KEY\" \\",
-    "  -H \"Content-Type: application/json\" \\",
-    "  -d '{",
-    "    \"image\": \"data:image/png;base64,...\",",
-    "    \"mode\": \"ui\",",
-    "    \"question\": \"Describe this screenshot for a text-only coding agent.\"",
-    "  }'",
-  ].join("\n");
-
-  const helperInstallSnippet = [
+  const shellInstallSnippet = [
     `curl -fsSL "${routerBaseUrl}/api/v1/vision/helper/install.sh" | sh`,
   ].join("\n");
 
-  const cliSnippet = [
+  const powerShellInstallSnippet = [
+    `irm "${routerBaseUrl}/api/v1/vision/helper/install.ps1" | iex`,
+  ].join("\n");
+
+  const shellCliSnippet = [
     "CUSTOMROUTER_BASE_URL=\"" + routerBaseUrl + "\" \\",
     "CUSTOMROUTER_API_KEY=\"ar_sk_...\" \\",
     "node \"$HOME/.customrouter/vision-helper/customrouter-vision-helper.mjs\" describe ./screenshot.png",
   ].join("\n");
 
-  const mcpSnippet = [
+  const powerShellCliSnippet = [
+    "$env:CUSTOMROUTER_BASE_URL = \"" + routerBaseUrl + "\"",
+    "$env:CUSTOMROUTER_API_KEY = \"ar_sk_...\"",
+    "node \"$HOME\\.customrouter\\vision-helper\\customrouter-vision-helper.mjs\" describe .\\screenshot.png",
+  ].join("\n");
+
+  const shellMcpSnippet = [
     "{",
     "  \"mcpServers\": {",
     "    \"customrouter-vision\": {",
     "      \"command\": \"sh\",",
     "      \"args\": [\"-lc\", \"exec node \\\"$HOME/.customrouter/vision-helper/customrouter-vision-helper.mjs\\\"\"],",
+    "      \"env\": {",
+    `        "CUSTOMROUTER_BASE_URL": "${routerBaseUrl}",`,
+    "        \"CUSTOMROUTER_API_KEY\": \"ar_sk_...\"",
+    "      }",
+    "    }",
+    "  }",
+    "}",
+  ].join("\n");
+
+  const windowsMcpSnippet = [
+    "{",
+    "  \"mcpServers\": {",
+    "    \"customrouter-vision\": {",
+    "      \"command\": \"cmd.exe\",",
+    "      \"args\": [\"/c\", \"node \\\"%USERPROFILE%\\\\.customrouter\\\\vision-helper\\\\customrouter-vision-helper.mjs\\\"\"],",
     "      \"env\": {",
     `        "CUSTOMROUTER_BASE_URL": "${routerBaseUrl}",`,
     "        \"CUSTOMROUTER_API_KEY\": \"ar_sk_...\"",
@@ -272,11 +286,16 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
           <h3>Local Vision Helper</h3>
         </div>
         <div className="card-body" style={{ display: "grid", gap: "var(--space-5)" }}>
-          <CodeBlock label="Install local helper" value={helperInstallSnippet} onCopied={() => onStatus?.("Install command copied")} />
-          <CodeBlock label="MCP client configuration" value={mcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
-          <CodeBlock label="Direct CLI check" value={cliSnippet} onCopied={() => onStatus?.("CLI command copied")} />
+          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5, margin: 0 }}>
+            Use a CustomRouter API key for the account that has Vision configured. Individuals can use their own key; hosted or organization deployments can issue keys from whichever account owns the gateway and Vision settings.
+          </p>
+          <CodeBlock label="Install helper (macOS/Linux)" value={shellInstallSnippet} onCopied={() => onStatus?.("Install command copied")} />
+          <CodeBlock label="Install helper (Windows PowerShell)" value={powerShellInstallSnippet} onCopied={() => onStatus?.("Install command copied")} />
+          <CodeBlock label="MCP client configuration (macOS/Linux)" value={shellMcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
+          <CodeBlock label="MCP client configuration (Windows)" value={windowsMcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
+          <CodeBlock label="CLI check (macOS/Linux)" value={shellCliSnippet} onCopied={() => onStatus?.("CLI command copied")} />
+          <CodeBlock label="CLI check (Windows PowerShell)" value={powerShellCliSnippet} onCopied={() => onStatus?.("CLI command copied")} />
           <CodeBlock label="Agent instruction snippet" value={rulesSnippet} onCopied={() => onStatus?.("Vision rules copied")} />
-          <CodeBlock label="Direct endpoint call" value={endpointSnippet} onCopied={() => onStatus?.("Endpoint example copied")} />
         </div>
       </div>
     </div>
