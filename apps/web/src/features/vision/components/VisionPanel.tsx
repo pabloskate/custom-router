@@ -203,8 +203,8 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
   const rulesSnippet = [
     "When the user references an image, screenshot, diagram, visual UI issue, or asks what something looks like, call the available CustomRouter vision MCP tool before answering.",
     "If a local file path is provided, call describe_image.",
-    "If no file path is provided and the user references a recent screenshot, call describe_clipboard.",
-    "If the user asks to inspect the current screen, call capture_screenshot.",
+    "If no stable file path is provided and the user references a recent screenshot or current screen, call describe_screen.",
+    "If the user explicitly asks about the clipboard, call describe_clipboard.",
     "Do not claim that images cannot be viewed until the vision tool has failed.",
   ].join("\n");
 

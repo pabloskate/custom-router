@@ -29,6 +29,30 @@ function execFileAsync(command: string, args: string[]): Promise<void> {
   });
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function normalizeMacClipboardError(error: unknown): Error {
+  const message = getErrorMessage(error);
+  if (
+    message.includes("-1700") ||
+    /expected type/i.test(message) ||
+    /clipboard does not contain an image/i.test(message)
+  ) {
+    return new Error("Clipboard does not contain an image.");
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
+export function normalizeMacScreenshotError(error: unknown): Error {
+  const message = getErrorMessage(error);
+  if (/could not create image from display/i.test(message)) {
+    return new Error("Screen capture failed. On macOS, grant Screen Recording permission to the terminal or MCP host app, then retry.");
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
 function runOutputToFile(command: string, args: string[], outputPath: string): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -124,13 +148,21 @@ export async function readClipboardImage(maxImageBytes: number): Promise<string>
     if (process.platform === "darwin") {
       const script = [
         `set outputPath to POSIX file "${temp.path}"`,
+        "try",
         "set pngData to the clipboard as «class PNGf»",
+        "on error",
+        "error \"Clipboard does not contain an image.\"",
+        "end try",
         "set fileRef to open for access outputPath with write permission",
         "set eof fileRef to 0",
         "write pngData to fileRef",
         "close access fileRef",
       ];
-      await execFileAsync("osascript", script.flatMap((line) => ["-e", line]));
+      try {
+        await execFileAsync("osascript", script.flatMap((line) => ["-e", line]));
+      } catch (error) {
+        throw normalizeMacClipboardError(error);
+      }
     } else if (process.platform === "win32") {
       const script = [
         "Add-Type -AssemblyName System.Windows.Forms",
@@ -161,7 +193,11 @@ export async function captureScreenshot(maxImageBytes: number): Promise<string> 
   const temp = await createTempImagePath("screenshot.png");
   try {
     if (process.platform === "darwin") {
-      await execFileAsync("screencapture", ["-x", temp.path]);
+      try {
+        await execFileAsync("screencapture", ["-x", temp.path]);
+      } catch (error) {
+        throw normalizeMacScreenshotError(error);
+      }
     } else if (process.platform === "win32") {
       const script = [
         "Add-Type -AssemblyName System.Windows.Forms",

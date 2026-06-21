@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { imageSourceToRequestImage, isRemoteImageReference } from "../src/local-images.js";
+import {
+  imageSourceToRequestImage,
+  isRemoteImageReference,
+  normalizeMacClipboardError,
+  normalizeMacScreenshotError,
+} from "../src/local-images.js";
 
 describe("local image handling", () => {
   it("passes through data image URLs and HTTPS URLs", async () => {
@@ -28,5 +33,17 @@ describe("local image handling", () => {
     await expect(imageSourceToRequestImage("http://example.com/image.png", 1024))
       .rejects
       .toThrow("Only HTTPS image URLs are accepted.");
+  });
+
+  it("normalizes macOS empty clipboard errors", () => {
+    const error = normalizeMacClipboardError(new Error("136:165: execution error: Can't make some data into the expected type. (-1700)"));
+
+    expect(error.message).toBe("Clipboard does not contain an image.");
+  });
+
+  it("normalizes macOS screen recording permission errors", () => {
+    const error = normalizeMacScreenshotError(new Error("screencapture: could not create image from display"));
+
+    expect(error.message).toBe("Screen capture failed. On macOS, grant Screen Recording permission to the terminal or MCP host app, then retry.");
   });
 });

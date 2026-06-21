@@ -49,7 +49,7 @@ async function handleMessage(message: JsonRpcMessage): Promise<void> {
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: "customrouter-vision-helper",
-          version: "0.1.0",
+          version: "0.1.1",
         },
       },
     });

@@ -28,10 +28,18 @@ function parseMaxImageBytes(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_IMAGE_BYTES;
 }
 
+export function normalizeBaseUrl(value: string): string {
+  return value
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/api\/v1$/i, "")
+    .replace(/\/api$/i, "");
+}
+
 export function loadConfig(): BridgeConfig {
   return {
     apiKey: requireEnv("CUSTOMROUTER_API_KEY"),
-    baseUrl: requireEnv("CUSTOMROUTER_BASE_URL").replace(/\/+$/, ""),
+    baseUrl: normalizeBaseUrl(requireEnv("CUSTOMROUTER_BASE_URL")),
     maxImageBytes: parseMaxImageBytes(),
   };
 }

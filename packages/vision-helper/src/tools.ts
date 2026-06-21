@@ -37,6 +37,22 @@ function formatResult(args: {
   return metadata ? `${args.description}\n\n---\n${metadata}` : args.description;
 }
 
+async function describeRequestImages(args: {
+  config: ReturnType<typeof loadConfig>;
+  context?: string;
+  images: string[];
+  mode?: unknown;
+  question?: string;
+}): Promise<ToolResult> {
+  const result = await describeWithCustomRouter(args.config, {
+    context: args.context,
+    images: args.images,
+    mode: normalizeMode(args.mode),
+    question: args.question,
+  });
+  return textResult(formatResult(result));
+}
+
 async function describeImages(args: {
   context?: string;
   images: string[];
@@ -45,13 +61,49 @@ async function describeImages(args: {
 }): Promise<ToolResult> {
   const config = loadConfig();
   const images = await Promise.all(args.images.map((source) => imageSourceToRequestImage(source, config.maxImageBytes)));
-  const result = await describeWithCustomRouter(config, {
+  return describeRequestImages({
+    config,
     context: args.context,
     images,
-    mode: normalizeMode(args.mode),
+    mode: args.mode,
     question: args.question,
   });
-  return textResult(formatResult(result));
+}
+
+function isEmptyClipboardError(error: unknown): boolean {
+  return error instanceof Error && error.message === "Clipboard does not contain an image.";
+}
+
+async function describeScreen(args: {
+  context?: string;
+  mode?: unknown;
+  question?: string;
+}): Promise<ToolResult> {
+  const config = loadConfig();
+  let image: string;
+
+  try {
+    image = await readClipboardImage(config.maxImageBytes);
+  } catch (clipboardError) {
+    if (!isEmptyClipboardError(clipboardError)) {
+      throw clipboardError;
+    }
+
+    try {
+      image = await captureScreenshot(config.maxImageBytes);
+    } catch (captureError) {
+      const message = captureError instanceof Error ? captureError.message : String(captureError);
+      throw new Error(`Clipboard does not contain an image, and screen capture failed. ${message}`);
+    }
+  }
+
+  return describeRequestImages({
+    config,
+    context: args.context,
+    images: [image],
+    mode: args.mode,
+    question: args.question,
+  });
 }
 
 export async function callTool(name: string, rawArguments: unknown): Promise<ToolResult> {
@@ -75,25 +127,33 @@ export async function callTool(name: string, rawArguments: unknown): Promise<Too
     if (name === "describe_clipboard") {
       const config = loadConfig();
       const image = await readClipboardImage(config.maxImageBytes);
-      const result = await describeWithCustomRouter(config, {
+      return describeRequestImages({
+        config,
         context: getString(args.context),
         images: [image],
-        mode: normalizeMode(args.mode),
+        mode: args.mode,
         question: getString(args.question),
       });
-      return textResult(formatResult(result));
     }
 
     if (name === "capture_screenshot") {
       const config = loadConfig();
       const image = await captureScreenshot(config.maxImageBytes);
-      const result = await describeWithCustomRouter(config, {
+      return describeRequestImages({
+        config,
         context: getString(args.context),
         images: [image],
-        mode: normalizeMode(args.mode),
+        mode: args.mode,
         question: getString(args.question),
       });
-      return textResult(formatResult(result));
+    }
+
+    if (name === "describe_screen") {
+      return await describeScreen({
+        context: getString(args.context),
+        mode: args.mode,
+        question: getString(args.question),
+      });
     }
 
     if (name === "compare_images") {
@@ -117,7 +177,7 @@ export async function callTool(name: string, rawArguments: unknown): Promise<Too
         baseUrl: config.baseUrl,
         hasApiKey: config.apiKey.length > 0,
         maxImageBytes: config.maxImageBytes,
-        tools: ["describe_image", "describe_clipboard", "capture_screenshot", "compare_images"],
+        tools: ["describe_image", "describe_clipboard", "capture_screenshot", "describe_screen", "compare_images"],
       }, null, 2));
     }
 
@@ -125,8 +185,8 @@ export async function callTool(name: string, rawArguments: unknown): Promise<Too
       return textResult([
         "When the user references an image, screenshot, diagram, visual UI issue, or asks what something looks like, call the CustomRouter vision MCP tool before answering.",
         "If a local file path is provided, call describe_image.",
-        "If no file path is provided and the user references a recent screenshot, call describe_clipboard.",
-        "If the user asks to inspect the current screen, call capture_screenshot.",
+        "If no stable file path is provided and the user references a recent screenshot or current screen, call describe_screen.",
+        "If the user explicitly asks about the clipboard, call describe_clipboard.",
         "Do not claim that images cannot be viewed until the vision tool has failed.",
       ].join("\n"));
     }
@@ -169,6 +229,19 @@ export const TOOL_DEFINITIONS = [
   {
     name: "capture_screenshot",
     description: "Capture the current screen locally and describe it using the configured CustomRouter vision model.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["general", "ui", "ocr", "diagram"], default: "ui" },
+        question: { type: "string" },
+        context: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "describe_screen",
+    description: "Describe the clipboard image if present; otherwise capture the current screen locally and describe it. Use this when a screenshot was just copied or the user asks what is visible.",
     inputSchema: {
       type: "object",
       properties: {
