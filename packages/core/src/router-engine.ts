@@ -111,6 +111,7 @@ export class RouterEngine {
     profiles?: RouterProfile[];
     forceRoute?: boolean;
     forceRouteNote?: string;
+    allowTextModelForImageInput?: boolean;
     now?: Date;
   }): Promise<RouteDecision> {
     const now = args.now ?? new Date();
@@ -167,7 +168,11 @@ export class RouterEngine {
     });
     const forceRoute = args.forceRoute === true || forceRouteFromRequest;
     const isLoop = isAgentLoop(messages);
-    const imageCapabilities = getRequestImageCapabilities(args.request as RouterRequestLike & Record<string, unknown>);
+    const detectedImageCapabilities = getRequestImageCapabilities(args.request as RouterRequestLike & Record<string, unknown>);
+    const imageCapabilities = {
+      hasImageInput: args.allowTextModelForImageInput ? false : detectedImageCapabilities.hasImageInput,
+      requiresImageOutput: detectedImageCapabilities.requiresImageOutput,
+    };
     const allowedCatalog = getAllowedCatalog(args.catalog, imageCapabilities);
 
     const notes = [`Routed via profile: ${matchedProfile.id}`];
@@ -209,6 +214,7 @@ export class RouterEngine {
         allowedCatalog,
         routingInstructions: effectiveConfig.routingInstructions,
         classifierModel: effectiveConfig.classifierModel,
+        imageDescriptionAvailable: args.allowTextModelForImageInput === true && detectedImageCapabilities.hasImageInput,
         defaultModel: effectiveConfig.defaultModel,
         policy: reasoningPolicy,
         activePin: pinState.activePin,

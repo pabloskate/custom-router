@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { collectVisionModelOptions, modelSupportsVisionInput, normalizeVisionMode } from "./contracts";
+import {
+  collectVisionModelOptions,
+  modelSupportsVisionInput,
+  normalizeVisionMode,
+  visionSettingsUpdateSchema,
+} from "./contracts";
 
 describe("vision contracts", () => {
   it("detects image input from gateway model modality", () => {
@@ -34,5 +39,13 @@ describe("vision contracts", () => {
     expect(normalizeVisionMode("ocr")).toBe("ocr");
     expect(normalizeVisionMode("invalid")).toBe("ui");
     expect(normalizeVisionMode(null)).toBe("ui");
+  });
+
+  it("accepts the automatic image description toggle in settings updates", () => {
+    expect(visionSettingsUpdateSchema.parse({
+      gateway_id: "gw_1",
+      model_id: "vision",
+      auto_describe_images_enabled: true,
+    }).auto_describe_images_enabled).toBe(true);
   });
 });

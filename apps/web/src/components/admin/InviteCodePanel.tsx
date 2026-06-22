@@ -9,6 +9,8 @@
 
 import { useEffect, useState } from "react";
 
+import { copyTextToClipboard } from "@/src/lib/clipboard";
+
 interface InviteInfo {
   id: string;
   code: string;
@@ -134,7 +136,13 @@ export function InviteCodePanel({ onStatus, onError }: Props) {
   }
 
   async function copyCode(invite: InviteInfo) {
-    await navigator.clipboard.writeText(invite.code);
+    const result = await copyTextToClipboard(invite.code);
+    if (!result.ok) {
+      onError(result.error);
+      onStatus("Error");
+      return;
+    }
+
     setCopiedId(invite.id);
     onStatus("Invite code copied to clipboard");
     setTimeout(() => setCopiedId((c) => (c === invite.id ? null : c)), 2000);

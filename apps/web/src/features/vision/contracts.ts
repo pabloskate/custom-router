@@ -9,6 +9,7 @@ export interface VisionSettings {
   gatewayId: string;
   modelId: string;
   defaultMode: VisionMode;
+  autoDescribeImagesEnabled: boolean;
   updatedAt: string;
 }
 
@@ -29,6 +30,7 @@ export interface VisionSettingsPayload {
   gateway_id: string;
   model_id: string;
   default_mode: VisionMode;
+  auto_describe_images_enabled: boolean;
   updated_at: string;
 }
 
@@ -51,6 +53,7 @@ export const visionSettingsUpdateSchema = z.object({
   gateway_id: z.string().min(1),
   model_id: z.string().min(1),
   default_mode: visionModeSchema.optional(),
+  auto_describe_images_enabled: z.boolean().optional(),
 });
 
 const imageReferenceSchema = z.string().min(1);

@@ -16,6 +16,7 @@
     "dev": "npm run dev -w @custom-router/web",
     "dev:seed": "npm run local:env && npm run db:seed && npm run dev -w @custom-router/web",
     "local:env": "node scripts/setup-local-env.mjs",
+    "check:vision-helper-bundle": "npm run build:standalone -w @custom-router/vision-helper && git diff --exit-code -- apps/web/public/vision-helper/customrouter-vision-helper.mjs",
     "check:schema:remote": "node scripts/check-cloudflare-schema.mjs",
     "verify:admin": "node scripts/verify-admin-flow.mjs",
     "verify:admin:remote": "node scripts/verify-admin-flow.mjs",

@@ -32,3 +32,6 @@ jobs:
 
       - name: Run build
         run: npm run build
+
+      - name: Check generated vision helper bundle
+        run: npm run check:vision-helper-bundle

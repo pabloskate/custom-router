@@ -13,6 +13,7 @@
 import React, { useEffect, useState } from "react";
 
 import type { RouterProfile } from "@custom-router/core";
+import { copyTextToClipboard } from "@/src/lib/clipboard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ type VercelSubTab = "stream" | "gen" | "route";
 interface Props {
   profiles: RouterProfile[] | null;
   hasKeys: boolean;
+  onError?: (message?: string) => void;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -707,7 +709,7 @@ export async function POST(req: Request) {
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export function QuickstartPanel({ profiles, hasKeys }: Props) {
+export function QuickstartPanel({ profiles, hasKeys, onError }: Props) {
   const [baseUrl, setBaseUrl] = useState("/api/v1");
   const [selectedTile, setSelectedTile] = useState<TileId>("js");
   const [selectedMode, setSelectedMode] = useState<ModeId>("profile");
@@ -723,7 +725,12 @@ export function QuickstartPanel({ profiles, hasKeys }: Props) {
   const defaultProfileId = profileIds[0] ?? "your-profile-id";
 
   async function copy(id: string, value: string) {
-    await navigator.clipboard.writeText(value);
+    const result = await copyTextToClipboard(value);
+    if (!result.ok) {
+      onError?.(result.error);
+      return;
+    }
+
     setCopiedItem(id);
     setTimeout(() => setCopiedItem((c) => (c === id ? null : c)), 2000);
   }

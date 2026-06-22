@@ -37,7 +37,7 @@ function isHttpsUrl(value: string): boolean {
   }
 }
 
-function getImageValidationError(image: string): string | null {
+export function getVisionImageValidationError(image: string): string | null {
   const trimmed = image.trim();
   if (trimmed.length === 0) {
     return "Image references cannot be empty.";
@@ -55,6 +55,34 @@ function getImageValidationError(image: string): string | null {
   }
 
   return "Images must be HTTPS URLs or data:image/... base64 URLs. Local files must be read by the local MCP bridge first.";
+}
+
+export function getVisionImagesValidationFailure(images: string[]): {
+  error: string;
+  status: 400 | 413;
+} | null {
+  let totalDataUrlChars = 0;
+
+  for (const image of images) {
+    const trimmed = image.trim();
+    const validationError = getVisionImageValidationError(trimmed);
+    if (validationError) {
+      return { error: validationError, status: 400 };
+    }
+
+    if (isDataImageUrl(trimmed)) {
+      totalDataUrlChars += trimmed.length;
+    }
+  }
+
+  if (totalDataUrlChars > VISION.MAX_TOTAL_DATA_URL_CHARS) {
+    return {
+      error: "Combined image data URLs are too large.",
+      status: 413,
+    };
+  }
+
+  return null;
 }
 
 function extractTextContent(content: unknown): string {
@@ -132,6 +160,52 @@ export function buildVisionChatPayload(args: {
   };
 }
 
+export async function describeImagesViaVisionModel(args: {
+  apiKey: string;
+  baseUrl: string;
+  context?: string;
+  images: string[];
+  mode: ReturnType<typeof normalizeVisionMode>;
+  modelId: string;
+  question?: string;
+}): Promise<
+  | { ok: true; description: string }
+  | { ok: false; status: number; error: string }
+> {
+  const upstream = await callOpenAiCompatible({
+    apiPath: "/chat/completions",
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
+    payload: buildVisionChatPayload({
+      context: args.context,
+      images: args.images,
+      mode: args.mode,
+      modelId: args.modelId,
+      question: args.question,
+    }),
+  });
+
+  if (!upstream.ok) {
+    return {
+      ok: false,
+      status: upstream.status,
+      error: "Vision model request failed.",
+    };
+  }
+
+  const upstreamPayload = await upstream.response.json().catch(() => null);
+  const description = extractVisionDescriptionFromChatCompletion(upstreamPayload);
+  if (!description) {
+    return {
+      ok: false,
+      status: 502,
+      error: "Vision model returned an empty description.",
+    };
+  }
+
+  return { ok: true, description };
+}
+
 export async function handleDescribeVisionRequest(args: {
   auth: AuthResult;
   bindings: VisionBindings;
@@ -155,11 +229,9 @@ export async function handleDescribeVisionRequest(args: {
   }
 
   const images = normalizeImages(parsed.data).map((image) => image.trim());
-  for (const image of images) {
-    const validationError = getImageValidationError(image);
-    if (validationError) {
-      return json({ error: validationError }, 400);
-    }
+  const validationFailure = getVisionImagesValidationFailure(images);
+  if (validationFailure) {
+    return json({ error: validationFailure.error }, validationFailure.status);
   }
 
   const gatewayRows = await loadGatewaysWithMigration({
@@ -196,34 +268,25 @@ export async function handleDescribeVisionRequest(args: {
   }
 
   const mode = parsed.data.mode ?? settings.defaultMode;
-  const upstream = await callOpenAiCompatible({
-    apiPath: "/chat/completions",
+  const descriptionResult = await describeImagesViaVisionModel({
     baseUrl: gateway.base_url,
     apiKey,
-    payload: buildVisionChatPayload({
-      context: parsed.data.context,
-      images,
-      mode,
-      modelId: settings.modelId,
-      question: parsed.data.question,
-    }),
+    context: parsed.data.context,
+    images,
+    mode,
+    modelId: settings.modelId,
+    question: parsed.data.question,
   });
 
-  if (!upstream.ok) {
+  if (!descriptionResult.ok) {
     return json({
-      error: "Vision model request failed.",
-      status: upstream.status,
-    }, 502);
-  }
-
-  const upstreamPayload = await upstream.response.json().catch(() => null);
-  const description = extractVisionDescriptionFromChatCompletion(upstreamPayload);
-  if (!description) {
-    return json({ error: "Vision model returned an empty description." }, 502);
+      error: descriptionResult.error,
+      status: descriptionResult.status,
+    }, descriptionResult.status === 400 ? 400 : 502);
   }
 
   const response: VisionDescribeResponse = {
-    description,
+    description: descriptionResult.description,
     mode,
     model: settings.modelId,
     gatewayId: settings.gatewayId,

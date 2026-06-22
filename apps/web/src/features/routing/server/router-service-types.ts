@@ -8,6 +8,7 @@ import type {
 } from "@custom-router/core";
 
 import type { GatewayRowPublic } from "@/src/lib/storage/gateway-store";
+import type { StoredVisionSettings } from "@/src/lib/storage/vision-settings-store";
 
 export interface RouteAndProxyResult {
   response: Response;
@@ -50,6 +51,7 @@ export interface UserRouterConfig {
   routingFrequency?: string | null;
   routeLoggingEnabled?: boolean;
   routingConfigRequiresReset?: boolean;
+  visionSettings?: StoredVisionSettings | null;
 }
 
 export type RoutedApiPath = "/chat/completions" | "/responses" | "/completions";

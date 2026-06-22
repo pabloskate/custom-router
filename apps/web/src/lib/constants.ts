@@ -150,6 +150,7 @@ export const VISION = {
   MODES: ["general", "ui", "ocr", "diagram"] as const,
   MAX_IMAGES: 4,
   MAX_DATA_URL_CHARS: 12_000_000,
+  MAX_TOTAL_DATA_URL_CHARS: 12_000_000,
   MAX_QUESTION_CHARS: 2_000,
   MAX_CONTEXT_CHARS: 2_000,
   MAX_OUTPUT_TOKENS: 1_800,

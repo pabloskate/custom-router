@@ -102,6 +102,33 @@ describe("routeWithFrontierModel", () => {
     expect(body.reasoning).toBeUndefined();
   });
 
+  it("allows text-only model guidance when automatic image descriptions are available", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ selectedModel: "openai/gpt-5.2" }) } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    await routeWithFrontierModel({
+      apiKey: "test",
+      baseUrl: "https://gateway.example/v1",
+      model: "openai/gpt-5-mini",
+      input: "What is wrong in this screenshot?",
+      catalog,
+      imageDescriptionAvailable: true,
+      fetchImpl,
+    });
+
+    const firstCall = fetchImpl.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const body = JSON.parse((firstCall?.[1] as RequestInit).body as string);
+    expect(body.messages[0].content).toContain("text-only models are allowed");
+    expect(body.messages[0].content).not.toContain("only select models with vision:yes");
+  });
+
   it("rejects parsed models not present in catalog", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(

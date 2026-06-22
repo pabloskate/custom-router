@@ -35,6 +35,7 @@ function buildPrompt(args: {
   catalog: CatalogEntry[];
   routingInstructions?: string;
   currentModel?: string;
+  imageDescriptionAvailable?: boolean;
 }): string {
   const modelList = args.catalog
     .map((m) => {
@@ -54,6 +55,9 @@ function buildPrompt(args: {
   const statusQuoBias = args.currentModel
     ? `\nCRITICAL STATUS QUO BIAS:\nThe user is currently using the model '${args.currentModel}'. You MUST select this exact same model AGAIN, unless the user's latest message represents a massive shift in complexity or task type that this model physically cannot handle. We want to preserve their cache!\n`
     : "";
+  const imageGuideline = args.imageDescriptionAvailable
+    ? "For vision/image input tasks: the latest image can be converted to a text description before execution, so text-only models are allowed. Select a native vision model only when direct visual reasoning is clearly better than a text description."
+    : "For vision/image tasks: only select models with vision:yes";
 
   return `You are a routing classifier for an LLM router.
 
@@ -82,7 +86,7 @@ ${modelList}
 - For deep reasoning: prefer variants with higher reasoning presets and stronger thinking hints
 - For simpler or cost-sensitive tasks: prefer base variants with lower reasoning presets
 - If a model shows reasoning:provider_default or thinking:provider_default, that means the router can omit reasoning controls and let the provider choose its native/adaptive default
-- For vision/image tasks: only select models with vision:yes
+- ${imageGuideline}
 - For long documents: prefer models with larger context windows${statusQuoBias}
 - selectedModel MUST be an exact byte-for-byte match to one of the available model IDs
 - Also classify the current step so the router can decide whether to preserve family stickiness or change effort
@@ -122,6 +126,7 @@ export async function routeWithFrontierModel(args: {
   routingInstructions?: string;
   model: string;
   currentModel?: string;
+  imageDescriptionAvailable?: boolean;
   supportsReasoningEffort?: boolean;
   fetchImpl?: typeof fetch;
 }): Promise<LlmRoutingResult | null> {

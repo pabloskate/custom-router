@@ -48,6 +48,7 @@ export async function handleGetVisionSettings(args: {
           gateway_id: settings.gatewayId,
           model_id: settings.modelId,
           default_mode: settings.defaultMode,
+          auto_describe_images_enabled: settings.autoDescribeImagesEnabled,
           updated_at: settings.updatedAt,
         }
       : null,
@@ -101,6 +102,7 @@ export async function handleUpdateVisionSettings(args: {
     gatewayId: parsed.data.gateway_id,
     modelId: parsed.data.model_id,
     defaultMode: normalizeVisionMode(parsed.data.default_mode),
+    autoDescribeImagesEnabled: parsed.data.auto_describe_images_enabled,
   });
 
   const response: VisionSettingsResponse = {
@@ -108,6 +110,7 @@ export async function handleUpdateVisionSettings(args: {
       gateway_id: settings.gatewayId,
       model_id: settings.modelId,
       default_mode: settings.defaultMode,
+      auto_describe_images_enabled: settings.autoDescribeImagesEnabled,
       updated_at: settings.updatedAt,
     },
     vision_models: collectVisionModelOptions(gateways).map((option) => ({

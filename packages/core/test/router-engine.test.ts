@@ -227,6 +227,50 @@ describe("RouterEngine (LLM Router)", () => {
         ]);
     });
 
+    it("allows text-only candidates for image input when auto image descriptions are available", async () => {
+        const mockLlmRouter = vi.fn().mockResolvedValue({
+            selectedModel: "openai/gpt-4o",
+            confidence: 0.9,
+            signals: ["auto_image_description_available"],
+        });
+
+        const engine = new RouterEngine({ llmRouter: mockLlmRouter });
+        const decision = await engine.decide({
+            requestId: "req-auto-describe-image",
+            request: {
+                model: "planning-backend",
+                input: [
+                    {
+                        type: "message",
+                        role: "user",
+                        content: [
+                            { type: "input_text", text: "Describe this image." },
+                            { type: "input_image", detail: "auto", image_url: "https://example.com/photo.png" },
+                        ],
+                    },
+                ],
+            },
+            config: defaultConfig,
+            catalog: [
+                { id: "openai/gpt-4o", name: "GPT-4o", modality: "text->text" },
+                { id: "openai/gpt-4o-vision", name: "GPT-4o Vision", modality: "text,image->text" },
+            ],
+            catalogVersion: "v1",
+            pinStore: new MockPinStore(),
+            profiles: namedProfiles,
+            allowTextModelForImageInput: true,
+        });
+
+        const args = mockLlmRouter.mock.calls[0]?.[0] as any;
+        expect(args.catalog).toEqual([
+            { id: "openai/gpt-4o", name: "GPT-4o", modality: "text->text" },
+            { id: "openai/gpt-4o-vision", name: "GPT-4o Vision", modality: "text,image->text" },
+        ]);
+        expect(args.imageDescriptionAvailable).toBe(true);
+        expect(decision.selectedModel).toBe("openai/gpt-4o");
+        expect(decision.switchReason).not.toBe("image_capability_override");
+    });
+
     it("forces image-output requests onto image-capable models when the default fallback is text-only", async () => {
         const engine = new RouterEngine();
 

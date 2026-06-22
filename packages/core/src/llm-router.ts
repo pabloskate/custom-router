@@ -11,6 +11,7 @@ export type LlmRouterFunction = (args: {
     routingInstructions?: string;
     classifierModel?: string;
     currentModel?: string;
+    imageDescriptionAvailable?: boolean;
 }) => Promise<LlmRoutingResult | null>;
 
 const PROMPT_WINDOW_USER_MESSAGES = 6;

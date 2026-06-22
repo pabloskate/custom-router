@@ -283,6 +283,7 @@ export function getBaseAdminTabs(args: BaseAdminTabsArgs): AdminTabDefinition[] 
           <QuickstartPanel
             profiles={ctx.user.profiles}
             hasKeys={args.keys.some((k) => !k.revoked)}
+            onError={args.setError}
           />
         </div>
       ),

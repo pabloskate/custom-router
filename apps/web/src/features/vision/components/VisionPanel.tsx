@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { GatewayInfo } from "@/src/features/gateways/contracts";
+import { copyTextToClipboard } from "@/src/lib/clipboard";
 import {
   collectVisionModelOptions,
   modelSupportsVisionInput,
@@ -33,11 +34,24 @@ function getInitialModelId(gateways: GatewayInfo[], gatewayId: string): string {
   return gateway?.models.find(modelSupportsVisionInput)?.id ?? "";
 }
 
-function CopyButton({ value, onCopied }: { value: string; onCopied?: () => void }) {
+function CopyButton({
+  value,
+  onCopied,
+  onCopyFailed,
+}: {
+  value: string;
+  onCopied?: () => void;
+  onCopyFailed?: (message: string) => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(value);
+    const result = await copyTextToClipboard(value);
+    if (!result.ok) {
+      onCopyFailed?.(result.error);
+      return;
+    }
+
     setCopied(true);
     onCopied?.();
     window.setTimeout(() => setCopied(false), 1500);
@@ -50,12 +64,22 @@ function CopyButton({ value, onCopied }: { value: string; onCopied?: () => void 
   );
 }
 
-function CodeBlock({ label, value, onCopied }: { label: string; value: string; onCopied?: () => void }) {
+function CodeBlock({
+  label,
+  value,
+  onCopied,
+  onCopyFailed,
+}: {
+  label: string;
+  value: string;
+  onCopied?: () => void;
+  onCopyFailed?: (message: string) => void;
+}) {
   return (
     <div style={{ display: "grid", gap: "var(--space-2)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-3)", alignItems: "center" }}>
         <span className="form-label" style={{ margin: 0 }}>{label}</span>
-        <CopyButton value={value} onCopied={onCopied} />
+        <CopyButton value={value} onCopied={onCopied} onCopyFailed={onCopyFailed} />
       </div>
       <pre
         className="input input--mono"
@@ -79,6 +103,7 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
   const [gatewayId, setGatewayId] = useState(() => getInitialGatewayId(gateways));
   const [modelId, setModelId] = useState(() => getInitialModelId(gateways, getInitialGatewayId(gateways)));
   const [defaultMode, setDefaultMode] = useState<VisionMode>("ui");
+  const [autoDescribeImagesEnabled, setAutoDescribeImagesEnabled] = useState(false);
   const [routerBaseUrl, setRouterBaseUrl] = useState("https://your-customrouter-domain.example.com");
 
   const visionOptions = useMemo(() => collectVisionModelOptions(gateways), [gateways]);
@@ -101,10 +126,12 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
         setGatewayId(payload.settings.gateway_id);
         setModelId(payload.settings.model_id);
         setDefaultMode(payload.settings.default_mode);
+        setAutoDescribeImagesEnabled(payload.settings.auto_describe_images_enabled);
       } else {
         const initialGatewayId = getInitialGatewayId(gateways);
         setGatewayId(initialGatewayId);
         setModelId(getInitialModelId(gateways, initialGatewayId));
+        setAutoDescribeImagesEnabled(false);
       }
       setLoading(false);
     }
@@ -136,6 +163,7 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
         gateway_id: gatewayId,
         model_id: modelId,
         default_mode: defaultMode,
+        auto_describe_images_enabled: autoDescribeImagesEnabled,
       }),
     });
 
@@ -271,6 +299,28 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
                   ))}
                 </select>
               </div>
+              <label
+                style={{
+                  alignItems: "flex-start",
+                  display: "flex",
+                  gap: "var(--space-3)",
+                  lineHeight: 1.5,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={autoDescribeImagesEnabled}
+                  disabled={loading || saving}
+                  onChange={(event) => setAutoDescribeImagesEnabled(event.target.checked)}
+                  style={{ marginTop: "0.25rem" }}
+                />
+                <span>
+                  <span className="form-label" style={{ margin: 0 }}>Auto-describe images for text-only models</span>
+                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.875rem" }}>
+                    Latest user image attachments are converted to text only when the selected model does not support image input.
+                  </span>
+                </span>
+              </label>
               <div>
                 <button type="button" className="btn btn--primary btn--sm" disabled={loading || saving} onClick={handleSave}>
                   {saving ? "Saving..." : "Save vision model"}
@@ -289,13 +339,13 @@ export function VisionPanel({ gateways, onError, onStatus }: VisionPanelProps) {
           <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5, margin: 0 }}>
             Use a CustomRouter API key for the account that has Vision configured. Individuals can use their own key; hosted or organization deployments can issue keys from whichever account owns the gateway and Vision settings.
           </p>
-          <CodeBlock label="Install helper (macOS/Linux)" value={shellInstallSnippet} onCopied={() => onStatus?.("Install command copied")} />
-          <CodeBlock label="Install helper (Windows PowerShell)" value={powerShellInstallSnippet} onCopied={() => onStatus?.("Install command copied")} />
-          <CodeBlock label="MCP client configuration (macOS/Linux)" value={shellMcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
-          <CodeBlock label="MCP client configuration (Windows)" value={windowsMcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} />
-          <CodeBlock label="CLI check (macOS/Linux)" value={shellCliSnippet} onCopied={() => onStatus?.("CLI command copied")} />
-          <CodeBlock label="CLI check (Windows PowerShell)" value={powerShellCliSnippet} onCopied={() => onStatus?.("CLI command copied")} />
-          <CodeBlock label="Agent instruction snippet" value={rulesSnippet} onCopied={() => onStatus?.("Vision rules copied")} />
+          <CodeBlock label="Install helper (macOS/Linux)" value={shellInstallSnippet} onCopied={() => onStatus?.("Install command copied")} onCopyFailed={onError} />
+          <CodeBlock label="Install helper (Windows PowerShell)" value={powerShellInstallSnippet} onCopied={() => onStatus?.("Install command copied")} onCopyFailed={onError} />
+          <CodeBlock label="MCP client configuration (macOS/Linux)" value={shellMcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} onCopyFailed={onError} />
+          <CodeBlock label="MCP client configuration (Windows)" value={windowsMcpSnippet} onCopied={() => onStatus?.("MCP configuration copied")} onCopyFailed={onError} />
+          <CodeBlock label="CLI check (macOS/Linux)" value={shellCliSnippet} onCopied={() => onStatus?.("CLI command copied")} onCopyFailed={onError} />
+          <CodeBlock label="CLI check (Windows PowerShell)" value={powerShellCliSnippet} onCopied={() => onStatus?.("CLI command copied")} onCopyFailed={onError} />
+          <CodeBlock label="Agent instruction snippet" value={rulesSnippet} onCopied={() => onStatus?.("Vision rules copied")} onCopyFailed={onError} />
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@
 import React, { useState } from "react";
 
 import type { ApiKeyInfo } from "@/src/features/account-settings/contracts";
+import { copyTextToClipboard } from "@/src/lib/clipboard";
 import { AUTH } from "@/src/lib/constants";
 
 interface Props {
@@ -83,14 +84,21 @@ function IconWarning({ className, style }: { className?: string; style?: React.C
 function NewKeyReveal({
   apiKey,
   onCopied,
+  onCopyFailed,
 }: {
   apiKey: string;
   onCopied: () => void;
+  onCopyFailed?: (message: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(apiKey);
+    const result = await copyTextToClipboard(apiKey);
+    if (!result.ok) {
+      onCopyFailed?.(result.error);
+      return;
+    }
+
     setCopied(true);
     onCopied();
     setTimeout(() => setCopied(false), 2000);
@@ -349,6 +357,10 @@ export function ApiKeyPanel({ keys, onKeysChanged, onStatus, onError }: Props) {
         <NewKeyReveal
           apiKey={newKey}
           onCopied={() => onStatus("Copied to clipboard")}
+          onCopyFailed={(message) => {
+            onError?.(message);
+            onStatus("Error");
+          }}
         />
       )}
 

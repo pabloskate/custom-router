@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildVisionChatPayload,
   extractVisionDescriptionFromChatCompletion,
+  getVisionImagesValidationFailure,
 } from "./vision-service";
 
 describe("vision service helpers", () => {
@@ -40,5 +41,21 @@ describe("vision service helpers", () => {
     expect(extractVisionDescriptionFromChatCompletion({
       choices: [{ message: { content: [{ text: "Part A" }, { text: "Part B" }] } }],
     })).toBe("Part A\nPart B");
+  });
+
+  it("rejects aggregate image data URLs that exceed the combined cap", () => {
+    const image = `data:image/png;base64,${"a".repeat(6_100_000)}`;
+
+    expect(getVisionImagesValidationFailure([image, image])).toEqual({
+      error: "Combined image data URLs are too large.",
+      status: 413,
+    });
+  });
+
+  it("accepts multiple image references under the combined cap", () => {
+    expect(getVisionImagesValidationFailure([
+      "data:image/png;base64,abc",
+      "https://example.com/screenshot.png",
+    ])).toBeNull();
   });
 });
