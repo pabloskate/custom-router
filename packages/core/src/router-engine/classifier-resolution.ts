@@ -74,7 +74,6 @@ export async function resolveClassifierSelection(args: {
   allowedCatalog: CatalogItem[];
   routingInstructions?: string;
   classifierModel?: string;
-  imageDescriptionAvailable?: boolean;
   defaultModel?: string;
   policy: EffectiveReasoningPolicy;
   activePin: ThreadPin | null;
@@ -112,7 +111,6 @@ export async function resolveClassifierSelection(args: {
       routingInstructions: args.routingInstructions,
       classifierModel: args.classifierModel,
       currentModel: args.activePin?.modelId,
-      imageDescriptionAvailable: args.imageDescriptionAvailable,
     });
 
     if (!result?.selectedModel) {

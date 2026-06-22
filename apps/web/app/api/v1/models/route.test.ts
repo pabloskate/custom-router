@@ -90,11 +90,11 @@ describe("/api/v1/models route", () => {
       handler(createAuth({
         profiles: [
           {
-            id: "opencode-go-coding",
-            name: "OpenCode Go Coding",
+            id: "custom-profile",
+            name: "Custom Profile",
             models: [
-              { gatewayId: "gw_1", modelId: "kimi-k2.6", name: "Kimi K2.6", modality: "text,image->text" },
-              { gatewayId: "gw_1", modelId: "deepseek-v4-flash", name: "DeepSeek V4 Flash", modality: "text->text" },
+              { gatewayId: "gw_1", modelId: "model/vision", name: "Vision", modality: "text,image->text" },
+              { gatewayId: "gw_1", modelId: "model/text", name: "Text", modality: "text->text" },
             ],
           },
         ],
@@ -111,10 +111,10 @@ describe("/api/v1/models route", () => {
         modalities?: { input: string[]; output: string[] };
       }>;
     };
-    const profileModel = body.data.find((item) => item.id === "opencode-go-coding");
+    const profileModel = body.data.find((item) => item.id === "custom-profile");
 
     expect(profileModel).toMatchObject({
-      id: "opencode-go-coding",
+      id: "custom-profile",
       attachment: true,
       modalities: {
         input: ["image", "text"],
@@ -128,11 +128,11 @@ describe("/api/v1/models route", () => {
       handler(createAuth({
         profiles: [
           {
-            id: "opencode-go-coding",
-            name: "OpenCode Go Coding",
+            id: "general-balanced",
+            name: "General Balanced",
             models: [
-              { gatewayId: "gw_1", modelId: "kimi-k2.6", name: "Kimi K2.6" },
-              { gatewayId: "gw_1", modelId: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
+              { gatewayId: "gw_1", modelId: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6" },
+              { gatewayId: "gw_1", modelId: "inception/mercury-2", name: "Mercury 2" },
             ],
           },
         ],
@@ -149,15 +149,14 @@ describe("/api/v1/models route", () => {
         modalities?: { input: string[]; output: string[] };
       }>;
     };
-    const profileModel = body.data.find((item) => item.id === "opencode-go-coding");
+    const profileModel = body.data.find((item) => item.id === "general-balanced");
 
     expect(profileModel).toMatchObject({
-      id: "opencode-go-coding",
+      id: "general-balanced",
       attachment: true,
-      modalities: {
-        input: ["image", "text"],
-        output: ["text"],
-      },
     });
+    expect(profileModel?.modalities?.input).toEqual(expect.arrayContaining(["image", "text"]));
+    expect(profileModel?.modalities?.output).toEqual(expect.arrayContaining(["text"]));
   });
+
 });

@@ -20,9 +20,8 @@ Use this flow for a brand-new CustomRouter deployment:
 2. Open `Gateways`, add the provider or gateway that has the vision model, and sync models. Manual models also work if the model modality includes image input, such as `text,image->text`.
 3. Open `Vision`.
 4. Select the gateway and vision-capable model CustomRouter should use for screenshots and image descriptions.
-5. Optionally enable `Auto-describe images for text-only models`.
-6. Save the vision model.
-7. Open `API Keys` and generate or choose the CustomRouter API key that should use this Vision configuration.
+5. Save the vision model.
+6. Open `API Keys` and generate or choose the CustomRouter API key that should use this Vision configuration.
 
 The important rule is that the API key identifies the CustomRouter account whose gateway and Vision settings are used. Common rollout patterns:
 
@@ -32,20 +31,9 @@ The important rule is that the API key identifies the CustomRouter account whose
 
 In the current schema, an API key from account A does not automatically use gateway or Vision settings from account B. A real org/team permissions layer would be a separate product feature.
 
-## Automatic Image Descriptions
+## Routed Image Requests
 
-When `Auto-describe images for text-only models` is enabled, routed OpenAI-compatible requests can use the saved Vision model as an internal sidecar. This is separate from the MCP helper.
-
-The automatic path only runs when all of these are true:
-
-- The latest user request contains HTTPS image URLs or `data:image/...` URLs.
-- The request does not ask for image output.
-- No earlier message/input item in the forwarded request still contains image content.
-- Routing or passthrough selects a model that is known in the gateway/profile catalog and does not advertise image input.
-
-If the selected model supports image input, CustomRouter keeps the original image payload and sends it normally. If the toggle is off, CustomRouter also keeps the existing native routing behavior.
-
-For text-only selected models, CustomRouter first sends the latest user image attachments to the configured Vision model, then replaces those image parts with a grounded text description before forwarding the request to the text-only model. If the Vision model call fails, the text-only attempt is skipped and normal fallback attempts can still run.
+Routed OpenAI-compatible requests with image parts require a selected model that advertises native image input. If a text-only agent needs image descriptions, use the local helper or direct `/api/v1/vision/describe` endpoint before sending the routed request.
 
 Each individual user then does this on the machine running their MCP client:
 

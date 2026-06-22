@@ -183,7 +183,6 @@ CREATE TABLE IF NOT EXISTS user_vision_settings (
   gateway_id   TEXT NOT NULL,
   model_id     TEXT NOT NULL,
   default_mode TEXT NOT NULL DEFAULT 'ui',
-  auto_describe_images_enabled INTEGER NOT NULL DEFAULT 0,
   updated_at   TEXT NOT NULL
 );
 

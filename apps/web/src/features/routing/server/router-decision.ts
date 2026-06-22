@@ -27,7 +27,6 @@ export function createRouterEngine(args: {
         catalog: routerArgs.catalog,
         routingInstructions: routerArgs.routingInstructions,
         currentModel: routerArgs.currentModel,
-        imageDescriptionAvailable: routerArgs.imageDescriptionAvailable,
         supportsReasoningEffort: args.classifierSupportsReasoningEffort,
       });
     },

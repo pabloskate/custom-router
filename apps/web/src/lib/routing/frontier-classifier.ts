@@ -35,7 +35,6 @@ function buildPrompt(args: {
   catalog: CatalogEntry[];
   routingInstructions?: string;
   currentModel?: string;
-  imageDescriptionAvailable?: boolean;
 }): string {
   const modelList = args.catalog
     .map((m) => {
@@ -55,9 +54,7 @@ function buildPrompt(args: {
   const statusQuoBias = args.currentModel
     ? `\nCRITICAL STATUS QUO BIAS:\nThe user is currently using the model '${args.currentModel}'. You MUST select this exact same model AGAIN, unless the user's latest message represents a massive shift in complexity or task type that this model physically cannot handle. We want to preserve their cache!\n`
     : "";
-  const imageGuideline = args.imageDescriptionAvailable
-    ? "For vision/image input tasks: the latest image can be converted to a text description before execution, so text-only models are allowed. Select a native vision model only when direct visual reasoning is clearly better than a text description."
-    : "For vision/image tasks: only select models with vision:yes";
+  const imageGuideline = "For vision/image tasks: only select models with vision:yes";
 
   return `You are a routing classifier for an LLM router.
 
@@ -126,7 +123,6 @@ export async function routeWithFrontierModel(args: {
   routingInstructions?: string;
   model: string;
   currentModel?: string;
-  imageDescriptionAvailable?: boolean;
   supportsReasoningEffort?: boolean;
   fetchImpl?: typeof fetch;
 }): Promise<LlmRoutingResult | null> {

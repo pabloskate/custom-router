@@ -111,7 +111,6 @@ export class RouterEngine {
     profiles?: RouterProfile[];
     forceRoute?: boolean;
     forceRouteNote?: string;
-    allowTextModelForImageInput?: boolean;
     now?: Date;
   }): Promise<RouteDecision> {
     const now = args.now ?? new Date();
@@ -169,11 +168,7 @@ export class RouterEngine {
     const forceRoute = args.forceRoute === true || forceRouteFromRequest;
     const isLoop = isAgentLoop(messages);
     const detectedImageCapabilities = getRequestImageCapabilities(args.request as RouterRequestLike & Record<string, unknown>);
-    const imageCapabilities = {
-      hasImageInput: args.allowTextModelForImageInput ? false : detectedImageCapabilities.hasImageInput,
-      requiresImageOutput: detectedImageCapabilities.requiresImageOutput,
-    };
-    const allowedCatalog = getAllowedCatalog(args.catalog, imageCapabilities);
+    const allowedCatalog = getAllowedCatalog(args.catalog, detectedImageCapabilities);
 
     const notes = [`Routed via profile: ${matchedProfile.id}`];
     const pinState = await resolvePinPolicy({
@@ -191,8 +186,8 @@ export class RouterEngine {
       defaultSmartPinTurns,
       allowedCatalog,
       fullCatalog: args.catalog,
-      hasImageInput: imageCapabilities.hasImageInput,
-      requiresImageOutput: imageCapabilities.requiresImageOutput,
+      hasImageInput: detectedImageCapabilities.hasImageInput,
+      requiresImageOutput: detectedImageCapabilities.requiresImageOutput,
     });
     notes.push(...pinState.notes);
 
@@ -214,7 +209,6 @@ export class RouterEngine {
         allowedCatalog,
         routingInstructions: effectiveConfig.routingInstructions,
         classifierModel: effectiveConfig.classifierModel,
-        imageDescriptionAvailable: args.allowTextModelForImageInput === true && detectedImageCapabilities.hasImageInput,
         defaultModel: effectiveConfig.defaultModel,
         policy: reasoningPolicy,
         activePin: pinState.activePin,
@@ -235,8 +229,8 @@ export class RouterEngine {
     const visionAdjusted = applyVisionCapabilityOverride({
       selection,
       allowedCatalog,
-      hasImageInput: imageCapabilities.hasImageInput,
-      requiresImageOutput: imageCapabilities.requiresImageOutput,
+      hasImageInput: detectedImageCapabilities.hasImageInput,
+      requiresImageOutput: detectedImageCapabilities.requiresImageOutput,
     });
     selection = visionAdjusted.selection;
     notes.push(...visionAdjusted.notes);

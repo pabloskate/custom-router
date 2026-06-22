@@ -29,13 +29,6 @@ import {
   improveErrorMessage,
   resolveAttemptUpstream,
 } from "@/src/features/routing/server/router-attempts";
-import {
-  buildAutoDescribedRequestBody,
-  getLatestUserImageCandidate,
-  resolveAutoDescribeImagesPlan,
-  shouldAutoDescribeAttempt,
-  type AutoDescribeImagesPlan,
-} from "@/src/features/routing/server/auto-describe-images";
 import { resolveClassifierContext } from "@/src/features/routing/server/router-classifier-context";
 import {
   buildRoutingExplanation,
@@ -44,7 +37,6 @@ import {
 } from "@/src/features/routing/server/router-decision";
 import { resolveUserRoutingContext } from "@/src/features/routing/server/router-context";
 import { persistExplanation, pinSelectedModel } from "@/src/features/routing/server/router-persistence";
-import { getUserVisionSettings } from "@/src/lib/storage";
 import type {
   RouteAndProxyResult,
   RouteInspectResult,
@@ -156,7 +148,6 @@ export async function routeAndProxy(args: {
     userConfig: args.userConfig,
   });
   const pinStore = repository.getPinStore();
-  let autoDescribePlan: AutoDescribeImagesPlan | null = null;
 
   if (routedRequest && catalog.length === 0) {
     const message = args.userConfig?.routingConfigRequiresReset
@@ -217,22 +208,6 @@ export async function routeAndProxy(args: {
     classifierSupportsReasoningEffort,
   } = classifierResolution.context;
 
-  const autoDescribeCandidate = getLatestUserImageCandidate(args.body);
-  if (autoDescribeCandidate && !autoDescribeCandidate.hasOtherImages) {
-    const visionSettings = args.userConfig && "visionSettings" in args.userConfig
-      ? (args.userConfig.visionSettings ?? null)
-      : bindings.ROUTER_DB
-        ? await getUserVisionSettings(bindings.ROUTER_DB, args.userId)
-        : null;
-
-    autoDescribePlan = resolveAutoDescribeImagesPlan({
-      body: args.body,
-      gatewayMap,
-      gatewayRows: args.userConfig?.gatewayRows,
-      settings: visionSettings,
-    });
-  }
-
   const engine = routedRequest && classifierBaseUrl && classifierApiKey && effectiveClassifierModel
     ? createRouterEngine({
         classifierApiKey,
@@ -262,7 +237,6 @@ export async function routeAndProxy(args: {
       profiles: args.userConfig?.profiles ?? undefined,
       forceRoute: options?.forceRoute,
       forceRouteNote: options?.forceRouteNote,
-      allowTextModelForImageInput: autoDescribePlan !== null,
     });
 
     return {
@@ -350,9 +324,6 @@ export async function routeAndProxy(args: {
   let degradedByPinnedRateLimitRetry = false;
   let reroutedAfterPinnedRateLimit = false;
   let lastAttempts: ReturnType<typeof buildAttemptOrder> = [];
-  let autoDescribedRequest:
-    | Awaited<ReturnType<typeof buildAutoDescribedRequestBody>>
-    | null = null;
 
   while (true) {
     const attempts = buildAttemptOrder({ decision, nowMs: Date.now() });
@@ -366,29 +337,8 @@ export async function routeAndProxy(args: {
         gatewayMap,
         resolvedDefaultUpstream
       );
-      const needsAutoDescription = shouldAutoDescribeAttempt({
-        catalog: activeCatalog,
-        modelId: attempt.modelId,
-        plan: autoDescribePlan,
-      });
-
-      if (needsAutoDescription && !autoDescribedRequest && autoDescribePlan) {
-        autoDescribedRequest = await buildAutoDescribedRequestBody({ plan: autoDescribePlan });
-      }
-
-      if (needsAutoDescription && autoDescribedRequest && !autoDescribedRequest.ok) {
-        errors.push(
-          `model=${attempt.modelId} provider=${attempt.provider} status=${autoDescribedRequest.status} reason=vision_auto_describe_failed`
-        );
-        continue;
-      }
-
-      const attemptBody =
-        needsAutoDescription && autoDescribedRequest?.ok
-          ? autoDescribedRequest.body
-          : args.body;
       const payload = buildAttemptPayload({
-        body: attemptBody,
+        body: args.body,
         selectedModelId: attempt.modelId,
         selectedEffort: decision.selectedEffort,
         catalog: activeCatalog,
@@ -460,11 +410,6 @@ export async function routeAndProxy(args: {
       const noteParts = [...decision.explanation.notes, ...rerouteNotes];
       if (index > 0) {
         noteParts.push("Fallback selected after previous model/provider failure.");
-      }
-      if (needsAutoDescription && autoDescribedRequest?.ok && autoDescribePlan) {
-        noteParts.push(
-          `Latest user image input was converted to text for text-only model ${attempt.modelId} using vision model ${autoDescribePlan.modelId}.`
-        );
       }
 
       const explanation = {

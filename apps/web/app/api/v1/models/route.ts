@@ -134,16 +134,12 @@ function profileId(profile: unknown): string | null {
  *
  * OpenAI-compatible models listing endpoint.
  * Returns the caller-specific catalog in the standard { data: [...] } format
- * so clients like Cursor, Continue, Apollo, etc. can discover available models.
- *
- * Requires API key auth and returns:
- * - named routing profiles (e.g. "cost-optimized", "fast-coding")
- * - flattened model list from all configured user gateways
+ * so clients can discover available models.
  */
 export async function GET(request: Request): Promise<Response> {
   return withApiKeyAuth(request, async (auth, bindings) => {
     const gatewayRows = await loadGatewaysWithMigration({
-      db: bindings.ROUTER_DB!,
+      db: bindings.ROUTER_DB,
       userId: auth.userId,
       upstreamBaseUrl: auth.upstreamBaseUrl ?? null,
       upstreamApiKeyEnc: auth.upstreamApiKeyEnc ?? null,
