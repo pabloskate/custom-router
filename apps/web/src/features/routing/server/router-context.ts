@@ -12,8 +12,47 @@ export interface ResolvedRoutingContext {
   runtimeConfig: RouterConfig;
   catalog: CatalogItem[];
   requestedModel: string;
+  effectiveRequestModel: string;
+  directGatewayId?: string;
   matchedProfile?: RouterProfile;
   routedRequest: boolean;
+}
+
+function normalizeGatewayAlias(value: string | null | undefined): string {
+  return (value ?? "").toLowerCase().replace(/\s+/g, "");
+}
+
+function resolveGatewayQualifiedModel(args: {
+  requestedModel: string;
+  gatewayRows: NonNullable<UserRouterConfig["gatewayRows"]>;
+}): { gatewayId: string; modelId: string } | null {
+  const separatorIndex = args.requestedModel.indexOf("/");
+  if (separatorIndex <= 0 || separatorIndex >= args.requestedModel.length - 1) {
+    return null;
+  }
+
+  const gatewayAlias = normalizeGatewayAlias(args.requestedModel.slice(0, separatorIndex));
+  const modelId = args.requestedModel.slice(separatorIndex + 1);
+  if (!gatewayAlias || !modelId) {
+    return null;
+  }
+
+  const matches = args.gatewayRows.filter((gateway) => {
+    const aliases = new Set([
+      normalizeGatewayAlias(gateway.id),
+      normalizeGatewayAlias(gateway.name),
+    ]);
+    return aliases.has(gatewayAlias) && gateway.models.some((model) => model.id === modelId);
+  });
+
+  if (matches.length !== 1) {
+    return null;
+  }
+
+  return {
+    gatewayId: matches[0]!.id,
+    modelId,
+  };
 }
 
 export async function resolveUserRoutingContext(args: {
@@ -53,6 +92,12 @@ export async function resolveUserRoutingContext(args: {
   const matchedProfile = findMatchedProfile(requestedModel, args.userConfig?.profiles);
   const routedRequest = isRoutedRequestModel(requestedModel, args.userConfig?.profiles);
   const activeProfile = routedRequest ? matchedProfile : undefined;
+  const directGatewayModel = !routedRequest && args.userConfig?.gatewayRows
+    ? resolveGatewayQualifiedModel({
+        requestedModel,
+        gatewayRows: args.userConfig.gatewayRows,
+      })
+    : null;
 
   const profileInventory = (activeProfile?.models ?? [])
     .map(profileModelToCatalogItem)
@@ -67,6 +112,10 @@ export async function resolveUserRoutingContext(args: {
   const resolvedCatalog =
     routedRequest
       ? profileInventory
+      : directGatewayModel
+        ? gatewayInventoryItems.filter(
+            (item) => item.gatewayId === directGatewayModel.gatewayId && item.id === directGatewayModel.modelId
+          )
       : gatewayInventoryItems.length > 0
         ? gatewayInventoryItems
         : args.userConfig?.customCatalog && args.userConfig.customCatalog.length > 0
@@ -108,6 +157,8 @@ export async function resolveUserRoutingContext(args: {
     runtimeConfig,
     catalog: resolvedCatalog,
     requestedModel,
+    effectiveRequestModel: directGatewayModel?.modelId ?? requestedModel,
+    directGatewayId: directGatewayModel?.gatewayId,
     matchedProfile,
     routedRequest,
   };

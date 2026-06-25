@@ -35,6 +35,7 @@ export interface GatewayRow {
 /** Shape used by router-service: still encrypted, models already parsed */
 export interface GatewayRowPublic {
   id: string;
+  name?: string;
   baseUrl: string;
   apiKeyEnc: string;
   models: CatalogItem[];
@@ -243,6 +244,7 @@ export function gatewayRowToInfo(row: GatewayRow): GatewayInfo {
 export function gatewayRowToPublic(row: GatewayRow): GatewayRowPublic {
   return {
     id: row.id,
+    name: row.name,
     baseUrl: row.base_url,
     apiKeyEnc: row.api_key_enc,
     models: parseModels(row.models_json),

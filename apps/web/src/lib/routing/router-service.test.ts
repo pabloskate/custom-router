@@ -148,6 +148,84 @@ describe("routeAndProxy", () => {
     );
   });
 
+  it("routes a gateway-qualified direct model to the matching gateway model", async () => {
+    const secret = "1234567890abcdef";
+    const nvidiaApiKeyEnc = await encryptByokSecret({
+      plaintext: "nvidia-key",
+      secret,
+    });
+    const fireworksApiKeyEnc = await encryptByokSecret({
+      plaintext: "fireworks-key",
+      secret,
+    });
+    const repository = createRepository();
+
+    setRuntimeBindings({
+      BYOK_ENCRYPTION_SECRET: secret,
+    });
+    repositoryMock.mockReturnValue(repository as any);
+    upstreamMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      response: new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "ok" } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      ),
+    });
+
+    const result = await routeAndProxy({
+      apiPath: "/chat/completions",
+      userId: "user_1",
+      body: {
+        model: "nvidia/glm-5.1",
+        messages: [{ role: "user", content: "use this direct model" }],
+      },
+      userConfig: {
+        profiles: [
+          {
+            id: "planning-backend",
+            name: "Planning Backend",
+            models: [
+              { gatewayId: "gw_nvidia", modelId: "glm-5.1", name: "GLM 5.1" },
+            ],
+            defaultModel: key("gw_nvidia", "glm-5.1"),
+            classifierModel: key("gw_nvidia", "glm-5.1"),
+          },
+        ],
+        gatewayRows: [
+          {
+            id: "gw_nvidia",
+            name: "NVIDIA",
+            baseUrl: "https://integrate.api.nvidia.com/v1",
+            apiKeyEnc: nvidiaApiKeyEnc,
+            models: [{ id: "glm-5.1", name: "GLM 5.1" }],
+          },
+          {
+            id: "gw_fireworks",
+            name: "Fireworks",
+            baseUrl: "https://api.fireworks.ai/inference/v1",
+            apiKeyEnc: fireworksApiKeyEnc,
+            models: [{ id: "glm-5.1", name: "GLM 5.1" }],
+          },
+        ],
+      },
+    });
+
+    expect(result.response.status).toBe(200);
+    expect(classifierMock).not.toHaveBeenCalled();
+    expect(upstreamMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: "nvidia-key",
+        baseUrl: "https://integrate.api.nvidia.com/v1",
+        payload: expect.objectContaining({
+          model: "glm-5.1",
+        }),
+      })
+    );
+  });
+
   it('routes through the "auto" profile when a matching profile exists', async () => {
     const secret = "1234567890abcdef";
     const defaultApiKeyEnc = await encryptByokSecret({

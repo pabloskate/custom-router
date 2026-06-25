@@ -100,13 +100,32 @@ export async function routeAndProxy(args: {
     };
   }
 
-  // Decrypt all gateways and build an O(1) lookup Map.
-  // The first successfully-decrypted gateway is the default upstream.
+  const {
+    repository,
+    runtimeConfig,
+    catalog,
+    requestedModel,
+    effectiveRequestModel,
+    directGatewayId,
+    matchedProfile,
+    routedRequest,
+  } = await resolveUserRoutingContext({
+    body: args.body,
+    userConfig: args.userConfig,
+  });
+  const pinStore = repository.getPinStore();
+
+  // Decrypt the gateways needed by this request and build an O(1) lookup Map.
+  // Qualified direct calls only need their target gateway; routed requests keep
+  // the full gateway map because classifier, primary, and fallback ownership can differ.
   const gatewayMap = new Map<string, { baseUrl: string; apiKey: string }>();
   let defaultUpstream: { baseUrl: string; apiKey: string } | null = null;
   let invalidGatewayBaseUrlCount = 0;
+  const gatewaysToPrepare = directGatewayId && !routedRequest
+    ? args.userConfig.gatewayRows.filter((gateway) => gateway.id === directGatewayId)
+    : args.userConfig.gatewayRows;
 
-  for (const gw of args.userConfig.gatewayRows) {
+  for (const gw of gatewaysToPrepare) {
     const baseUrlValidation = validateUpstreamBaseUrl(gw.baseUrl, upstreamHostPolicy);
     if (!baseUrlValidation.ok) {
       invalidGatewayBaseUrlCount += 1;
@@ -135,19 +154,6 @@ export async function routeAndProxy(args: {
     };
   }
   const resolvedDefaultUpstream = defaultUpstream;
-
-  const {
-    repository,
-    runtimeConfig,
-    catalog,
-    requestedModel,
-    matchedProfile,
-    routedRequest,
-  } = await resolveUserRoutingContext({
-    body: args.body,
-    userConfig: args.userConfig,
-  });
-  const pinStore = repository.getPinStore();
 
   if (routedRequest && catalog.length === 0) {
     const message = args.userConfig?.routingConfigRequiresReset
@@ -229,7 +235,9 @@ export async function routeAndProxy(args: {
     const decideStartMs = Date.now();
     const decision = await engine.decide({
       requestId,
-      request: args.body,
+      request: effectiveRequestModel === args.body.model
+        ? args.body
+        : { ...args.body, model: effectiveRequestModel },
       config: options?.config ?? runtimeConfig,
       catalog: options?.catalog ?? catalog,
       catalogVersion: "1.0", // TODO: wire up real version from catalog meta
